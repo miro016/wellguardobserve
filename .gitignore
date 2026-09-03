@@ -1,0 +1,9 @@
+/node_modules
+/dist
+/.angular
+/.cache
+/pb_data
+/.env
+/.playwright-cli
+*.log
+coverage
