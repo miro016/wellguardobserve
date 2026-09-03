@@ -22,7 +22,7 @@ RUN arch="$TARGETARCH" \
   && chmod +x /out/pocketbase
 
 FROM oven/bun:1.4.0-debian AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl nginx tini \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gosu nginx tini \
   && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default
 WORKDIR /app
 ENV NODE_ENV=production \
@@ -40,7 +40,6 @@ COPY pocketbase/pb_migrations ./pb_migrations
 COPY deploy/nginx.conf /etc/nginx/nginx.conf
 COPY --chmod=755 deploy/start.sh /usr/local/bin/wellguard-start
 RUN mkdir -p /data && chown bun:bun /data
-USER bun
 EXPOSE 8080
 VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD curl --fail --silent http://127.0.0.1:8080/healthz || exit 1
