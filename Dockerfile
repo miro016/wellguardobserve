@@ -6,7 +6,7 @@ RUN npm ci
 COPY angular.json tsconfig.json tsconfig.app.json .postcssrc.json ./
 COPY public ./public
 COPY src ./src
-RUN npm run build
+RUN npm run build && npm prune --omit=dev
 
 FROM debian:bookworm-slim AS pocketbase-download
 ARG POCKETBASE_VERSION=0.40.2
@@ -38,8 +38,8 @@ COPY agent ./agent
 COPY scripts ./scripts
 COPY pocketbase/pb_migrations ./pb_migrations
 COPY deploy/nginx.conf /etc/nginx/nginx.conf
-COPY deploy/start.sh /usr/local/bin/wellguard-start
-RUN chmod +x /usr/local/bin/wellguard-start && mkdir -p /data && chown -R bun:bun /data /app /usr/share/nginx/html
+COPY --chmod=755 deploy/start.sh /usr/local/bin/wellguard-start
+RUN mkdir -p /data && chown bun:bun /data
 USER bun
 EXPOSE 8080
 VOLUME ["/data"]
