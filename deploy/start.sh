@@ -5,9 +5,11 @@ data_dir="${POCKETBASE_DATA_DIR:-/data}"
 mkdir -p "$data_dir"
 
 # Easypanel/Docker volumes can replace the image's pre-owned /data directory
-# with a root-owned mount. Repair it before PocketBase initializes the store.
+# with a root-owned mount. Repair it once, then drop privileges for every
+# long-running process in the container.
 if [[ "$(id -u)" -eq 0 ]]; then
   chown -R bun:bun "$data_dir"
+  exec gosu bun "$0" "$@"
 fi
 
 if [[ -z "${POCKETBASE_SUPERUSER_EMAIL:-}" || -z "${POCKETBASE_SUPERUSER_PASSWORD:-}" ]]; then
