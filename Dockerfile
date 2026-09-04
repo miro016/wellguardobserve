@@ -42,6 +42,5 @@ COPY --chmod=755 deploy/start.sh /usr/local/bin/wellguard-start
 RUN mkdir -p /data && chown bun:bun /data
 EXPOSE 8080
 VOLUME ["/data"]
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD curl --fail --silent http://127.0.0.1:8080/healthz || exit 1
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/usr/local/bin/wellguard-start"]
