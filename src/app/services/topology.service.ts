@@ -98,6 +98,23 @@ export class TopologyService {
     type Technology = { name: string; evidence: string };
     type ObservedService = { key: string; label: string; hostname: string; port: number; evidence: string; status?: number; location?: string; productHints?: string[]; technologies?: Technology[] };
     const latestDiscovery = actions.filter((action) => action.tool === 'discover_service_hosts').at(-1);
+    const scanActions = latestDiscovery ? actions.filter((action) => action.scan === latestDiscovery.scan) : actions;
+    const directHttpEvidence = (hostname: string) => {
+      const technologies: Technology[] = [];
+      let title = '';
+      const evidence: string[] = [];
+      for (const action of scanActions.filter((item) => item.tool === 'inspect_http' && clean(item.input['hostname'] || target.hostname) === hostname)) {
+        try {
+          const result = JSON.parse(action.summary) as { status?: number; requestedUrl?: string; signals?: { title?: string; technologies?: Technology[] } };
+          if (result.signals?.title) title = clean(result.signals.title);
+          for (const technology of result.signals?.technologies || []) {
+            if (technology.name && !technologies.some((item) => item.name.toLowerCase() === technology.name.toLowerCase())) technologies.push(technology);
+          }
+          if (result.requestedUrl) evidence.push(`${result.requestedUrl} returned ${result.status || 'a response'}.`);
+        } catch { /* Ignore unstructured legacy actions. */ }
+      }
+      return { title, technologies, evidence };
+    };
     const discovered: Array<{ hostname?: string; title?: string; status?: number; location?: string; evidence?: string; productHints?: string[]; technologies?: Technology[] }> = [];
     let discoveredRoot: { status?: number; title?: string; serviceWords?: string[]; technologies?: Technology[] } | null = null;
     try {
@@ -108,19 +125,25 @@ export class TopologyService {
     const services: ObservedService[] = discovered.map((item, index) => {
       const product = item.productHints?.[0];
       const hostname = clean(item.hostname) || `service-${index + 1}.${target.hostname}`;
-      return { key: hostname, label: product ? this.productName(product) : clean(item.title) || hostname.split('.')[0]!, hostname, port: 443, evidence: clean(item.evidence) || 'A distinct HTTPS response was verified beneath the authorized root.', status: item.status, location: clean(item.location), productHints: item.productHints || [], technologies: item.technologies || [] };
+      const deep = directHttpEvidence(hostname);
+      const technologies = [...(item.technologies || [])];
+      for (const technology of deep.technologies) if (!technologies.some((value) => value.name.toLowerCase() === technology.name.toLowerCase())) technologies.push(technology);
+      return { key: hostname, label: product ? this.productName(product) : clean(item.title) || deep.title || hostname.split('.')[0]!, hostname, port: 443, evidence: [clean(item.evidence) || 'A distinct HTTPS response was verified beneath the authorized root.', ...deep.evidence].join(' '), status: item.status, location: clean(item.location), productHints: item.productHints || [], technologies };
     });
     if (discoveredRoot) {
       const rootProduct = discoveredRoot.serviceWords?.[0];
+      const deep = directHttpEvidence(target.hostname);
+      const technologies = [...(discoveredRoot.technologies || [])];
+      for (const technology of deep.technologies) if (!technologies.some((value) => value.name.toLowerCase() === technology.name.toLowerCase())) technologies.push(technology);
       services.unshift({
         key: target.hostname,
-        label: rootProduct ? this.productName(rootProduct) : clean(discoveredRoot.title) || 'Web application',
+        label: rootProduct ? this.productName(rootProduct) : clean(discoveredRoot.title) || deep.title || 'Web application',
         hostname: target.hostname,
         port: 443,
         evidence: `Direct HTTPS GET / returned ${discoveredRoot.status || 'a response'}${discoveredRoot.title ? ` with title “${discoveredRoot.title}”` : ''}.`,
         status: discoveredRoot.status,
         productHints: rootProduct ? [rootProduct] : [],
-        technologies: discoveredRoot.technologies || []
+        technologies
       });
     }
     if (!services.length) services.push({ key: 'web', label: 'HTTP service', hostname: target.hostname, port: ports.includes(443) ? 443 : ports[0]!, evidence: 'An HTTP response was observed by the bounded application probe.' });

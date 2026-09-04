@@ -12,6 +12,7 @@ const PRODUCT_PATTERN = /\b(keycloak|easypanel|grafana|prometheus|jenkins|gitlab
 interface CompactObservation {
   hostname: string;
   status: number;
+  initialStatus?: number;
   title: string;
   location: string;
   server: string;
@@ -63,9 +64,20 @@ export function classifyServiceObservation(candidate: CompactObservation, root?:
   if (mirrorsRoot) return null;
   const identity = [candidate.title, candidate.location, ...candidate.serviceWords].join(' ');
   const productHints = [...new Set((identity.match(PRODUCT_PATTERN) || []).map((item) => item.toLowerCase()))];
-  const response = `HTTPS GET / returned ${candidate.status}${candidate.title ? ` with title “${candidate.title}”` : ''}`;
+  const response = candidate.initialStatus
+    ? `HTTPS GET / returned ${candidate.initialStatus}, then the same-host redirect returned ${candidate.status}${candidate.title ? ` with title “${candidate.title}”` : ''}`
+    : `HTTPS GET / returned ${candidate.status}${candidate.title ? ` with title “${candidate.title}”` : ''}`;
   const redirect = candidate.location ? ` and Location ${candidate.location}` : '';
   return { hostname: candidate.hostname, status: candidate.status, title: candidate.title, location: candidate.location, server: candidate.server, productHints, technologies: candidate.technologies, evidence: `${response}${redirect}.` };
+}
+
+async function observeHostname(scope: ScopeGuard, hostname: string): Promise<CompactObservation> {
+  const initial = compact(hostname, await inspectHttp(scope, { hostname, tls: true, port: 443, path: '/' }));
+  if (initial.status < 300 || initial.status > 399 || !initial.location.startsWith('/') || initial.location.startsWith('//')) return initial;
+  try {
+    const followed = compact(hostname, await inspectHttp(scope, { hostname, tls: true, port: 443, path: initial.location }));
+    return { ...followed, initialStatus: initial.status, location: initial.location };
+  } catch { return initial; }
 }
 
 async function passiveHosts(scope: ScopeGuard): Promise<{ hosts: string[]; status: string }> {
@@ -93,7 +105,7 @@ export async function discoverServiceHosts(scope: ScopeGuard, input: { candidate
   const candidates = [...new Set([...requested, ...passive.hosts, ...defaults])].filter((hostname) => hostname !== scope.rootHostname).slice(0, limit);
 
   let root: CompactObservation | undefined;
-  try { root = compact(scope.rootHostname, await inspectHttp(scope, { hostname: scope.rootHostname, tls: true, port: 443, path: '/' })); } catch { /* Discovery can continue when the root HTTP response is unavailable. */ }
+  try { root = await observeHostname(scope, scope.rootHostname); } catch { /* Discovery can continue when the root HTTP response is unavailable. */ }
 
   const observations = new Array<CompactObservation | null>(candidates.length).fill(null);
   let cursor = 0;
@@ -101,7 +113,7 @@ export async function discoverServiceHosts(scope: ScopeGuard, input: { candidate
     while (cursor < candidates.length) {
       const index = cursor++;
       const hostname = candidates[index]!;
-      try { observations[index] = compact(hostname, await inspectHttp(scope, { hostname, tls: true, port: 443, path: '/' })); }
+      try { observations[index] = await observeHostname(scope, hostname); }
       catch { observations[index] = null; }
     }
   });
@@ -118,7 +130,7 @@ export async function discoverServiceHosts(scope: ScopeGuard, input: { candidate
     serviceHosts,
     excludedAsMissingOrMirrored: missingOrMirrored,
     unreachable,
-    securityNote: 'Candidates are restricted to the authorized root. A hostname is retained only when its HTTPS response differs from the root and is not a generic reverse-proxy missing-route response.'
+    securityNote: 'Candidates are restricted to the authorized root. A hostname is retained only when its HTTPS response differs from the root and is not a generic reverse-proxy missing-route response. Discovery may follow one relative redirect on the same validated hostname to retain page identity and technology markers.'
   };
 }
 

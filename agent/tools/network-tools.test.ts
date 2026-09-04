@@ -61,4 +61,11 @@ describe('bounded network tools', () => {
     const candidate = { hostname: 'easypanel.example.com', status: 200, title: 'Company portal', location: '', server: 'cloudflare', contentType: 'text/html', textSample: 'Welcome', serviceWords: [], technologies: [] };
     expect(classifyServiceObservation(candidate)?.productHints).not.toContain('easypanel');
   });
+
+  test('retains framework evidence from one same-host redirect destination', () => {
+    const candidate = { hostname: 'app.example.com', initialStatus: 302, status: 200, title: 'Base', location: '/en/', server: 'cloudflare', contentType: 'text/html', textSample: 'Base', serviceWords: [], technologies: [{ name: 'Angular', evidence: 'HTML contains app-root.' }] };
+    const result = classifyServiceObservation(candidate);
+    expect(result?.technologies[0]?.name).toBe('Angular');
+    expect(result?.evidence).toContain('same-host redirect returned 200');
+  });
 });
