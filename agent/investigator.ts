@@ -20,7 +20,7 @@ Your job is to identify forgotten services, public management interfaces, accide
 
 Drive the investigation adaptively. Begin with DNS, DNS posture, authoritative domain RDAP, public network registration, certificate transparency, TLS and the root HTTP response. Always use discover_service_hosts once: it combines stored hints, passive host data and bounded HTTPS verification while excluding wildcard/CDN missing routes. Use a bounded port check, then choose deeper service checks from actual evidence. A CDN edge can make ports look open; do not mistake CDN ports for origin services. IP registration describes the public network holder, not a physical server location. Use public sources when they materially improve identification or remediation.
 
-Review every verified service host returned by discover_service_hosts and prioritize public administration, monitoring, storage, development and identity surfaces. Compare the retained technology markers so pages with similar titles are still distinguished by their observed stack. Treat every hostname independently: never transfer a framework, product, or version marker from one host to another just because their titles or redirects look similar. The discovery result already contains each host's root response; use inspect_http, inspect_http_configuration and inspect_public_metadata for meaningful deeper evidence instead of repeating the root path. If direct response evidence identifies Keycloak, inspect /realms/master, /realms/master/.well-known/openid-configuration, and /admin/master/console/ with safe GETs. Record public master-realm or administration-console exposure and any canonical host or endpoint disclosure; do not attempt authentication. If direct evidence identifies WordPress, always call inspect_wordpress for that hostname. Public REST users, email-like display names, login surfaces, version disclosures and metadata routes must be described precisely; never infer administrator roles from a public author record. The WordPress tool automatically records an evidence finding when anonymous users are returned; do not record a duplicate of that finding. For other products, choose only documented unauthenticated metadata paths supported by evidence.
+Review every verified service host returned by discover_service_hosts and prioritize public administration, monitoring, storage, development and identity surfaces. Compare the retained technology markers so pages with similar titles are still distinguished by their observed stack. Treat every hostname independently: never transfer a framework, product, or version marker from one host to another just because their titles or redirects look similar. The discovery result already contains each host's root response; use inspect_http, inspect_http_configuration and inspect_public_metadata for meaningful deeper evidence instead of repeating the root path. If direct response evidence identifies Keycloak, inspect /realms/master, /realms/master/.well-known/openid-configuration, and /admin/master/console/ with safe GETs. Record public master-realm or administration-console exposure and any canonical host or endpoint disclosure; do not attempt authentication. If direct evidence identifies WordPress, always call inspect_wordpress for that hostname. Public REST users, email-like display names, login surfaces, version disclosures and metadata routes must be described precisely; never infer administrator roles from a public author record. The WordPress tool automatically records an evidence finding when anonymous users are returned and automatically runs up to three NVD correlations for directly observed generator/component versions; do not duplicate those calls or the automatic finding. For other products, choose only documented unauthenticated metadata paths supported by evidence.
 
 Map observed configuration weaknesses to specific mappable CWE weakness IDs and verify their names with query_cwe when useful. A CWE classifies the underlying weakness; it is not proof of exploitability. Only search vulnerability databases after an exact product version has been directly observed. Treat NVD/OSV results as candidates until edition and version ranges match. Record only confirmed matching CVE identifiers; do not attach CVEs based on a product name alone.
 
@@ -160,6 +160,23 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
     }),
     tool(async ({ hostname, port, tls, basePath }) => tracked('inspect_wordpress', { hostname, port, tls, basePath }, () => inspectWordPress(scope, { hostname, port, tls, basePath }), async (observation) => {
       const publicUsers = observation.evidence.publicUsers.users;
+      const versionedComponents: Array<{ product: string; version: string }> = [];
+      if (observation.version) versionedComponents.push({ product: 'WordPress', version: observation.version });
+      for (const generator of observation.components.generators) {
+        const match = generator.match(/^(.+?)\s+([0-9]+(?:\.[0-9]+){1,3})(?:;|$)/);
+        if (match && !versionedComponents.some((item) => item.product.toLowerCase() === match[1]!.toLowerCase())) versionedComponents.push({ product: match[1]!, version: match[2]! });
+      }
+      for (const plugin of observation.components.plugins) {
+        if (plugin.publicAssetVersions.length !== 1) continue;
+        const product = plugin.slug.replace(/-/g, ' ');
+        if (!versionedComponents.some((item) => item.product.toLowerCase() === product.toLowerCase())) versionedComponents.push({ product, version: plugin.publicAssetVersions[0]! });
+      }
+      const automaticNvdCorrelations: unknown[] = [];
+      for (const component of versionedComponents.slice(0, 3)) {
+        try { automaticNvdCorrelations.push(JSON.parse(await tracked('query_nvd_cves', component, () => queryNvdCves(component)))); }
+        catch (error) { automaticNvdCorrelations.push({ query: component, error: error instanceof Error ? error.message : String(error) }); }
+      }
+      Object.assign(observation, { automaticNvdCorrelations });
       if (!publicUsers.length) return;
       const emailLike = observation.emailLikePublicNames;
       const title = emailLike.length ? 'WordPress REST API exposes user and email-like account identifiers' : 'WordPress REST API exposes public user identifiers';

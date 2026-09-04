@@ -14,7 +14,7 @@ It is intentionally reconnaissance-only: no credential guessing, payload deliver
 - Findings with separate severity and confidence, preserved evidence, remediation, source URLs, CWE weakness mappings, and version-matched CVE identifiers.
 - TLS hostname, trust, issuer, validity window, protocol, cipher, expiry, and explicitly published certificate-email monitoring, plus a browsable certificate-transparency record inventory.
 - DNS control-plane visibility for registrar lifecycle, public registration contacts, nameservers, DNSSEC, CAA, MX, SPF, DMARC, MTA-STS, and SMTP TLS reporting.
-- Read-only service configuration audits for HTTP security headers, CORS, fixed public API/metadata paths, and WordPress REST/login/readme/XML-RPC surfaces.
+- Read-only service configuration audits for HTTP security headers, CORS, fixed public API/metadata paths, and WordPress REST/login/readme/XML-RPC surfaces; directly observed WordPress generator/component versions trigger up to three transparent NVD correlations.
 - Evidence-backed web technology detection for common frameworks, CMS products, generators, runtimes, and server headers so same-title applications remain distinguishable.
 - Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase.
 - A pannable, zoomable evidence-linked topology connecting domains, edge providers, hidden origins, ports, and every identified service without collapsing nodes behind a “more” counter.
