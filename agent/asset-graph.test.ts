@@ -12,12 +12,18 @@ function action(tool: string, input: Record<string, unknown>, output: unknown): 
 
 describe('explicit asset graph', () => {
   test('turns every distinct discovered host into a technology-aware service node', () => {
-    const findings: AgentFinding[] = [{
-      title: 'Keycloak administration surface is publicly reachable', summary: 'A direct request reached the observed Keycloak administration surface.', severity: 'low', confidence: 100,
-      asset: 'login.example.com', assetKey: 'hostname:login.example.com', relatedAssetKeys: [], relationKey: '', evidence: ['GET /admin returned 200.'], remediation: 'Restrict the administration route.', sourceUrls: [], cveIds: [], weaknessIds: ['CWE-284']
-    }];
+    const findings: AgentFinding[] = [
+      {
+        title: 'Keycloak administration surface is publicly reachable', summary: 'A direct request reached the observed Keycloak administration surface.', severity: 'low', confidence: 100,
+        asset: 'login.example.com', assetKey: 'hostname:login.example.com', relatedAssetKeys: [], relationKey: '', evidence: ['GET /admin returned 200.'], remediation: 'Restrict the administration route.', sourceUrls: [], cveIds: [], weaknessIds: ['CWE-284']
+      },
+      {
+        title: 'Mail posture should be reviewed', summary: 'The root domain does not publish an enforcing DMARC policy.', severity: 'low', confidence: 100,
+        asset: 'example.com', assetKey: 'hostname:example.com', relatedAssetKeys: [], relationKey: '', evidence: ['DMARC was observed in monitoring mode.'], remediation: 'Review the intended mail policy.', sourceUrls: [], cveIds: [], weaknessIds: []
+      }
+    ];
     const graph = buildAssetGraph(target, [action('discover_service_hosts', {}, {
-      root: { status: 200, title: 'Example', serviceWords: [], technologies: [{ name: 'Cloudflare' }] },
+      root: { status: 200, title: 'Easypanel', serviceWords: ['easypanel'], technologies: [{ name: 'Cloudflare' }] },
       serviceHosts: [
         { hostname: 'login.example.com', status: 302, title: '', productHints: ['keycloak'], technologies: [{ name: 'Cloudflare' }], evidence: 'HTTPS GET / returned 302 to /admin/.' },
         { hostname: 'client.example.com', status: 200, title: 'Client', productHints: [], technologies: [{ name: 'Angular' }, { name: 'Cloudflare' }], evidence: 'HTML contained an Angular app-root marker.' },
@@ -29,6 +35,7 @@ describe('explicit asset graph', () => {
     expect(graph.assets.find((asset) => asset.key === 'service:client.example.com:443:angular')?.details.some((detail) => detail.value.includes('Angular'))).toBeTrue();
     expect(graph.assets.find((asset) => asset.key === 'service:links.example.com:443:linkwarden')?.details.some((detail) => detail.value.includes('Next.js'))).toBeTrue();
     expect(findings[0]?.assetKey).toBe('service:login.example.com:443:keycloak');
+    expect(findings[1]?.assetKey).toBe('domain:example.com');
   });
 
   test('attaches a service disclosure to the relationship and both participating assets', () => {

@@ -207,6 +207,7 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
     return (product || candidates[0])?.key || (assets.has(hostKey(hostname)) ? hostKey(hostname) : domainKey);
   };
   for (const finding of findings) {
+    if (finding.assetKey === `hostname:${target.hostname}`) finding.assetKey = domainKey;
     const suggestedAssetKey = serviceForFinding(finding);
     const requestedAsset = finding.assetKey ? assets.get(finding.assetKey) : undefined;
     const suggestedAsset = assets.get(suggestedAssetKey);
