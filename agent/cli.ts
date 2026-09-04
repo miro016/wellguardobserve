@@ -14,6 +14,7 @@ if (!hostname) {
 const report = await investigate({ id: hostname, hostname, authorizationStatus: 'admin_override' }, {
   model: argument('model'),
   baseUrl: argument('ollama-url'),
+  maxActions: 44,
   onAction: (action) => console.error(`[${action.at}] ${action.tool}: ${action.summary.replace(/\s+/g, ' ').slice(0, 180)}`)
 });
 

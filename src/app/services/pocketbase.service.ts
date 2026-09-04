@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import PocketBase, { RecordModel } from 'pocketbase';
-import { AgentActionRecord, AgentMessageRecord, Finding, Scan, Target, TlsObservation } from '../models';
+import { AgentActionRecord, AgentMessageRecord, CreateTargetInput, Finding, Scan, Target, TlsObservation } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class PocketBaseService {
@@ -24,11 +24,34 @@ export class PocketBaseService {
     throw error;
   }
 
+  private target(record: RecordModel): Target {
+    return {
+      id: record.id, name: record['name'], hostname: record['hostname'], hostHints: record['hostHints'] ?? [],
+      authorizationStatus: record['authorizationStatus'], status: record['status'], lastScanAt: record['lastScanAt'],
+      assetCount: record['assetCount'] ?? 0, findingCount: record['findingCount'] ?? 0, posture: record['posture'] ?? 100
+    } as Target;
+  }
+
+  isAdmin(): boolean { return this.user()?.['role'] === 'admin'; }
+
   async targets(): Promise<Target[]> {
     try {
       const records = await this.client.collection('targets').getFullList({ sort: '-created' });
       this.connected.set(true);
-      return records.map((r) => ({ id: r.id, name: r['name'], hostname: r['hostname'], authorizationStatus: r['authorizationStatus'], status: r['status'], lastScanAt: r['lastScanAt'], assetCount: r['assetCount'] ?? 0, findingCount: r['findingCount'] ?? 0, posture: r['posture'] ?? 100 } as Target));
+      return records.map((record) => this.target(record));
+    } catch (error) { return this.failed(error); }
+  }
+
+  async createTarget(input: CreateTargetInput): Promise<Target> {
+    if (!this.isAdmin() || !this.user()?.id) throw new Error('Only a workspace administrator can approve a target.');
+    try {
+      const record = await this.client.collection('targets').create({
+        owner: this.user()!.id, name: input.name, hostname: input.hostname, hostHints: input.hostHints,
+        authorizationStatus: 'admin_override', authorizationReason: input.authorizationReason,
+        authorizedAt: new Date().toISOString(), allowPrivateAddresses: false, status: 'observed',
+        assetCount: 1, findingCount: 0, posture: 100
+      });
+      return this.target(record);
     } catch (error) { return this.failed(error); }
   }
 
@@ -82,7 +105,8 @@ export class PocketBaseService {
     }
   }
 
-  async requestScan(targetId: string, mode: 'light' | 'standard' = 'standard'): Promise<void> {
-    await this.client.collection('scanRequests').create({ target: targetId, mode, status: 'queued' });
+  async requestScan(targetId: string, mode: 'light' | 'standard' = 'standard'): Promise<string> {
+    const record = await this.client.collection('scanRequests').create({ target: targetId, mode, status: 'queued' });
+    return record.id;
   }
 }

@@ -21,6 +21,7 @@ import { ThemeService } from '../services/theme.service';
         <a routerLink="/app/traces" routerLinkActive="active"><i>›_</i>Agent traces</a>
         <a routerLink="/app/sources" routerLinkActive="active"><i>⊙</i>Evidence sources</a>
         <span>Workspace</span>
+        @if (pocketbase.isAdmin()) { <a routerLink="/app/admin" routerLinkActive="active"><i>⌁</i>Administration</a> }
         <a routerLink="/app/settings" routerLinkActive="active"><i>⚙</i>Settings</a>
       </nav>
       <div class="sidebar-status"><span><i></i>Observer ready</span><small>Recon only · scope locked</small></div>

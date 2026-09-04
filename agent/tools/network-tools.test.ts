@@ -3,6 +3,7 @@ import { createServer, type Server } from 'node:http';
 import { ScopeGuard } from '../security/scope-guard';
 import { inspectHttp } from './http';
 import { discoverPorts } from './ports';
+import { classifyServiceObservation } from './service-hosts';
 
 let server: Server;
 let port: number;
@@ -39,5 +40,13 @@ describe('bounded network tools', () => {
     const result = await discoverPorts(scope, { ports: [port] });
     expect(result.openPorts).toEqual([port]);
     expect(result.portsTested).toBe(1);
+  });
+
+  test('separates a real redirected service from wildcard missing routes', () => {
+    const root = { hostname: 'example.com', status: 200, title: 'Easypanel', location: '', server: 'cloudflare', contentType: 'text/html', textSample: 'Easypanel', serviceWords: ['easypanel'] };
+    const missing = { ...root, hostname: 'keycloak.example.com', status: 404, title: 'Not Found', textSample: 'The application keycloak was not found on Easypanel.' };
+    const service = { ...root, hostname: 'keycloak1.example.com', status: 302, title: '', location: 'https://project-keycloak.provider.test/admin/', textSample: '', serviceWords: [] };
+    expect(classifyServiceObservation(missing, root)).toBeNull();
+    expect(classifyServiceObservation(service, root)?.productHints).toContain('keycloak');
   });
 });

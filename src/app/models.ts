@@ -6,12 +6,20 @@ export interface Target {
   id: string;
   name: string;
   hostname: string;
+  hostHints: string[];
   authorizationStatus: 'verified' | 'admin_override' | 'pending';
   status: 'observed' | 'scanning' | 'paused';
   lastScanAt: string;
   assetCount: number;
   findingCount: number;
   posture: number;
+}
+
+export interface CreateTargetInput {
+  name: string;
+  hostname: string;
+  hostHints: string[];
+  authorizationReason: string;
 }
 
 export interface Finding {

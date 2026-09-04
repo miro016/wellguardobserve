@@ -95,23 +95,48 @@ export class TopologyService {
       edges.push({ from: 'server', to: portId });
     });
 
-    const services: Array<{ key: string; label: string; port: number; evidence: string }> = [];
-    if (lower.includes('easypanel')) services.push({ key: 'easypanel', label: 'Easypanel', port: 443, evidence: 'Page title, application assets, or API metadata identify Easypanel.' });
-    if (lower.includes('keycloak')) services.push({ key: 'keycloak', label: 'Keycloak', port: 443, evidence: 'Public response metadata contains a Keycloak identifier.' });
-    if (!services.length || lower.includes('http')) services.push({ key: 'web', label: services.length ? 'Web endpoint' : 'HTTP service', port: ports.includes(443) ? 443 : ports[0]!, evidence: 'An HTTP response was observed by the bounded application probe.' });
-    services.slice(0, 5).forEach((service, index) => {
-      const serviceFindings = related(service.key === 'web' ? 'http' : service.key);
+    type ObservedService = { key: string; label: string; hostname: string; port: number; evidence: string; status?: number; location?: string; productHints?: string[] };
+    const latestDiscovery = actions.filter((action) => action.tool === 'discover_service_hosts').at(-1);
+    const discovered: Array<{ hostname?: string; title?: string; status?: number; location?: string; evidence?: string; productHints?: string[] }> = [];
+    try { discovered.push(...(JSON.parse(latestDiscovery?.summary || '{}')['serviceHosts'] || [])); } catch { /* Older or truncated discovery output has no structured services. */ }
+    const services: ObservedService[] = discovered.map((item, index) => {
+      const product = item.productHints?.find((hint) => hint !== 'easypanel');
+      const hostname = clean(item.hostname) || `service-${index + 1}.${target.hostname}`;
+      return { key: hostname, label: product ? this.productName(product) : clean(item.title) || hostname.split('.')[0]!, hostname, port: 443, evidence: clean(item.evidence) || 'A distinct HTTPS response was verified beneath the authorized root.', status: item.status, location: clean(item.location), productHints: item.productHints || [] };
+    });
+    if (lower.includes('easypanel')) services.unshift({ key: 'easypanel-root', label: 'Easypanel', hostname: target.hostname, port: 443, evidence: 'The root response identifies the Easypanel management surface.' });
+    if (!services.length) services.push({ key: 'web', label: 'HTTP service', hostname: target.hostname, port: ports.includes(443) ? 443 : ports[0]!, evidence: 'An HTTP response was observed by the bounded application probe.' });
+
+    const visible = services.slice(0, services.length > 7 ? 6 : 7);
+    visible.forEach((service, index) => {
+      const terms = [service.hostname, service.label, ...(service.productHints || [])].filter(Boolean);
+      const serviceFindings = findings.filter((finding) => terms.some((term) => [finding.title, finding.summary, finding.asset, ...finding.evidence].join(' ').toLowerCase().includes(term.toLowerCase())));
       const strongestFinding = strongest(serviceFindings);
-      const id = `service-${service.key}`;
-      nodes.push({ id, kind: 'service', label: service.label, subtitle: strongestFinding?.severity === 'high' ? 'Review exposure' : 'Identified service', state: strongestFinding ? severityState(strongestFinding.severity) : 'observed', x: 88, y: 30 + index * 26, details: [
+      const id = `service-${index}`;
+      nodes.push({ id, kind: 'service', label: service.label, subtitle: service.hostname, state: strongestFinding ? severityState(strongestFinding.severity) : 'observed', x: 88, y: visible.length === 1 ? 48 : 10 + index * (80 / Math.max(1, visible.length - 1)), details: [
         { label: 'Product', value: service.label, evidence: service.evidence },
+        { label: 'Endpoint', value: service.hostname, evidence: `Verified as distinct from the ${target.hostname} root response.` },
+        { label: 'HTTP observation', value: service.status ? `Status ${service.status}` : 'Observed', evidence: service.evidence },
+        { label: 'Canonical location', value: service.location || 'No redirect observed', evidence: service.location ? 'Location header returned by the service.' : 'No canonical redirect was retained.' },
         { label: 'Version', value: this.versionNear(corpus, service.label) || 'Not observed', evidence: this.versionNear(corpus, service.label) ? 'Version-like identifier retained in scan evidence.' : 'The public response did not provide a reliable product version.' },
         { label: 'Exposure', value: strongestFinding ? strongestFinding.title : 'Public response observed', evidence: strongestFinding?.evidence[0] || service.evidence },
         { label: 'Confidence', value: strongestFinding ? `${strongestFinding.confidence}%` : 'Unscored', evidence: strongestFinding ? 'Agent-assigned confidence based on retained evidence.' : 'No linked finding is available.' }
       ], findingIds: serviceFindings.map((f) => f.id) });
       edges.push({ from: `port-${ports.includes(service.port) ? service.port : ports[0]}`, to: id });
     });
+    if (services.length > visible.length) {
+      const remaining = services.slice(visible.length);
+      const id = 'service-more';
+      nodes.push({ id, kind: 'service', label: `+${remaining.length} more`, subtitle: 'Verified service hosts', state: 'observed', x: 88, y: 94, details: [
+        { label: 'Additional hosts', value: remaining.map((service) => service.hostname).join(', '), evidence: 'Each host returned a distinct non-missing HTTPS response during bounded service discovery.' }
+      ], findingIds: [] });
+      edges.push({ from: `port-${ports.includes(443) ? 443 : ports[0]}`, to: id });
+    }
     return { nodes, edges };
+  }
+
+  private productName(value: string): string {
+    return ({ keycloak: 'Keycloak', easypanel: 'Easypanel', grafana: 'Grafana', prometheus: 'Prometheus', jenkins: 'Jenkins', gitlab: 'GitLab', kibana: 'Kibana', rabbitmq: 'RabbitMQ', phpmyadmin: 'phpMyAdmin', portainer: 'Portainer', traefik: 'Traefik', swagger: 'Swagger', openapi: 'OpenAPI', jupyter: 'Jupyter', wordpress: 'WordPress', beszel: 'Beszel', excalidraw: 'Excalidraw', linkwarden: 'Linkwarden', logto: 'Logto', immich: 'Immich', minio: 'MinIO' } as Record<string, string>)[value] || value;
   }
 
   private versionNear(corpus: string, product: string): string {

@@ -16,7 +16,8 @@ while (true) {
     const target = await store.loadTarget(request['target']);
     scan = await store.createScan(target.id, request.id);
     console.log(`Investigating ${target.hostname} for request ${request.id}.`);
-    const report = await investigate(target, { onAction: (action) => store.saveAction(target.id, scan!.id, action) });
+    const maxActions = request['mode'] === 'light' ? 18 : 44;
+    const report = await investigate(target, { maxActions, onAction: (action) => store.saveAction(target.id, scan!.id, action) });
     await store.complete(request, scan, report);
     console.log(`Completed ${target.hostname}: ${report.findings.length} findings.`);
   } catch (error) {

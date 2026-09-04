@@ -13,6 +13,7 @@ A scan runs only when its target is `verified` or `admin_override`. An override 
 - DNS is resolved before connecting and HTTP connections are pinned to the validated result.
 - Loopback, private, link-local, metadata, documentation, multicast, and reserved addresses are blocked unless a separately configured private scanner is explicitly authorized.
 - HTTP requests are GET-only, body-bounded, timed out, and do not automatically follow cross-host redirects.
+- Service-host discovery makes one fixed HackerTarget passive query and verifies at most 80 in-scope HTTPS candidates with concurrency capped at five. Wildcard/missing responses are excluded.
 - Port discovery is capped at 40 explicit ports with limited concurrency and short connection timeouts.
 - TLS inspection performs a handshake only.
 

@@ -23,12 +23,13 @@ export class InvestigationStore {
 
   async claim(record: RecordModel): Promise<void> {
     await this.client.collection('scanRequests').update(record.id, { status: 'processing', startedAt: new Date().toISOString(), error: '' });
+    await this.client.collection('targets').update(record['target'], { status: 'scanning' });
   }
 
   async loadTarget(id: string): Promise<AuthorizedTarget> {
     const record = await this.client.collection('targets').getOne(id);
     if (!['verified', 'admin_override'].includes(record['authorizationStatus'])) throw new Error('Target is not authorized.');
-    return { id: record.id, hostname: record['hostname'], authorizationStatus: record['authorizationStatus'], allowPrivateAddresses: record['allowPrivateAddresses'] };
+    return { id: record.id, hostname: record['hostname'], hostHints: record['hostHints'] ?? [], authorizationStatus: record['authorizationStatus'], allowPrivateAddresses: record['allowPrivateAddresses'] };
   }
 
   async createScan(targetId: string, requestId: string): Promise<RecordModel> {
@@ -54,7 +55,10 @@ export class InvestigationStore {
       await this.client.collection('tlsObservations').create({ target: report.target.id, scan: scan.id, hostname: tls.hostname, valid: tls.valid, expiresAt: tls.validTo, details: tls });
     }
     const posture = Math.max(0, 100 - report.findings.reduce((sum, finding) => sum + ({ critical: 35, high: 22, medium: 11, low: 4, info: 0 })[finding.severity], 0));
-    await this.client.collection('targets').update(report.target.id, { lastScanAt: report.completedAt, findingCount: report.findings.filter((item) => item.severity !== 'info').length, posture, status: 'observed' });
+    const serviceAction = [...report.actions].reverse().find((action) => action.tool === 'discover_service_hosts');
+    let discoveredServices = 0;
+    try { discoveredServices = (JSON.parse(serviceAction?.summary || '{}')['serviceHosts'] || []).length; } catch { /* Keep the conservative root-only count. */ }
+    await this.client.collection('targets').update(report.target.id, { lastScanAt: report.completedAt, findingCount: report.findings.filter((item) => item.severity !== 'info').length, assetCount: Math.max(1, discoveredServices + 1), posture, status: 'observed' });
     await this.client.collection('scans').update(scan.id, { status: 'completed', completedAt: report.completedAt, summary: report.summary });
     await this.client.collection('scanRequests').update(request.id, { status: 'completed', completedAt: report.completedAt });
   }
@@ -62,6 +66,7 @@ export class InvestigationStore {
   async fail(request: RecordModel, scan: RecordModel | null, error: unknown): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     await this.client.collection('scanRequests').update(request.id, { status: 'failed', completedAt: new Date().toISOString(), error: message.slice(0, 500) });
+    await this.client.collection('targets').update(request['target'], { status: 'observed' });
     if (scan) await this.client.collection('scans').update(scan.id, { status: 'failed', completedAt: new Date().toISOString(), error: message.slice(0, 500) });
   }
 }

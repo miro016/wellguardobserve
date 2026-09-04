@@ -1,6 +1,7 @@
 export interface AuthorizedTarget {
   id: string;
   hostname: string;
+  hostHints?: string[];
   authorizationStatus: 'verified' | 'admin_override';
   allowPrivateAddresses?: boolean;
 }

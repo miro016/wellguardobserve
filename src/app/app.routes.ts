@@ -15,6 +15,7 @@ export const routes: Routes = [
   guarded('app/reports', () => import('./pages/reports.component').then((m) => m.ReportsComponent), 'Reports — Wellguard Observe'),
   guarded('app/traces', () => import('./pages/traces.component').then((m) => m.TracesComponent), 'Agent traces — Wellguard Observe'),
   guarded('app/sources', () => import('./pages/sources.component').then((m) => m.SourcesComponent), 'Evidence sources — Wellguard Observe'),
+  guarded('app/admin', () => import('./pages/admin.component').then((m) => m.AdminComponent), 'Administration — Wellguard Observe'),
   guarded('app/settings', () => import('./pages/settings.component').then((m) => m.SettingsComponent), 'Settings — Wellguard Observe'),
   { path: '**', redirectTo: '' }
 ];

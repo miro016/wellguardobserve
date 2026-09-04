@@ -25,6 +25,7 @@ try { target = await pb.collection('targets').getFirstListItem('hostname = "miro
 catch {
   target = await pb.collection('targets').create({
     owner: user.id, name: 'Personal infrastructure', hostname: 'miroslav-petro.com',
+    hostHints: ['keycloak1.miroslav-petro.com'],
     authorizationStatus: 'admin_override', authorizationReason: 'Infrastructure owner supplied this target for MVP testing.',
     authorizedAt: new Date().toISOString(), status: 'observed', posture: 100, assetCount: 1, findingCount: 0
   });

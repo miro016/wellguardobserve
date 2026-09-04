@@ -7,18 +7,18 @@ It is intentionally reconnaissance-only: no credential guessing, payload deliver
 ## What the MVP does
 
 - Direct Angular-to-PocketBase authentication, data access, and realtime-ready records.
-- Administrator-created accounts; there is no public registration.
+- Administrator-created accounts and administrator-approved target creation; there is no public registration.
 - Verified or explicitly administrator-authorized target scope.
 - LangChain investigation driven by an Ollama model.
-- Safe DNS, certificate-transparency, TCP reachability, HTTP, TLS, GitHub Advisory, CISA KEV, and bounded public-document tools.
+- Safe DNS, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, HTTP, TLS, GitHub Advisory, CISA KEV, and bounded public-document tools.
 - Findings with separate severity and confidence, preserved evidence, remediation, and source URLs.
 - TLS hostname, trust, issuer, validity window, protocol, cipher, and expiry monitoring.
 - Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase.
 - An interactive evidence-linked topology connecting domains, edge providers, hidden origins, ports, and identified services.
-- Working target inventory, finding register, scan reports, transparent agent traces, source catalog, and workspace settings.
+- Working target administration and scan queue controls, target-scoped surface and finding views, all-target portfolio overview, scan reports, transparent agent traces, source catalog, and workspace settings.
 - A custom responsive light/dark security-operations interface and public product landing page.
 
-The first authorized acceptance target is `miroslav-petro.com`. The agent independently identified its public Easypanel management surface, public OpenAPI specification/version disclosure, Cloudflare edge behavior, and healthy TLS state.
+The first authorized acceptance target is `miroslav-petro.com`. The agent independently identified eleven distinct service hosts, including its public Easypanel management surface, a public Keycloak master realm and administration console, Keycloak canonical-host disclosure, a Beszel monitoring hub, Cloudflare edge behavior, and healthy TLS state.
 
 ## Architecture
 
@@ -117,6 +117,7 @@ For a production deployment, set long random PocketBase credentials, a precise `
 ## Free public evidence sources
 
 - Certificate Transparency through `crt.sh`
+- Passive hostname candidates through the free HackerTarget Host Search API; candidates are never trusted until an in-scope HTTPS response is verified
 - GitHub reviewed Security Advisories and Releases APIs
 - CISA Known Exploited Vulnerabilities feed
 - OSV.dev package vulnerability API
@@ -133,7 +134,7 @@ New investigations retain the full application-visible LangChain message transcr
 
 - PocketBase-backed polling is intended for a limited-access, single-instance MVP.
 - Cloudflare and other CDNs obscure origin reachability; a future read-only provider integration can evaluate origin firewall configuration.
-- Product/version identification remains probabilistic and is labelled with confidence.
+- Product/version identification remains probabilistic and is labelled with confidence. Wildcard DNS records and missing reverse-proxy routes are explicitly excluded from the service inventory.
 - The current container bundles three processes for convenient MVP deployment. They should become separate services when scaling independently.
 
 ## License
