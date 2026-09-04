@@ -1,5 +1,5 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, HostListener, inject, input, signal, viewChild } from '@angular/core';
-import { Finding, Target, TlsObservation, AgentActionRecord, AssetRecord, AssetRelationRecord, NodeKind, TopologyEdge } from '../models';
+import { Finding, Target, TlsObservation, AgentActionRecord, AssetRecord, AssetRelationRecord, NodeKind, TopologyEdge, TopologyNode } from '../models';
 import { Topology, TopologyService } from '../services/topology.service';
 
 type GraphView = 'services' | 'infrastructure' | 'evidence';
@@ -31,7 +31,7 @@ type GraphView = 'services' | 'infrastructure' | 'evidence';
           }
           @for (node of topology().nodes; track node.id) {
             <button class="topology-node" type="button" [class.selected]="!selectedEdge() && selected().id === node.id" [attr.data-state]="node.state" [attr.data-kind]="node.kind" [style.left.%]="node.x" [style.top.%]="node.y" [style.--node-left]="node.x + '%'" [style.--node-top]="node.y + '%'" (click)="select(node.id)">
-              <i aria-hidden="true">{{ icon(node.kind) }}</i><span><strong>{{ node.label }}</strong><small>{{ node.subtitle }}</small></span>
+              <i aria-hidden="true">{{ icon(node.kind) }}</i><span><strong>{{ node.label }}</strong><small>{{ nodeSubtitle(node) }}</small></span>
               @if (node.findingIds.length) { <b>{{ node.findingIds.length }}</b> }
             </button>
           }
@@ -74,18 +74,25 @@ export class InfrastructureGraphComponent {
   protected readonly selectedId = signal('domain');
   protected readonly selectedEdgeId = signal('');
   protected readonly viewMode = signal<GraphView>('services');
+  protected readonly expandedHostId = signal('');
   protected readonly query = signal('');
   protected readonly riskOnly = signal(false);
   protected readonly fullTopology = computed(() => this.builder.build(this.target(), this.findings(), this.tls(), this.actions(), this.assets(), this.relations()));
+  protected readonly hostServiceCounts = computed(() => {
+    const topology = this.fullTopology();
+    return new Map(topology.nodes.filter((node) => node.kind === 'hostname').map((node) => [node.id, this.serviceDescendants(topology, node.id).size]));
+  });
   protected readonly topology = computed(() => this.layout(this.filter(this.project(this.fullTopology(), this.viewMode()))));
-  protected readonly laneLabels = computed(() => ({ services: ['Domain', 'Hostnames', 'Applications'], infrastructure: ['Domain', 'Hostnames', 'Edge', 'Networks', 'Addresses'], evidence: ['Domain', 'Host', 'Edge', 'Network', 'Server', 'Ports', 'Services'] } as Record<GraphView, string[]>)[this.viewMode()]);
+  protected readonly laneLabels = computed(() => ({ services: ['Domain', 'Hostnames', 'Focused applications'], infrastructure: ['Domain', 'Hostnames', 'Edge', 'Networks', 'Addresses'], evidence: ['Domain', 'Host', 'Edge', 'Network', 'Server', 'Ports', 'Services'] } as Record<GraphView, string[]>)[this.viewMode()]);
   protected readonly collapsedLabel = computed(() => {
     const hidden = this.fullTopology().nodes.length - this.topology().nodes.length;
     if (this.query() || this.riskOnly()) return `${hidden} asset${hidden === 1 ? '' : 's'} outside the current filter`;
     if (this.viewMode() === 'services') {
-      const ports = this.fullTopology().nodes.filter((node) => node.kind === 'port').length;
-      const context = this.fullTopology().nodes.filter((node) => ['edge', 'network', 'server'].includes(node.kind)).length;
-      return `${ports} endpoint record${ports === 1 ? '' : 's'} and ${context} network record${context === 1 ? '' : 's'} collapsed`;
+      const applications = this.fullTopology().nodes.filter((node) => node.kind === 'service').length;
+      const visibleApplications = this.topology().nodes.filter((node) => node.kind === 'service').length;
+      const grouped = Math.max(0, applications - visibleApplications);
+      if (!this.expandedHostId()) return `${applications} application${applications === 1 ? '' : 's'} grouped by host · click a host to open`;
+      return `${visibleApplications} open · ${grouped} application${grouped === 1 ? '' : 's'} grouped elsewhere`;
     }
     return hidden ? `${hidden} application detail record${hidden === 1 ? '' : 's'} collapsed` : 'Every retained asset is visible';
   });
@@ -117,11 +124,21 @@ export class InfrastructureGraphComponent {
     });
     afterNextRender(() => this.resetView());
   }
-  protected select(id: string): void { this.selectedId.set(id); this.selectedEdgeId.set(''); }
+  protected select(id: string): void {
+    const node = this.topology().nodes.find((item) => item.id === id);
+    if (this.viewMode() === 'services' && node?.kind === 'hostname' && (this.hostServiceCounts().get(id) || 0) > 0) this.expandedHostId.set(id);
+    this.selectedId.set(id);
+    this.selectedEdgeId.set('');
+  }
   protected selectEdge(id: string): void { this.selectedEdgeId.set(id); }
   protected setView(view: GraphView): void { this.viewMode.set(view); }
   protected changeQuery(event: Event): void { this.query.set((event.target as HTMLInputElement).value); }
   protected icon(kind: string): string { return ({ domain: '◎', hostname: '⌁', network: '◇', edge: '◇', server: '▣', port: ':', service: '◆' } as Record<string, string>)[kind] || '•'; }
+  protected nodeSubtitle(node: TopologyNode): string {
+    if (this.viewMode() !== 'services' || node.kind !== 'hostname') return node.subtitle;
+    const count = this.hostServiceCounts().get(node.id) || 0;
+    return count ? `${node.subtitle} · ${count} app${count === 1 ? '' : 's'}` : node.subtitle;
+  }
   protected stateLabel(state: string): string { return ({ risk: 'Needs action', warning: 'Review', healthy: 'Healthy', observed: 'Observed', unknown: 'Unknown' } as Record<string, string>)[state] || state; }
   protected path(from: string, to: string): string {
     const a = this.topology().nodes.find((n) => n.id === from); const b = this.topology().nodes.find((n) => n.id === to);
@@ -213,7 +230,34 @@ export class InfrastructureGraphComponent {
         for (const edge of outgoing.get(current.node) || []) queue.push({ node: edge.to, path: [...current.path, edge] });
       }
     }
-    return { nodes: visibleNodes, edges: [...projected.values()] };
+    let projectedNodes = visibleNodes;
+    let projectedEdges = [...projected.values()];
+    if (view === 'services' && !this.query().trim() && !this.riskOnly()) {
+      const focusedServices = this.expandedHostId() ? this.serviceDescendants(topology, this.expandedHostId()) : new Set<string>();
+      projectedNodes = visibleNodes.filter((node) => node.kind !== 'service' || focusedServices.has(node.id));
+      const focusedIds = new Set(projectedNodes.map((node) => node.id));
+      projectedEdges = projectedEdges.filter((edge) => focusedIds.has(edge.from) && focusedIds.has(edge.to));
+    }
+    return { nodes: projectedNodes, edges: projectedEdges };
+  }
+
+  private serviceDescendants(topology: Topology, hostnameId: string): Set<string> {
+    const nodes = new Map(topology.nodes.map((node) => [node.id, node]));
+    const outgoing = new Map<string, TopologyEdge[]>();
+    for (const edge of topology.edges) outgoing.set(edge.from, [...(outgoing.get(edge.from) || []), edge]);
+    const services = new Set<string>();
+    const queue: Array<{ id: string; depth: number }> = (outgoing.get(hostnameId) || []).map((edge) => ({ id: edge.to, depth: 1 }));
+    const visited = new Set<string>();
+    while (queue.length) {
+      const current = queue.shift()!;
+      if (visited.has(current.id) || current.depth > 8) continue;
+      visited.add(current.id);
+      const node = nodes.get(current.id);
+      if (!node || (node.kind === 'hostname' && node.id !== hostnameId)) continue;
+      if (node.kind === 'service') { services.add(node.id); continue; }
+      for (const edge of outgoing.get(current.id) || []) queue.push({ id: edge.to, depth: current.depth + 1 });
+    }
+    return services;
   }
 
   private filter(topology: Topology): Topology {
