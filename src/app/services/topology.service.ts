@@ -24,6 +24,7 @@ export class TopologyService {
     const networkRegistration = latestEvidence<{ networks?: Array<{ address?: string; name?: string; handle?: string; country?: string; startAddress?: string; endAddress?: string; source?: string }> }>('inspect_network_registration');
     const registrar = registration?.registrar?.organizations?.[0] || registration?.registrar?.names?.[0] || 'Not observed';
     const registrationEvents = registration?.events || {};
+    const registrationPeriod = registrationEvents['registration'] ? `${registrationEvents['registration'].slice(0, 10)} → ${registrationEvents['expiration'] ? registrationEvents['expiration'].slice(0, 10) : 'not published'}` : 'Not observed';
     const domainEmails = [...new Set([...(registration?.publicEmails || []), ...(tls?.certificateEmails || [])])];
 
     nodes.push({
@@ -31,7 +32,7 @@ export class TopologyService {
       details: [
         { label: 'Authorization', value: target.authorizationStatus === 'admin_override' ? 'Admin approved' : target.authorizationStatus, evidence: 'Stored target authorization record.' },
         { label: 'Registrar', value: registrar, evidence: registration ? `Authoritative RDAP evidence from ${registration.source || 'the registry service'}.` : 'The latest scan did not retain RDAP registration evidence.' },
-        { label: 'Registered / expires', value: registrationEvents['registration'] ? `${registrationEvents['registration'].slice(0, 10)} → ${(registrationEvents['expiration'] || 'not published').slice(0, 10)}` : 'Not observed', evidence: registration ? 'Domain lifecycle events returned by authoritative RDAP.' : 'No RDAP lifecycle evidence is available.' },
+        { label: 'Registered / expires', value: registrationPeriod, evidence: registration ? 'Domain lifecycle events returned by authoritative RDAP.' : 'No RDAP lifecycle evidence is available.' },
         { label: 'Nameservers', value: (dnsPosture?.nameservers || registration?.nameservers || []).join(', ') || 'Not observed', evidence: dnsPosture ? 'Direct public NS resolution.' : registration ? 'Nameservers returned by RDAP.' : 'No nameserver evidence is available.' },
         { label: 'DNSSEC', value: dnsPosture?.dnssec?.enabled || registration?.dnssec?.delegationSigned ? 'Delegation signed' : dnsPosture || registration ? 'Not observed as enabled' : 'Not observed', evidence: dnsPosture ? 'Public DS lookup result.' : 'RDAP secureDNS metadata.' },
         { label: 'Mail policy', value: dnsPosture?.emailSecurity?.dmarcPolicy ? `DMARC ${dnsPosture.emailSecurity.dmarcPolicy} · SPF ${dnsPosture.emailSecurity.spf?.length ? 'present' : 'absent'}` : 'Not observed', evidence: dnsPosture?.emailSecurity?.dmarc?.[0] || dnsPosture?.emailSecurity?.spf?.[0] || 'No DNS mail-policy evidence is available.' },
@@ -80,7 +81,12 @@ export class TopologyService {
       }
     };
     for (const action of actions) {
-      if (action.tool === 'discover_tcp_ports' || action.tool === 'inspect_http' || action.tool === 'inspect_tls') {
+      if (action.tool === 'discover_tcp_ports') {
+        try {
+          const result = JSON.parse(action.summary) as { openPorts?: unknown[] };
+          (result.openPorts || []).forEach(addPort);
+        } catch { /* An unstructured legacy result cannot establish reachability. */ }
+      } else if (action.tool === 'inspect_http' || action.tool === 'inspect_tls') {
         collectPorts(action.input);
         try { collectPorts(JSON.parse(action.summary)); } catch { /* Retain only structured port evidence. */ }
       }
@@ -165,10 +171,29 @@ export class TopologyService {
         technologies
       });
     }
+    for (const action of scanActions.filter((item) => item.tool === 'inspect_http')) {
+      try {
+        const result = JSON.parse(action.summary) as { requestedUrl?: string; status?: number; headers?: Record<string, string>; signals?: { title?: string; serviceWords?: string[]; technologies?: Technology[] } };
+        if (!result.requestedUrl || !result.status) continue;
+        const url = new URL(result.requestedUrl);
+        const port = Number(url.port || (url.protocol === 'https:' ? 443 : 80));
+        const product = result.signals?.serviceWords?.[0]?.toLowerCase();
+        const distinctPort = port !== 80 && port !== 443;
+        if (!product && !distinctPort) continue;
+        const label = product ? this.productName(product) : clean(result.signals?.title) || `${url.protocol.replace(':', '').toUpperCase()} service`;
+        const duplicate = services.some((service) => service.hostname === url.hostname && service.port === port && (service.label.toLowerCase() === label.toLowerCase() || Boolean(product && service.productHints?.includes(product))));
+        if (duplicate) continue;
+        services.push({
+          key: `${url.hostname}:${port}:${product || label}`, label, hostname: url.hostname, port,
+          evidence: `Direct GET ${result.requestedUrl} returned ${result.status}${result.signals?.title ? ` with title “${result.signals.title}”` : ''}.`,
+          status: result.status, location: clean(result.headers?.['location']), productHints: product ? [product] : [], technologies: result.signals?.technologies || []
+        });
+      } catch { /* Only complete structured HTTP observations can create service nodes. */ }
+    }
     if (!services.length) services.push({ key: 'web', label: 'HTTP service', hostname: target.hostname, port: ports.includes(443) ? 443 : ports[0]!, evidence: 'An HTTP response was observed by the bounded application probe.' });
 
     services.forEach((service, index) => {
-      const terms = [service.hostname, service.label, ...(service.productHints || [])].filter(Boolean);
+      const terms = [service.hostname === target.hostname ? '' : service.hostname, service.label, ...(service.productHints || [])].filter(Boolean);
       const serviceFindings = findings.filter((finding) => terms.some((term) => [finding.title, finding.summary, finding.asset, ...finding.evidence].join(' ').toLowerCase().includes(term.toLowerCase())));
       const strongestFinding = strongest(serviceFindings);
       const id = `service-${index}`;
