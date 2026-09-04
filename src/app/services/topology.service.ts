@@ -23,7 +23,7 @@ export class TopologyService {
         { label: 'Registration', value: 'Not observed', evidence: 'The latest scan did not retain RDAP registration evidence.' },
         { label: 'TLS identity', value: tls?.valid ? `Valid · ${tls.daysRemaining} days left` : tls ? 'Needs attention' : 'Not observed', evidence: tls ? `${tls.issuer}; ${tls.protocol}; valid until ${tls.validTo}.` : 'No TLS observation is available.' },
         { label: 'Certificate names', value: tls?.subjectAltNames?.join(', ') || 'Not observed', evidence: tls ? 'Certificate Subject Alternative Name extension.' : 'No certificate evidence is available.' }
-      ], findingIds: related(target.hostname).map((f) => f.id)
+      ], findingIds: findings.filter((f) => /dns|certificate|tls|domain/i.test([f.title, f.summary].join(' '))).map((f) => f.id)
     });
 
     const cloudflare = lower.includes('cloudflare');
@@ -50,8 +50,26 @@ export class TopologyService {
     edges.push({ from: edgeId, to: 'server', label: cloudflare ? 'proxied' : 'route' });
 
     const portSet = new Set<number>();
-    for (const match of corpus.matchAll(/(?:port[\s"':=]*|:)(\d{2,5})\b/gi)) {
-      const port = Number(match[1]); if (port > 0 && port <= 65535) portSet.add(port);
+    const addPort = (value: unknown) => { const port = Number(value); if (Number.isInteger(port) && port > 0 && port <= 65535) portSet.add(port); };
+    const collectPorts = (value: unknown): void => {
+      if (Array.isArray(value)) { value.forEach(collectPorts); return; }
+      if (!value || typeof value !== 'object') return;
+      for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+        if (/^port$/i.test(key)) addPort(item);
+        else if (/^ports$/i.test(key) && Array.isArray(item)) item.forEach(addPort);
+        else collectPorts(item);
+      }
+    };
+    for (const action of actions) {
+      if (action.tool === 'discover_tcp_ports' || action.tool === 'inspect_http' || action.tool === 'inspect_tls') {
+        collectPorts(action.input);
+        try { collectPorts(JSON.parse(action.summary)); } catch { /* Retain only structured port evidence. */ }
+      }
+    }
+    for (const finding of findings) {
+      for (const match of finding.asset.matchAll(/:(\d{1,5})\b/g)) addPort(match[1]);
+      const text = [finding.title, finding.summary, ...finding.evidence].join(' ');
+      for (const match of text.matchAll(/\bports?\s+(\d{1,5})(?:\s*(?:,|and)\s*(\d{1,5}))?/gi)) { addPort(match[1]); if (match[2]) addPort(match[2]); }
     }
     if (tls?.port) portSet.add(tls.port); else if (tls) portSet.add(443);
     if (!portSet.size) { portSet.add(80); portSet.add(443); }
