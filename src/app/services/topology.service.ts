@@ -71,8 +71,11 @@ export class TopologyService {
       const observed = new Set<number>();
       const retain = (value: unknown) => { const port = Number(value); if (Number.isInteger(port) && port > 0 && port <= 65535) { observed.add(port); addPort(port); } };
       for (const match of finding.asset.matchAll(/:(\d{1,5})\b/g)) retain(match[1]);
-      const text = [finding.title, finding.summary, ...finding.evidence].join(' ');
+      const text = [finding.title, finding.summary].join(' ');
       for (const match of text.matchAll(/\bports?\s+(\d{1,5})(?:\s*(?:,|and)\s*(\d{1,5}))?/gi)) { retain(match[1]); if (match[2]) retain(match[2]); }
+      for (const evidence of finding.evidence) {
+        for (const match of evidence.matchAll(/\b(?:GET|HEAD)\s+(https?):\/\/[^/:\s]+(?::(\d{1,5}))?/gi)) retain(match[2] || (match[1].toLowerCase() === 'https' ? 443 : 80));
+      }
       if (/tls|certificate/i.test(finding.title)) observed.add(443);
       findingPorts.set(finding.id, observed);
     }
