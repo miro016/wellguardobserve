@@ -17,7 +17,7 @@ export class TopologyService {
     const strongest = (items: Finding[]) => items.sort((a, b) => ['info','low','medium','high','critical'].indexOf(b.severity) - ['info','low','medium','high','critical'].indexOf(a.severity))[0];
 
     nodes.push({
-      id: 'domain', kind: 'domain', label: target.hostname, subtitle: 'Authorized domain', state: target.authorizationStatus === 'pending' ? 'warning' : 'observed', x: 8, y: 48,
+      id: 'domain', kind: 'domain', label: target.hostname, subtitle: 'Authorized domain', state: target.authorizationStatus === 'pending' ? 'warning' : 'observed', x: 12, y: 48,
       details: [
         { label: 'Authorization', value: target.authorizationStatus === 'admin_override' ? 'Admin approved' : target.authorizationStatus, evidence: 'Stored target authorization record.' },
         { label: 'Registration', value: 'Not observed', evidence: 'The latest scan did not retain RDAP registration evidence.' },

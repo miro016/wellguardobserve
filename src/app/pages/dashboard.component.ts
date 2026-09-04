@@ -47,7 +47,7 @@ import { PocketBaseService } from '../services/pocketbase.service';
 export class DashboardComponent implements OnInit {
   private readonly db = inject(PocketBaseService);
   protected readonly targets = signal<Target[]>([]); protected readonly findings = signal<Finding[]>([]); protected readonly actions = signal<AgentActionRecord[]>([]); protected readonly error = signal('');
-  protected readonly actionable = computed(() => this.findings().filter((finding) => finding.severity !== 'info' && finding.status === 'open'));
+  protected readonly actionable = computed(() => this.findings().filter((finding) => finding.severity !== 'info' && finding.status === 'open').sort((a, b) => ['low','medium','high','critical'].indexOf(b.severity) - ['low','medium','high','critical'].indexOf(a.severity)));
   protected readonly urgentCount = computed(() => this.findings().filter((finding) => finding.status === 'open' && (finding.severity === 'critical' || finding.severity === 'high')).length);
   protected readonly assetCount = computed(() => this.targets().reduce((sum, target) => sum + Math.max(1, target.assetCount), 0));
   protected readonly portfolioPosture = computed(() => Math.round(this.targets().reduce((sum, target) => sum + target.posture, 0) / Math.max(1, this.targets().length)));
