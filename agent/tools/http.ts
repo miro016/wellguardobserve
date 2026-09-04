@@ -5,6 +5,7 @@ import type { ScopeGuard } from '../security/scope-guard';
 import { fingerprintWebResponse } from '../fingerprints/web';
 
 const MAX_BODY_BYTES = 96 * 1024;
+const MAX_EXTENDED_BODY_BYTES = 1280 * 1024;
 
 export interface AuthorizedHttpResponse {
   requestedUrl: string;
@@ -80,11 +81,12 @@ export function extractSignals(raw: string, headers: Record<string, string> = {}
   return { title, generator, urls, ipv4, serviceWords, assets, technologies, textSample };
 }
 
-export async function requestAuthorizedHttp(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; path?: string }): Promise<AuthorizedHttpResponse> {
+export async function requestAuthorizedHttp(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; path?: string; maxBodyBytes?: number }): Promise<AuthorizedHttpResponse> {
   const hostname = scope.assertHostname(input.hostname);
   const useTls = input.tls ?? true;
   const port = input.port ?? (useTls ? 443 : 80);
   const path = scope.assertPath(input.path || '/');
+  const bodyLimit = Math.max(1, Math.min(MAX_EXTENDED_BODY_BYTES, Math.floor(input.maxBodyBytes || MAX_BODY_BYTES)));
   if (port < 1 || port > 65535) throw new Error('HTTP port is outside the allowed range.');
   const [{ address, family }] = await scope.resolve(hostname);
   const transport = useTls ? https : http;
@@ -105,8 +107,8 @@ export async function requestAuthorizedHttp(scope: ScopeGuard, input: { hostname
     }, (response) => {
       const chunks: Buffer[] = []; let size = 0; let truncated = false;
       response.on('data', (chunk: Buffer) => {
-        if (size >= MAX_BODY_BYTES) { truncated = true; return; }
-        const remaining = MAX_BODY_BYTES - size;
+        if (size >= bodyLimit) { truncated = true; return; }
+        const remaining = bodyLimit - size;
         chunks.push(chunk.subarray(0, remaining)); size += Math.min(chunk.length, remaining);
         if (chunk.length > remaining) truncated = true;
       });

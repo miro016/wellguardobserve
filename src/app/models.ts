@@ -50,7 +50,7 @@ export interface Scan {
 
 export interface ScanRequest {
   id: string; target: string; mode: 'light' | 'standard'; status: 'queued' | 'processing' | 'cancelling' | 'cancelled' | 'completed' | 'failed';
-  startedAt: string; completedAt: string; error: string; created: string;
+  startedAt: string; completedAt: string; heartbeatAt: string; phase: string; actionCount: number; messageCount: number; error: string; created: string;
 }
 
 export interface AgentActionRecord {

@@ -19,7 +19,10 @@ A scan runs only when its target is `verified` or `admin_override`. An override 
 - Banner inspection listens briefly for service-initiated SSH, FTP, or SMTP greetings and sends no command or authentication material.
 - RDAP starts with the fixed IANA bootstrap registry, preserves registry redaction, and retains only fields the authoritative service publishes.
 - Configuration and versioned application adapters use bounded anonymous GET requests against fixed or explicitly selected metadata paths. The WordPress tool uses public REST `view` context only; it never requests authenticated `edit` fields. The Keycloak adapter makes at most four public GETs for identity, OIDC metadata, canonical-host, and administration-route evidence.
+- Frontend API discovery reads the entry page and at most twelve same-origin JavaScript bundles, each capped at 1.25 MiB. It retains API-shaped route names and backend client markers, discards query values, does not invoke discovered business routes, and requests `/api/health` only after a shipped PocketBase marker is observed.
+- The `safe-recon-v1` audit performs five sequential GET requests from an in-repository allowlist. Strict response signatures prevent generic SPA fallbacks from becoming findings. It never returns environment/configuration values and excludes authentication, payload injection, fuzzing, headless actions, out-of-band callbacks, CVE exploit checks, and arbitrary downloaded templates.
 - A user stop aborts the LangChain run before another tool begins; a bounded request already in flight is allowed to return or time out rather than being replaced with a more forceful action.
+- While a request is processing, the worker updates a five-second heartbeat and a human-readable phase. The phase describes execution state but does not expose hidden model chain-of-thought.
 
 ## Agent boundary
 

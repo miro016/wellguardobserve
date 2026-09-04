@@ -10,16 +10,16 @@ It is intentionally reconnaissance-only: no credential guessing, payload deliver
 - Administrator-created accounts and administrator-approved target creation; there is no public registration.
 - Verified root/subdomain scope plus administrator-approved exact related hostnames. Approving `service.provider.example` never authorizes its parent or sibling tenants.
 - LangChain investigation driven by an Ollama model.
-- Safe DNS, RDAP registration, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, passive service banners, HTTP, TLS, public metadata, versioned WordPress/Keycloak inspection, NVD, MITRE CWE, GitHub Advisory, OSV, CISA KEV, and bounded public-document tools.
+- Safe DNS, RDAP registration, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, passive service banners, HTTP, TLS, public metadata, frontend-to-API discovery, a curated safe web audit, versioned WordPress/Keycloak inspection, NVD, MITRE CWE, GitHub Advisory, OSV, CISA KEV, and bounded public-document tools.
 - Findings with separate severity and confidence, preserved evidence, remediation, source URLs, CWE weakness mappings, and version-matched CVE identifiers.
 - TLS hostname, trust, issuer, validity window, protocol, cipher, expiry, and explicitly published certificate-email monitoring, plus a browsable certificate-transparency record inventory.
 - DNS control-plane visibility for registrar lifecycle, public registration contacts, nameservers, DNSSEC, CAA, MX, SPF, DMARC, MTA-STS, and SMTP TLS reporting.
 - Read-only service configuration audits for HTTP security headers, CORS, fixed public API/metadata paths, and WordPress REST/login/readme/XML-RPC surfaces; directly observed WordPress generator/component versions trigger up to three transparent NVD correlations.
 - Evidence-backed technology detection using local markers and pinned, size-bounded ProjectDiscovery WappalyzerGo and Rapid7 Recog catalogues. Unknown services remain unknown rather than inheriting a product from a hostname.
 - Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase.
-- A pannable, zoomable evidence-linked topology connecting domains, exact hostnames, registered networks, observed public addresses, ports, and services. Findings can attach to a node or to a risky relationship such as “service advertises stale origin.”
+- A pannable, zoomable evidence-linked topology with service, network-context, and full-evidence lenses. The default domain → hostname → application view collapses repeated port/address transit records without discarding them. Findings can attach to a node or to a risky relationship such as “service advertises stale origin.”
 - A target-scoped public identity ledger for names and mailboxes directly disclosed by owned services, RDAP, or `security.txt`. It supports owner-confirmed current/former status, shows only explicitly returned public links, and never guesses or scrapes social profiles.
-- A live scan console with model messages, tool inputs/results, progress, and safe user cancellation; evidence already retained remains auditable after a stop.
+- A live job console with a five-second worker heartbeat, current phase, model messages, tool inputs/results, delayed/stalled indicators, and safe user cancellation; evidence already retained remains auditable after a stop.
 - Working target administration and scan queue controls, target-scoped surface and finding views, all-target portfolio overview, scan reports, transparent agent traces, source catalog, and workspace settings.
 - A custom responsive light/dark security-operations interface and public product landing page.
 
@@ -134,20 +134,21 @@ For a production deployment, set long random PocketBase credentials, a precise `
 - CISA Known Exploited Vulnerabilities feed
 - OSV.dev package vulnerability API
 - DNS records, mail-security policies, and public TLS handshakes
-- Public application metadata and versioned, bounded WordPress and Keycloak adapters
+- Public application metadata, shipped same-origin frontend bundles, the audited `safe-recon-v1` GET-only exposure checks, and versioned bounded WordPress/Keycloak adapters
 - Vendor documentation selected by the investigator
 
 External responses are untrusted evidence and are never treated as agent instructions.
 
 ## Transparency
 
-New investigations persist each application-visible LangChain message as it is emitted alongside every completed bounded tool input and result. Product identity requires a direct response fingerprint; hostnames and generic tool policy text are not product evidence. Adapters are registered through a small manifest-driven registry, so another service can be added without changing the agent's safety boundary. The UI intentionally does not infer hidden infrastructure facts: for example, a Cloudflare edge location is never presented as an origin-server location, and service versions remain “Not observed” until direct or corroborated evidence supports them.
+New investigations persist each application-visible LangChain message as it is emitted alongside every completed bounded tool input and result. The worker also publishes its current phase and heartbeat while a model or network request is in flight. Product identity requires a direct response fingerprint; hostnames and generic tool policy text are not product evidence. Adapters are registered through a small manifest-driven registry, so another service can be added without changing the agent's safety boundary. The UI intentionally does not infer hidden infrastructure facts: for example, a Cloudflare edge location is never presented as an origin-server location, and service versions remain “Not observed” until direct or corroborated evidence supports them.
 
 ## Current MVP limitations
 
 - PocketBase-backed polling is intended for a limited-access, single-instance MVP.
 - Cloudflare and other CDNs obscure origin reachability; a future read-only provider integration can evaluate origin firewall configuration.
 - Product/version identification remains probabilistic and is labelled with confidence. CVEs are only recordable after exact version and NVD applicability correlation; no-version product names never become CVE claims. Wildcard DNS records and missing reverse-proxy routes are explicitly excluded from the service inventory.
+- `safe-recon-v1` is intentionally not an unrestricted Nuclei runner. It permits five reviewed, sequential, GET-only checks with strict response signatures and excludes fuzzing, authentication, payloads, OOB callbacks, headless actions, and CVE exploit templates. Expanding it requires code review and explicit policy metadata.
 - The current container bundles three processes for convenient MVP deployment. They should become separate services when scaling independently.
 
 ## License

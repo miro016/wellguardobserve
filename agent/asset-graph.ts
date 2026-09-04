@@ -144,6 +144,34 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
         for (const address of hostnameAddresses.get(url.hostname) || []) ensureRelation({ key: `serves:${edgeKey}:server:${address}`, fromKey: edgeKey, toKey: `server:${address}`, type: 'serves_from_address', label: 'serves from edge address', state: 'observed', confidence: 95, basis: 'inferred', evidence: [`${url.hostname} returned the Cloudflare marker and resolved to ${address}. This does not identify an origin address.`], findingTitles: [] });
       }
     }
+    if (action.tool === 'inspect_frontend_api') {
+      const hostname = clean(data['hostname'] || action.input['hostname'] || target.hostname);
+      const port = Number(action.input['port'] || (action.input['tls'] === false ? 80 : 443));
+      const backendSignals = Array.isArray(data['backendTechnologies']) ? data['backendTechnologies'].flatMap((value) => value && typeof value === 'object' ? [value as Record<string, unknown>] : []) : [];
+      const endpoints = Array.isArray(data['endpoints']) ? data['endpoints'].flatMap((value) => value && typeof value === 'object' ? [value as Record<string, unknown>] : []) : [];
+      const frontend = [...assets.values()].find((asset) => asset.kind === 'service' && asset.subtitle.toLowerCase().startsWith(hostname.toLowerCase()) && !/api$/i.test(asset.label))?.key
+        || ensureService(hostname, port, 'Web application', `GET ${clean(data['page']) || '/'} returned a public JavaScript application.`);
+      const confirmed = backendSignals.find((signal) => clean(signal['name']) === 'PocketBase API') || backendSignals[0];
+      if (confirmed) {
+        const product = clean(confirmed['name']) || 'Observed API';
+        const apiKey = ensureService(hostname, port, product, clean(confirmed['evidence']) || 'A public frontend bundle contained a backend client marker.');
+        const api = assets.get(apiKey)!;
+        const paths = endpoints.map((item) => clean(item['value'])).filter(Boolean).slice(0, 12);
+        if (paths.length) api.details.push(fact('Frontend API references', paths.join(' · '), 'Routes were extracted from public same-origin JavaScript bundles. Discovered business endpoints were not invoked.', 90));
+        api.details.push(fact('Backend identification', product, clean(confirmed['evidence']) || 'Public bundle and fixed health-document evidence.', Number(confirmed['confidence'] || 75)));
+        ensureRelation({
+          key: `calls-api:${frontend}:${apiKey}`, fromKey: frontend, toKey: apiKey, type: 'calls_api', label: 'calls API', state: 'observed',
+          confidence: Number(confirmed['confidence'] || 75), basis: 'observed',
+          evidence: [clean(confirmed['evidence']) || 'The shipped frontend bundle contains this backend client marker.', ...(paths.length ? [`Public bundles reference ${paths.length} API-shaped route${paths.length === 1 ? '' : 's'}.`] : [])], findingTitles: []
+        });
+      }
+    }
+    if (action.tool === 'inspect_safe_web_audit') {
+      const hostname = clean(data['hostname'] || action.input['hostname'] || target.hostname);
+      const matched = (Array.isArray(data['checks']) ? data['checks'] : []).flatMap((value) => value && typeof value === 'object' && Boolean((value as Record<string, unknown>)['matched']) ? [clean((value as Record<string, unknown>)['templateId'])] : []).filter(Boolean);
+      const service = [...assets.values()].find((asset) => asset.kind === 'service' && asset.subtitle.toLowerCase().startsWith(hostname.toLowerCase()));
+      if (service) service.details.push(fact('Safe web audit', matched.length ? `${matched.length} strict match${matched.length === 1 ? '' : 'es'}` : 'No strict exposure markers matched', `safe-recon-v1 used five sequential GET-only checks; ${matched.length ? `matched ${matched.join(', ')}` : 'no response satisfied a strict template'}.`, 100));
+    }
     if (action.tool === 'inspect_service_banner') {
       const hostname = clean(data['hostname']); const port = Number(data['port']); const fingerprinting = (data['fingerprinting'] || {}) as Record<string, unknown>; const matches = Array.isArray(fingerprinting['matches']) ? fingerprinting['matches'] : [];
       const first = matches[0] && typeof matches[0] === 'object' ? matches[0] as Record<string, unknown> : null; const protocol = clean(data['protocolHint']) || 'TCP'; const product = clean(first?.['product']) || `Unknown ${protocol.toUpperCase()} service`;

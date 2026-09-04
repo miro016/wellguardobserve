@@ -106,8 +106,23 @@ export class PocketBaseService {
   async scanRequest(id: string): Promise<ScanRequest> {
     try {
       const r = await this.client.collection('scanRequests').getOne(id);
-      return { id: r.id, target: r['target'], mode: r['mode'], status: r['status'], startedAt: r['startedAt'], completedAt: r['completedAt'], error: r['error'] ?? '', created: r['created'] } as ScanRequest;
+      return this.request(r);
     } catch (error) { return this.failed(error); }
+  }
+
+  async scanRequests(targetId?: string): Promise<ScanRequest[]> {
+    try {
+      const filter = targetId ? this.client.filter('target = {:targetId}', { targetId }) : '';
+      const records = await this.client.collection('scanRequests').getFullList({ filter, sort: '-created' });
+      return records.map((record) => this.request(record));
+    } catch (error) { return this.failed(error); }
+  }
+
+  private request(r: RecordModel): ScanRequest {
+    return {
+      id: r.id, target: r['target'], mode: r['mode'], status: r['status'], startedAt: r['startedAt'], completedAt: r['completedAt'],
+      heartbeatAt: r['heartbeatAt'] ?? '', phase: r['phase'] ?? '', actionCount: r['actionCount'] ?? 0, messageCount: r['messageCount'] ?? 0, error: r['error'] ?? '', created: r['created']
+    } as ScanRequest;
   }
 
   async cancelScan(request: ScanRequest): Promise<void> {

@@ -24,7 +24,8 @@ export class InvestigationStore {
   async claim(record: RecordModel): Promise<boolean> {
     const current = await this.client.collection('scanRequests').getOne(record.id);
     if (current['status'] !== 'queued') return false;
-    await this.client.collection('scanRequests').update(record.id, { status: 'processing', startedAt: new Date().toISOString(), error: '' });
+    const startedAt = new Date().toISOString();
+    await this.client.collection('scanRequests').update(record.id, { status: 'processing', startedAt, heartbeatAt: startedAt, phase: 'Preparing investigation', actionCount: 0, messageCount: 0, error: '' });
     await this.client.collection('targets').update(record['target'], { status: 'scanning' });
     return true;
   }
@@ -54,6 +55,13 @@ export class InvestigationStore {
     await this.client.collection('agentMessages').create({ target: targetId, scan: scanId, role: message.role, content: message.content, toolName: message.toolName, sequence: message.sequence, occurredAt: message.at });
   }
 
+  async heartbeat(requestId: string, phase: string, actionCount?: number, messageCount?: number): Promise<void> {
+    await this.client.collection('scanRequests').update(requestId, {
+      heartbeatAt: new Date().toISOString(), phase: phase.slice(0, 200),
+      ...(typeof actionCount === 'number' ? { actionCount } : {}), ...(typeof messageCount === 'number' ? { messageCount } : {})
+    });
+  }
+
   async isCancellationRequested(requestId: string): Promise<boolean> {
     const request = await this.client.collection('scanRequests').getOne(requestId);
     return request['status'] === 'cancelling' || request['status'] === 'cancelled';
@@ -61,7 +69,7 @@ export class InvestigationStore {
 
   async cancel(request: RecordModel, scan: RecordModel | null): Promise<void> {
     const completedAt = new Date().toISOString();
-    await this.client.collection('scanRequests').update(request.id, { status: 'cancelled', completedAt, error: '' });
+    await this.client.collection('scanRequests').update(request.id, { status: 'cancelled', completedAt, heartbeatAt: completedAt, phase: 'Stopped by user', error: '' });
     await this.client.collection('targets').update(request['target'], { status: 'observed' });
     if (scan) await this.client.collection('scans').update(scan.id, { status: 'cancelled', completedAt, summary: 'Investigation stopped by the user.' });
   }
@@ -103,12 +111,13 @@ export class InvestigationStore {
     const posture = Math.max(0, 100 - report.findings.reduce((sum, finding) => sum + ({ critical: 35, high: 22, medium: 11, low: 4, info: 0 })[finding.severity], 0));
     await this.client.collection('targets').update(report.target.id, { lastScanAt: report.completedAt, findingCount: report.findings.filter((item) => item.severity !== 'info').length, assetCount: Math.max(1, report.assets.length), posture, status: 'observed' });
     await this.client.collection('scans').update(scan.id, { status: 'completed', completedAt: report.completedAt, summary: report.summary });
-    await this.client.collection('scanRequests').update(request.id, { status: 'completed', completedAt: report.completedAt });
+    await this.client.collection('scanRequests').update(request.id, { status: 'completed', completedAt: report.completedAt, heartbeatAt: report.completedAt, phase: 'Evidence retained' });
   }
 
   async fail(request: RecordModel, scan: RecordModel | null, error: unknown): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
-    await this.client.collection('scanRequests').update(request.id, { status: 'failed', completedAt: new Date().toISOString(), error: message.slice(0, 500) });
+    const completedAt = new Date().toISOString();
+    await this.client.collection('scanRequests').update(request.id, { status: 'failed', completedAt, heartbeatAt: completedAt, phase: 'Investigation failed', error: message.slice(0, 500) });
     await this.client.collection('targets').update(request['target'], { status: 'observed' });
     if (scan) await this.client.collection('scans').update(scan.id, { status: 'failed', completedAt: new Date().toISOString(), error: message.slice(0, 500) });
   }

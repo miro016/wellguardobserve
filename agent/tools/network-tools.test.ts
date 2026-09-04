@@ -8,6 +8,9 @@ import { assessHttpConfiguration } from './configuration';
 import { inspectWordPress, normalizeWordPressUsers } from './wordpress';
 import { summarizeRdap } from './domain';
 import { inspectWithAdapter } from '../adapters/registry';
+import { analyzeFrontendBundles } from './frontend-api';
+import { evaluateSafeTemplate, SAFE_WEB_TEMPLATES } from './safe-audit';
+import type { AuthorizedHttpResponse } from './http';
 
 let server: Server;
 let port: number;
@@ -125,5 +128,23 @@ describe('bounded network tools', () => {
     expect(result.registrar?.names).toContain('Example Registrar');
     expect(result.publicEmails).toContain('abuse@example.test');
     expect(result.dnssec.delegationSigned).toBe(true);
+  });
+
+  test('discovers backend client markers without invoking shipped business routes', () => {
+    const analysis = analyzeFrontendBundles([
+      { url: 'https://app.example.test/vendor.js', raw: `// node_modules/pocketbase/dist/pocketbase.es.mjs\nconst internal='/api/settings';` },
+      { url: 'https://app.example.test/profile.js', raw: `const avatar='/api/files/users/{{id}}/avatar'; const docs='/api/forms/AbstractControl';` }
+    ]);
+    expect(analysis.backendTechnologies[0]?.name).toBe('PocketBase client/API');
+    expect(analysis.endpoints.some((item) => item.value.startsWith('/api/files/users/'))).toBeTrue();
+    expect(analysis.endpoints.some((item) => item.value.includes('/api/forms/'))).toBeFalse();
+    expect(analysis.endpoints.some((item) => item.value === '/api/settings')).toBeFalse();
+  });
+
+  test('safe web templates require strict signatures and reject an SPA fallback', () => {
+    const template = SAFE_WEB_TEMPLATES.find((item) => item.id === 'exposed-git-head')!;
+    const response = (raw: string, contentType: string): AuthorizedHttpResponse => ({ requestedUrl: 'https://app.example.test/.git/HEAD', status: 200, headers: { 'content-type': contentType }, raw, truncated: false });
+    expect(evaluateSafeTemplate(template, response('ref: refs/heads/main\n', 'text/plain'))).toBeTrue();
+    expect(evaluateSafeTemplate(template, response('<html><app-root></app-root></html>', 'text/html'))).toBeFalse();
   });
 });

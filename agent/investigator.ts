@@ -11,6 +11,8 @@ import { inspectHttp } from './tools/http';
 import { inspectHttpConfiguration } from './tools/configuration';
 import { inspectWordPress } from './tools/wordpress';
 import { inspectPublicMetadata, PUBLIC_METADATA_PATHS, type PublicMetadataPath } from './tools/metadata';
+import { inspectFrontendApi } from './tools/frontend-api';
+import { inspectSafeWebAudit } from './tools/safe-audit';
 import { discoverServiceHosts } from './tools/service-hosts';
 import { queryCisaKev, queryCwe, queryGitHubAdvisory, queryGitHubReleases, queryNvdCves, queryOsv, readPublicSource } from './tools/sources';
 import { adapterCatalog, inspectWithAdapter } from './adapters/registry';
@@ -26,7 +28,7 @@ Your job is to identify forgotten services, public management interfaces, accide
 
 Drive the investigation adaptively. Begin with DNS, DNS posture, authoritative domain RDAP, public network registration, certificate transparency, TLS and the root HTTP response. Always use discover_service_hosts once: it combines stored hints, passive host data and bounded HTTPS verification while excluding wildcard/CDN missing routes. Use a bounded port check, then choose deeper service checks from actual evidence. A CDN edge can make ports look open; do not mistake CDN ports for origin services. IP registration describes the public network holder, not a physical server location. Use public sources when they materially improve identification or remediation.
 
-Review every verified service host returned by discover_service_hosts and prioritize public administration, monitoring, storage, development and identity surfaces. Inspect DNS and public network registration for each separately approved exact hostname and for a distinct service host when its address attribution is relevant. Compare the retained technology markers and confidence scores so pages with similar titles are still distinguished by their observed stack. Treat every hostname independently: never transfer a framework, product, or version marker from one host to another just because their titles or redirects look similar. The discovery result already contains each host's root response; use inspect_http, inspect_http_configuration and inspect_public_metadata for meaningful deeper evidence instead of repeating the root path. Use list_service_adapters to see the versioned deeper-inspection capabilities. If direct response evidence identifies Keycloak, call inspect_service_adapter with adapterId keycloak; it automatically records evidence-backed hostname and administration-surface review findings. If direct evidence identifies WordPress, always call inspect_wordpress for that hostname. Public REST users, email-like display names, login surfaces, version disclosures and metadata routes must be described precisely; never infer administrator roles from a public author record. The WordPress tool automatically records an evidence finding when anonymous users are returned and automatically runs up to three NVD correlations for directly observed generator/component versions; do not duplicate those calls or the automatic finding. For a reachable non-HTTP port that may emit a passive banner, use inspect_service_banner once. For other products, choose only documented unauthenticated metadata paths supported by evidence.
+Review every verified service host returned by discover_service_hosts and prioritize public administration, monitoring, storage, development, identity and API surfaces. Inspect DNS and public network registration for each separately approved exact hostname and for a distinct service host when its address attribution is relevant. Compare the retained technology markers and confidence scores so pages with similar titles are still distinguished by their observed stack. Treat every hostname independently: never transfer a framework, product, or version marker from one host to another just because their titles or redirects look similar. The discovery result already contains each host's root response; use inspect_http, inspect_http_configuration and inspect_public_metadata for meaningful deeper evidence instead of repeating the root path. When a public page is a JavaScript application or appears to call a backend, use inspect_frontend_api once to inspect its shipped same-origin bundles and identify API routes/client technology without invoking discovered business operations. Use inspect_safe_web_audit on higher-value public application and administration surfaces; it is a fixed GET-only allowlist and automatically records only strict matches. Use list_service_adapters to see the versioned deeper-inspection capabilities. If direct response evidence identifies Keycloak, call inspect_service_adapter with adapterId keycloak; it automatically records evidence-backed hostname and administration-surface review findings. If direct evidence identifies WordPress, always call inspect_wordpress for that hostname. Public REST users, email-like display names, login surfaces, version disclosures and metadata routes must be described precisely; never infer administrator roles from a public author record. The WordPress tool automatically records an evidence finding when anonymous users are returned and automatically runs up to three NVD correlations for directly observed generator/component versions; do not duplicate those calls or the automatic finding. For a reachable non-HTTP port that may emit a passive banner, use inspect_service_banner once. For other products, choose only documented unauthenticated metadata paths supported by evidence.
 
 Map observed configuration weaknesses to specific mappable CWE weakness IDs and verify their names with query_cwe when useful. A CWE classifies the underlying weakness; it is not proof of exploitability. Only search vulnerability databases after an exact product version has been directly observed. Treat NVD/OSV results as candidates until edition and version ranges match. Record only confirmed matching CVE identifiers; do not attach CVEs based on a product name alone.
 
@@ -88,6 +90,7 @@ export interface InvestigatorOptions {
   maxActions?: number;
   onAction?: (action: AgentAction) => void | Promise<void>;
   onMessage?: (message: AgentMessage) => void | Promise<void>;
+  onProgress?: (phase: string) => void | Promise<void>;
   signal?: AbortSignal;
 }
 
@@ -113,11 +116,13 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
   async function tracked<T>(toolName: string, input: Record<string, unknown>, operation: () => Promise<T>, after?: (output: T) => void | Promise<void>): Promise<string> {
     options.signal?.throwIfAborted();
     if (actions.length >= maxActions) throw new Error(`Investigation action budget of ${maxActions} was exhausted.`);
+    await options.onProgress?.(`Running ${toolName}`);
     const output = await operation();
     options.signal?.throwIfAborted();
     const action: AgentAction = { tool: toolName, input, summary: stringify(output).slice(0, 28_000), at: new Date().toISOString() };
     actions.push(action); await options.onAction?.(action);
     await after?.(output);
+    await options.onProgress?.(`Reviewing ${toolName} evidence`);
     return stringify(output);
   }
 
@@ -173,6 +178,18 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       name: 'inspect_http_configuration',
       description: 'Assess directly returned browser security, framing, CORS, transport and server identity headers on one authorized page. Missing optional headers are review signals, not automatic vulnerabilities.',
       schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), path: z.string().max(512).default('/') })
+    }),
+    tool(async ({ hostname, port, tls, path }) => tracked('inspect_frontend_api', { hostname, port, tls, path }, () => inspectFrontendApi(scope, { hostname, port, tls, path })), {
+      name: 'inspect_frontend_api',
+      description: 'Inspect public HTML and at most twelve size-bounded same-origin JavaScript bundles to find API-shaped routes, frontend technology and backend client markers. It never invokes discovered business endpoints; a fixed /api/health GET is used only after a PocketBase client marker is observed.',
+      schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), path: z.string().max(512).default('/') })
+    }),
+    tool(async ({ hostname, port, tls }) => tracked('inspect_safe_web_audit', { hostname, port, tls }, () => inspectSafeWebAudit(scope, { hostname, port, tls }), async (result) => {
+      for (const finding of result.suggestedFindings) await recordFinding(finding);
+    }), {
+      name: 'inspect_safe_web_audit',
+      description: 'Run the audited safe-recon-v1 web checks on one authorized host: five sequential GET-only templates for accidentally exposed .env, Git metadata, Apache status, phpinfo and Spring Actuator environment data. Strict matches are recorded automatically; no payload, fuzzing, authentication, OOB callback or exploit template is allowed.',
+      schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true) })
     }),
     tool(async ({ hostname, port, tls, basePath }) => tracked('inspect_wordpress', { hostname, port, tls, basePath }, () => inspectWordPress(scope, { hostname, port, tls, basePath }), async (observation) => {
       const publicUsers = observation.evidence.publicUsers.users;
@@ -299,6 +316,7 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
   const userPrompt = `Investigate the authorized public target ${scope.rootHostname}. Authorization method: ${target.authorizationStatus}.${hints}${exactScope} Use no more than ${maxActions} total tool calls. Build an evidence-based picture of what an unauthenticated outsider can observe, including distinct services on subdomains and their meaningful public metadata.`;
   const conversation: AgentMessage[] = [{ role: 'system', content: SYSTEM_PROMPT, toolName: '', sequence: 0, at: startedAt }];
   await options.onMessage?.(conversation[0]!);
+  await options.onProgress?.('Waiting for agent plan');
   let result: unknown = {};
   let emittedRaw = 0;
   const stream = await agent.stream({ messages: [{ role: 'user', content: userPrompt }] }, { recursionLimit: maxActions + 4, streamMode: 'values', signal: options.signal });
@@ -310,6 +328,7 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       const message = conversationMessage(raw[emittedRaw]!, conversation.length);
       conversation.push(message);
       await options.onMessage?.(message);
+      await options.onProgress?.(message.role === 'tool' ? `Tool result received${message.toolName ? `: ${message.toolName}` : ''}` : 'Agent planning next step');
       emittedRaw += 1;
     }
   }

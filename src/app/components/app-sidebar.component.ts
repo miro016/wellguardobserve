@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { PocketBaseService } from '../services/pocketbase.service';
 import { ThemeService } from '../services/theme.service';
@@ -19,6 +19,7 @@ import { ThemeService } from '../services/theme.service';
         <a routerLink="/app/identities" routerLinkActive="active"><i>@</i>Identity exposure</a>
         <a routerLink="/app/reports" routerLinkActive="active"><i>▤</i>Reports</a>
         <span>Transparency</span>
+        <a routerLink="/app/jobs" routerLinkActive="active"><i>◌</i>Observer jobs @if (activeJobs()) { <b class="nav-job-count"><span></span>{{ activeJobs() }}</b> }</a>
         <a routerLink="/app/traces" routerLinkActive="active"><i>›_</i>Agent traces</a>
         <a routerLink="/app/sources" routerLinkActive="active"><i>⊙</i>Evidence sources</a>
         <span>Workspace</span>
@@ -34,13 +35,22 @@ import { ThemeService } from '../services/theme.service';
   `,
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AppSidebarComponent {
+export class AppSidebarComponent implements OnInit, OnDestroy {
   protected readonly pocketbase = inject(PocketBaseService);
   protected readonly theme = inject(ThemeService);
   private readonly router = inject(Router);
+  private timer?: ReturnType<typeof setTimeout>;
+  protected readonly activeJobs = signal(0);
+  ngOnInit(): void { void this.refreshJobs(); }
+  ngOnDestroy(): void { if (this.timer) clearTimeout(this.timer); }
   protected initials(): string {
     const label = String(this.pocketbase.user()?.['name'] || this.pocketbase.user()?.['email'] || 'AD');
     return label.split(/[\s@.]+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('');
   }
   protected signOut(): void { this.pocketbase.signOut(); void this.router.navigateByUrl('/'); }
+  private async refreshJobs(): Promise<void> {
+    try { const jobs = await this.pocketbase.scanRequests(); this.activeJobs.set(jobs.filter((job) => ['queued', 'processing', 'cancelling'].includes(job.status)).length); }
+    catch { /* Page-level errors remain the primary error surface. */ }
+    finally { this.timer = setTimeout(() => void this.refreshJobs(), 5_000); }
+  }
 }

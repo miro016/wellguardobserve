@@ -72,4 +72,19 @@ describe('explicit asset graph', () => {
     expect(graph.identities.find((identity) => identity.email === 'security@example.com')?.employmentStatus).toBe('not_applicable');
     expect(graph.identities.some((identity) => identity.publicLinks.some((link) => link.includes('linkedin.com')))).toBeFalse();
   });
+
+  test('maps a frontend-discovered backend as a service-to-service API relationship', () => {
+    const actions = [
+      action('discover_service_hosts', {}, { root: { status: 200, title: 'Portal', serviceWords: [], technologies: [{ name: 'Angular' }] }, serviceHosts: [] }),
+      action('inspect_frontend_api', { hostname: 'example.com', port: 443 }, {
+        hostname: 'example.com', page: 'https://example.com/',
+        backendTechnologies: [{ name: 'PocketBase API', confidence: 100, evidence: 'GET /api/health returned the PocketBase-compatible health document.' }],
+        endpoints: [{ value: '/api/files/users/{dynamic}', kind: 'same-origin path', evidence: 'main.js contains this route.' }]
+      })
+    ];
+    const graph = buildAssetGraph(target, actions, [], []);
+    const api = graph.assets.find((asset) => asset.label === 'PocketBase API');
+    expect(api?.details.some((detail) => detail.label === 'Frontend API references')).toBeTrue();
+    expect(graph.relations.some((relation) => relation.type === 'calls_api' && relation.toKey === api?.key)).toBeTrue();
+  });
 });
