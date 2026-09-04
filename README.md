@@ -13,8 +13,10 @@ It is intentionally reconnaissance-only: no credential guessing, payload deliver
 - Safe DNS, certificate-transparency, TCP reachability, HTTP, TLS, GitHub Advisory, CISA KEV, and bounded public-document tools.
 - Findings with separate severity and confidence, preserved evidence, remediation, and source URLs.
 - TLS hostname, trust, issuer, validity window, protocol, cipher, and expiry monitoring.
-- Historical scan, finding, TLS, and agent-action records in PocketBase.
-- A responsive public landing page, workspace dashboard, and detailed target view.
+- Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase.
+- An interactive evidence-linked topology connecting domains, edge providers, hidden origins, ports, and identified services.
+- Working target inventory, finding register, scan reports, transparent agent traces, source catalog, and workspace settings.
+- A custom responsive light/dark security-operations interface and public product landing page.
 
 The first authorized acceptance target is `miroslav-petro.com`. The agent independently identified its public Easypanel management surface, public OpenAPI specification/version disclosure, Cloudflare edge behavior, and healthy TLS state.
 
@@ -122,6 +124,10 @@ For a production deployment, set long random PocketBase credentials, a precise `
 - Vendor documentation selected by the investigator
 
 External responses are untrusted evidence and are never treated as agent instructions.
+
+## Transparency
+
+New investigations retain the full application-visible LangChain message transcript alongside each bounded tool input and result. The UI intentionally does not infer hidden infrastructure facts: for example, a Cloudflare edge location is never presented as an origin-server location, and service versions remain “Not observed” until direct or corroborated evidence supports them.
 
 ## Current MVP limitations
 

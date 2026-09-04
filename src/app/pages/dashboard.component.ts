@@ -1,82 +1,52 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AppSidebarComponent } from '../components/app-sidebar.component';
-import { Finding, Target } from '../models';
+import { InfrastructureGraphComponent } from '../components/infrastructure-graph.component';
+import { AgentActionRecord, Finding, Target, TlsObservation } from '../models';
 import { PocketBaseService } from '../services/pocketbase.service';
 
 @Component({
-  selector: 'wg-dashboard',
-  imports: [AppSidebarComponent, DatePipe, RouterLink],
+  selector: 'wg-dashboard', imports: [AppSidebarComponent, InfrastructureGraphComponent, DatePipe, RouterLink],
   template: `
-    <div class="app-layout">
-      <wg-app-sidebar />
-      <main class="app-main">
-        <header class="app-header">
-          <div><span class="app-breadcrumb">Workspace / Overview</span><h1>External posture</h1></div>
-          <div class="header-actions"><span class="system-state"><i></i> Observer ready</span><button class="icon-button" aria-label="Notifications">●</button></div>
-        </header>
-
-        <section class="posture-overview">
-          <div class="posture-score">
-            <div class="score-ring" [style.--score]="targets()[0]?.posture || 0"><span>{{ targets()[0]?.posture || '—' }}</span><small>/ 100</small></div>
-            <div><span class="section-index">Current posture</span><h2>One exposure deserves your attention.</h2><p>The public surface is stable. A management interface remains reachable from the internet.</p></div>
-          </div>
-          <div class="metric-column"><span>Open findings</span><strong>{{ findings().length }}</strong><small><i class="severity-dot high"></i> {{ highCount() }} high priority</small></div>
-          <div class="metric-column"><span>Observed assets</span><strong>{{ targets()[0]?.assetCount || 0 }}</strong><small><i class="severity-dot healthy"></i> No new assets today</small></div>
+    <div class="app-layout"><wg-app-sidebar /><main class="app-main">
+      <header class="app-header"><div><span class="app-breadcrumb">OBSERVE / OVERVIEW</span><h1>Exposure operations</h1><p>What an unauthenticated outsider can establish about your public infrastructure.</p></div><div class="header-actions"><span class="system-state"><i></i>Agent online</span><a class="button primary compact" routerLink="/app/surface">Open topology <span>→</span></a></div></header>
+      @if (error()) { <div class="error-banner"><strong>Live data unavailable</strong><span>{{ error() }}</span></div> }
+      @if (primaryTarget(); as target) {
+        <section class="ops-metrics">
+          <article class="posture-metric"><div class="posture-gauge" [style.--score]="target.posture"><span>{{ target.posture }}</span></div><div><small>EXTERNAL POSTURE</small><strong>{{ postureLabel(target.posture) }}</strong><span>Based on latest retained evidence</span></div></article>
+          <article><small>ACTIONABLE FINDINGS</small><strong>{{ actionable().length }}</strong><span class="metric-delta risk"><i></i>{{ urgentCount() }} high priority</span></article>
+          <article><small>OBSERVED ASSETS</small><strong>{{ target.assetCount }}</strong><span class="metric-delta"><i></i>1 authorized root</span></article>
+          <article><small>LAST INVESTIGATION</small><strong class="time-value">{{ target.lastScanAt | date:'HH:mm:ss' }}</strong><span>{{ target.lastScanAt | date:'MMM d, y' }}</span></article>
         </section>
 
-        <section class="dashboard-grid">
-          <div class="panel target-panel">
-            <div class="panel-heading"><div><span class="section-index">Authorized scope</span><h2>Targets</h2></div><button class="small-button" type="button">Add target <span>+</span></button></div>
-            <div class="target-table-head"><span>Target</span><span>Posture</span><span>Surface</span><span>Last observed</span><span></span></div>
-            @for (target of targets(); track target.id) {
-              <a class="target-row" [routerLink]="['/app/targets', target.id]">
-                <span class="target-identity"><i>{{ target.hostname.slice(0, 1).toUpperCase() }}</i><span><strong>{{ target.hostname }}</strong><small>{{ target.authorizationStatus === 'admin_override' ? 'Admin authorized' : 'Ownership verified' }}</small></span></span>
-                <span><b class="posture-pill">{{ target.posture }}</b></span>
-                <span><strong>{{ target.assetCount }} assets</strong><small>{{ target.findingCount }} findings</small></span>
-                <span><strong>{{ target.lastScanAt | date:'MMM d, HH:mm' }}</strong><small>standard observation</small></span>
-                <span class="row-arrow">→</span>
-              </a>
-            }
-          </div>
-
-          <div class="panel activity-panel">
-            <div class="panel-heading"><div><span class="section-index">Investigator</span><h2>Recent activity</h2></div><span class="live-label">live</span></div>
-            <div class="activity-stream">
-              <article><i class="activity-symbol observe"></i><div><strong>Compared the public surface</strong><p>No ports changed since the previous observation.</p><time>37 seconds ago</time></div></article>
-              <article><i class="activity-symbol tls">✓</i><div><strong>Validated TLS identity</strong><p>Certificate is trusted and covers the requested host.</p><time>42 seconds ago</time></div></article>
-              <article><i class="activity-symbol reason">?</i><div><strong>Investigated service identity</strong><p>Correlated page metadata with public product documentation.</p><time>51 seconds ago</time></div></article>
-            </div>
-          </div>
-
-          <div class="panel findings-panel">
-            <div class="panel-heading"><div><span class="section-index">Evidence requiring review</span><h2>Open findings</h2></div><a href="#" class="text-link">View all <span>→</span></a></div>
-            <div class="finding-list">
-              @for (finding of findings(); track finding.id) {
-                <article class="finding-row">
-                  <span class="severity-label" [class]="finding.severity">{{ finding.severity }}</span>
-                  <div><h3>{{ finding.title }}</h3><p>{{ finding.summary }}</p><span class="asset-label">{{ finding.asset }}</span></div>
-                  <div class="confidence"><span>{{ finding.confidence }}%</span><small>confidence</small></div>
-                </article>
-              }
-            </div>
-          </div>
+        <section class="panel topology-panel">
+          <div class="panel-heading"><div><span class="section-index">LIVE SURFACE MODEL</span><h2>{{ target.hostname }}</h2></div><div class="panel-actions"><span class="evidence-count">{{ actions().length }} tool observations</span><a routerLink="/app/traces">Inspect trace →</a></div></div>
+          <wg-infrastructure-graph [target]="target" [findings]="findings()" [tls]="tls()" [actions]="actions()" />
         </section>
-      </main>
-    </div>
+
+        <section class="dashboard-lower">
+          <article class="panel"><div class="panel-heading"><div><span class="section-index">PRIORITY QUEUE</span><h2>Needs review</h2></div><a routerLink="/app/findings">All findings →</a></div>
+            <div class="compact-findings">@for (finding of actionable().slice(0, 4); track finding.id) { <a routerLink="/app/findings" class="compact-finding"><span class="severity-mark" [attr.data-severity]="finding.severity"></span><div><strong>{{ finding.title }}</strong><small>{{ finding.asset }} · {{ finding.confidence }}% confidence</small></div><span>→</span></a> } @empty { <div class="empty-state">No actionable findings in the latest records.</div> }</div>
+          </article>
+          <article class="panel"><div class="panel-heading"><div><span class="section-index">LATEST TRACE</span><h2>Agent activity</h2></div><a routerLink="/app/traces">Full transcript →</a></div>
+            <div class="tool-stream">@for (action of actions().slice(-5).reverse(); track action.id) { <div><time>{{ action.occurredAt | date:'HH:mm:ss' }}</time><span>{{ action.tool }}</span><p>{{ compact(action.summary) }}</p></div> } @empty { <div class="empty-state">No retained tool activity yet.</div> }</div>
+          </article>
+        </section>
+      } @else if (!error()) { <div class="loading-state"><i></i>Loading live workspace…</div> }
+    </main></div>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class DashboardComponent implements OnInit {
-  private readonly pocketbase = inject(PocketBaseService);
-  protected readonly targets = signal<Target[]>([]);
-  protected readonly findings = signal<Finding[]>([]);
-  protected readonly highCount = () => this.findings().filter((finding) => finding.severity === 'critical' || finding.severity === 'high').length;
-
-  ngOnInit(): void {
-    void Promise.all([this.pocketbase.targets(), this.pocketbase.findings()]).then(([targets, findings]) => {
-      this.targets.set(targets); this.findings.set(findings);
-    });
-  }
+  private readonly db = inject(PocketBaseService);
+  protected readonly targets = signal<Target[]>([]); protected readonly findings = signal<Finding[]>([]);
+  protected readonly tls = signal<TlsObservation | null>(null); protected readonly actions = signal<AgentActionRecord[]>([]); protected readonly error = signal('');
+  protected readonly primaryTarget = computed(() => this.targets()[0] || null);
+  protected readonly actionable = computed(() => this.findings().filter((f) => f.severity !== 'info' && f.status === 'open'));
+  protected readonly urgentCount = computed(() => this.findings().filter((f) => f.severity === 'critical' || f.severity === 'high').length);
+  ngOnInit(): void { void this.load(); }
+  private async load(): Promise<void> { try { const targets = await this.db.targets(); this.targets.set(targets); const target = targets[0]; if (!target) return; const [findings, tls, actions] = await Promise.all([this.db.findings(target.id), this.db.tls(target.id), this.db.agentActions({ targetId: target.id })]); this.findings.set(findings); this.tls.set(tls); this.actions.set(actions); } catch (e) { this.error.set(e instanceof Error ? e.message : 'Could not load workspace data.'); } }
+  protected postureLabel(score: number): string { return score >= 90 ? 'Strong' : score >= 70 ? 'Review recommended' : 'Attention required'; }
+  protected compact(value: string): string { try { const parsed = JSON.parse(value); return String(parsed.title || parsed.hostname || parsed.status || value).slice(0, 120); } catch { return value.replace(/\s+/g, ' ').slice(0, 120); } }
 }

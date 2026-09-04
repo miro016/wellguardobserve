@@ -40,6 +40,9 @@ export class InvestigationStore {
   }
 
   async complete(request: RecordModel, scan: RecordModel, report: InvestigationReport): Promise<void> {
+    for (const message of report.conversation) {
+      await this.client.collection('agentMessages').create({ target: report.target.id, scan: scan.id, role: message.role, content: message.content, toolName: message.toolName, sequence: message.sequence, occurredAt: message.at });
+    }
     for (const finding of report.findings) {
       await this.client.collection('findings').create({
         target: report.target.id, scan: scan.id, title: finding.title, summary: finding.summary,

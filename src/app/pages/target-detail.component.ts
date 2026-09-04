@@ -2,107 +2,34 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AppSidebarComponent } from '../components/app-sidebar.component';
-import { Finding, Target, TlsObservation } from '../models';
+import { InfrastructureGraphComponent } from '../components/infrastructure-graph.component';
+import { AgentActionRecord, Finding, Scan, Target, TlsObservation } from '../models';
 import { PocketBaseService } from '../services/pocketbase.service';
 
 @Component({
-  selector: 'wg-target-detail',
-  imports: [AppSidebarComponent, DatePipe, RouterLink],
+  selector: 'wg-target-detail', imports: [AppSidebarComponent, InfrastructureGraphComponent, DatePipe, RouterLink],
   template: `
-    <div class="app-layout">
-      <wg-app-sidebar />
-      <main class="app-main target-main">
-        <header class="app-header target-header">
-          <div><a class="app-breadcrumb" routerLink="/app">Workspace / Targets /</a><h1>{{ target()?.hostname || 'Loading target…' }}</h1><p>{{ target()?.name }}</p></div>
-          <div class="header-actions"><span class="authorization-badge"><i></i> Admin authorized</span><button class="button button-primary scan-button" (click)="scan()" [disabled]="scanState() === 'requesting'">{{ scanLabel() }} <span>◎</span></button></div>
-        </header>
-
-        <nav class="target-tabs" aria-label="Target sections"><a class="active" href="#overview">Overview</a><a href="#findings">Findings <b>{{ findings().length }}</b></a><a href="#surface">Surface</a><a href="#history">History</a><a href="#authorization">Authorization</a></nav>
-
-        <section class="target-status-strip">
-          <div><span class="status-orb"></span><span><small>Observation status</small><strong>Continuous watch active</strong></span></div>
-          <div><small>Last completed</small><strong>{{ target()?.lastScanAt | date:'MMM d, HH:mm:ss' }}</strong></div>
-          <div><small>Policy</small><strong>Standard · recon only</strong></div>
-          <div><small>Next observation</small><strong>in 5 hours</strong></div>
+    <div class="app-layout"><wg-app-sidebar /><main class="app-main">
+      <header class="app-header"><div><a class="app-breadcrumb" routerLink="/app/targets">TARGETS / DETAIL</a><h1>{{ target()?.hostname || 'Loading target…' }}</h1><p>{{ target()?.name }}</p></div><div class="header-actions"><span class="authorization-badge"><i></i>{{ target()?.authorizationStatus === 'admin_override' ? 'Admin approved' : 'Ownership verified' }}</span><button class="button primary compact" type="button" (click)="scan()" [disabled]="scanState() !== 'idle'">{{ scanLabel() }} <span>◎</span></button></div></header>
+      @if (error()) { <div class="error-banner"><strong>Target data unavailable</strong><span>{{ error() }}</span></div> }
+      @if (target(); as item) {
+        <nav class="subnav"><a href="#map">Surface map</a><a href="#findings">Findings <b>{{ findings().length }}</b></a><a href="#tls">TLS</a><a routerLink="/app/traces">Agent trace</a><a routerLink="/app/reports">Reports</a></nav>
+        <section class="target-facts"><div><small>STATUS</small><strong><i class="live-dot"></i>{{ item.status }}</strong></div><div><small>POSTURE</small><strong>{{ item.posture }} / 100</strong></div><div><small>LAST SCAN</small><strong>{{ item.lastScanAt | date:'MMM d, HH:mm:ss' }}</strong></div><div><small>RETAINED TOOLS</small><strong>{{ actions().length }}</strong></div><div><small>SCAN HISTORY</small><strong>{{ scans().length }}</strong></div></section>
+        <section class="panel topology-panel" id="map"><div class="panel-heading"><div><span class="section-index">CLICK ANY ASSET</span><h2>Observed infrastructure</h2></div><span class="evidence-count">Evidence-linked model</span></div><wg-infrastructure-graph [target]="item" [findings]="findings()" [tls]="tls()" [actions]="actions()" /></section>
+        <section class="target-detail-grid">
+          <article class="panel" id="findings"><div class="panel-heading"><div><span class="section-index">FINDINGS</span><h2>Evidence and action</h2></div><a routerLink="/app/findings">Open register →</a></div><div class="finding-cards">@for (finding of findings(); track finding.id) { <article class="finding-card"><header><span class="severity-label" [attr.data-severity]="finding.severity">{{ finding.severity }}</span><span>{{ finding.confidence }}% confidence</span></header><h3>{{ finding.title }}</h3><p>{{ finding.summary }}</p><details><summary>Evidence ({{ finding.evidence.length }})</summary><ul>@for (item of finding.evidence; track item) { <li>{{ item }}</li> }</ul></details><div class="remediation"><small>RECOMMENDED ACTION</small><p>{{ finding.remediation || 'Review this exposure and reduce public access when it is not explicitly required.' }}</p></div></article> } @empty { <div class="empty-state">No findings retained for this target.</div> }</div></article>
+          <aside class="panel tls-card" id="tls"><div class="panel-heading"><div><span class="section-index">TRANSPORT IDENTITY</span><h2>TLS certificate</h2></div><span class="state-pill" [attr.data-state]="tls()?.valid ? 'healthy' : 'warning'">{{ tls()?.valid ? 'Valid' : 'Unknown' }}</span></div>@if (tls(); as certificate) { <div class="tls-score"><strong>{{ certificate.daysRemaining }}</strong><span>days until expiry</span></div><dl class="fact-list"><div><dt>Issuer</dt><dd>{{ certificate.issuer }}</dd></div><div><dt>Protocol</dt><dd>{{ certificate.protocol }}</dd></div><div><dt>Cipher</dt><dd>{{ certificate.cipher || 'Not retained' }}</dd></div><div><dt>Valid until</dt><dd>{{ certificate.validTo | date:'MMM d, y, HH:mm' }}</dd></div><div><dt>Names</dt><dd>{{ certificate.subjectAltNames.join(', ') }}</dd></div></dl><p class="evidence-note"><span>EVIDENCE</span>Values come from a direct, hostname-validated TLS handshake.</p> } @else { <div class="empty-state">No TLS observation is available.</div> }</aside>
         </section>
-
-        <section class="target-content" id="overview">
-          <div class="target-primary">
-            <article class="panel attention-panel">
-              <div class="panel-heading"><div><span class="section-index">Posture summary</span><h2>What the observer sees</h2></div><span class="posture-pill large">{{ target()?.posture || 64 }}</span></div>
-              <p class="attention-lede">The host presents a valid identity through Cloudflare, while its homepage reveals a public infrastructure management surface.</p>
-              <div class="finding-list detailed" id="findings">
-                @for (finding of findings(); track finding.id) {
-                  <article class="finding-row">
-                    <span class="severity-label" [class]="finding.severity">{{ finding.severity }}</span>
-                    <div><h3>{{ finding.title }}</h3><p>{{ finding.summary }}</p><details><summary>View observed evidence</summary><ul>@for (item of finding.evidence; track item) { <li>{{ item }}</li> }</ul></details></div>
-                    <div class="confidence"><span>{{ finding.confidence }}%</span><small>confidence</small></div>
-                  </article>
-                }
-              </div>
-            </article>
-
-            <article class="panel surface-panel" id="surface">
-              <div class="panel-heading"><div><span class="section-index">Reachable surface</span><h2>Observed services</h2></div><span class="panel-note">2 responding</span></div>
-              <div class="service-map">
-                <div class="service-row"><span class="port-number">443</span><span class="service-protocol">HTTPS</span><span><strong>Cloudflare edge</strong><small>HTTP/2 · application surface</small></span><span class="service-health review">review</span></div>
-                <div class="service-row"><span class="port-number">80</span><span class="service-protocol">HTTP</span><span><strong>Redirect service</strong><small>Permanent move to HTTPS</small></span><span class="service-health healthy">expected</span></div>
-              </div>
-            </article>
-          </div>
-
-          <aside class="target-aside">
-            <article class="panel tls-panel">
-              <div class="tls-hero"><div class="certificate-seal">✓</div><span><small>TLS identity</small><strong>{{ tls()?.valid ? 'Valid & trusted' : 'Needs attention' }}</strong></span></div>
-              <div class="tls-days"><strong>{{ tls()?.daysRemaining || '—' }}</strong><span>days<br>remaining</span></div>
-              <dl>
-                <div><dt>Issuer</dt><dd>{{ tls()?.issuer }}</dd></div>
-                <div><dt>Valid until</dt><dd>{{ tls()?.validTo | date:'MMM d, y' }}</dd></div>
-                <div><dt>Protocol</dt><dd>{{ tls()?.protocol }}</dd></div>
-                <div><dt>Coverage</dt><dd>{{ tls()?.subjectAltNames?.length || 0 }} names</dd></div>
-              </dl>
-              <div class="tls-timeline"><span style="--progress: 62%"></span></div>
-              <p>Renewal should be observed before <strong>{{ tls()?.validTo | date:'MMM d' }}</strong>.</p>
-            </article>
-
-            <article class="panel reasoning-panel">
-              <div class="panel-heading"><div><span class="section-index">Latest trace</span><h2>Agent reasoning</h2></div><span class="live-label muted">complete</span></div>
-              <ol>
-                <li class="done"><span></span><p><strong>Resolved public edge</strong>Cloudflare addresses returned for the root host.</p></li>
-                <li class="done"><span></span><p><strong>Inspected application identity</strong>HTML title and static assets identify Easypanel.</p></li>
-                <li class="done"><span></span><p><strong>Validated certificate</strong>Chain and hostname checks succeeded.</p></li>
-                <li class="finding"><span></span><p><strong>Recorded exposure</strong>Public control surface marked for owner review.</p></li>
-              </ol>
-            </article>
-          </aside>
-        </section>
-      </main>
-    </div>
+      }
+    </main></div>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class TargetDetailComponent implements OnInit {
-  private readonly pocketbase = inject(PocketBaseService);
-  private readonly route = inject(ActivatedRoute);
-  protected readonly target = signal<Target | null>(null);
-  protected readonly findings = signal<Finding[]>([]);
-  protected readonly tls = signal<TlsObservation | null>(null);
-  protected readonly scanState = signal<'idle' | 'requesting' | 'queued'>('idle');
-  protected readonly scanLabel = () => ({ idle: 'Observe now', requesting: 'Requesting…', queued: 'Observation queued' })[this.scanState()];
-
-  ngOnInit(): void {
-    const id = this.route.snapshot.paramMap.get('id') ?? '';
-    void Promise.all([this.pocketbase.targets(), this.pocketbase.findings(id), this.pocketbase.tls(id)]).then(([targets, findings, tls]) => {
-      this.target.set(targets.find((item) => item.id === id) ?? targets[0] ?? null);
-      this.findings.set(findings); this.tls.set(tls);
-    });
-  }
-
-  protected async scan(): Promise<void> {
-    const target = this.target();
-    if (!target) return;
-    this.scanState.set('requesting');
-    try { await this.pocketbase.requestScan(target.id); this.scanState.set('queued'); }
-    catch { this.scanState.set('idle'); }
-  }
+  private readonly db = inject(PocketBaseService); private readonly route = inject(ActivatedRoute);
+  protected readonly target = signal<Target | null>(null); protected readonly findings = signal<Finding[]>([]); protected readonly tls = signal<TlsObservation | null>(null); protected readonly actions = signal<AgentActionRecord[]>([]); protected readonly scans = signal<Scan[]>([]); protected readonly scanState = signal<'idle'|'requesting'|'queued'>('idle'); protected readonly error = signal('');
+  protected readonly scanLabel = () => ({ idle: 'Run observation', requesting: 'Queueing…', queued: 'Queued' })[this.scanState()];
+  ngOnInit(): void { void this.load(); }
+  private async load(): Promise<void> { const id = this.route.snapshot.paramMap.get('id') || ''; try { const [targets, findings, tls, actions, scans] = await Promise.all([this.db.targets(), this.db.findings(id), this.db.tls(id), this.db.agentActions({ targetId: id }), this.db.scans(id)]); this.target.set(targets.find((x) => x.id === id) || null); this.findings.set(findings); this.tls.set(tls); this.actions.set(actions); this.scans.set(scans); } catch (e) { this.error.set(e instanceof Error ? e.message : 'Could not load target.'); } }
+  protected async scan(): Promise<void> { const target = this.target(); if (!target) return; this.scanState.set('requesting'); try { await this.db.requestScan(target.id); this.scanState.set('queued'); } catch { this.scanState.set('idle'); } }
 }

@@ -1,4 +1,6 @@
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
+export type NodeState = 'risk' | 'warning' | 'healthy' | 'observed' | 'unknown';
+export type NodeKind = 'domain' | 'edge' | 'server' | 'port' | 'service';
 
 export interface Target {
   id: string;
@@ -13,25 +15,36 @@ export interface Target {
 }
 
 export interface Finding {
-  id: string;
-  title: string;
-  summary: string;
-  severity: Severity;
-  confidence: number;
-  asset: string;
-  evidence: string[];
-  source?: string;
-  created: string;
-  status: 'open' | 'accepted' | 'resolved';
+  id: string; target: string; scan: string; title: string; summary: string; severity: Severity;
+  confidence: number; asset: string; evidence: string[]; remediation: string; sourceUrls: string[];
+  created: string; status: 'open' | 'accepted' | 'resolved';
 }
 
 export interface TlsObservation {
-  hostname: string;
-  valid: boolean;
-  issuer: string;
-  validFrom: string;
-  validTo: string;
-  daysRemaining: number;
-  protocol: string;
-  subjectAltNames: string[];
+  id?: string; scan?: string; hostname: string; port?: number; valid: boolean; authorizationError?: string | null;
+  issuer: string; subject?: string; validFrom: string; validTo: string; daysRemaining: number; protocol: string;
+  cipher?: string; fingerprint256?: string; subjectAltNames: string[];
 }
+
+export interface Scan {
+  id: string; target: string; request?: string; status: 'running' | 'completed' | 'failed'; startedAt: string;
+  completedAt: string; summary: string; error: string; created: string;
+}
+
+export interface AgentActionRecord {
+  id: string; target: string; scan: string; tool: string; input: Record<string, unknown>; summary: string; occurredAt: string;
+}
+
+export interface AgentMessageRecord {
+  id: string; target: string; scan: string; role: 'system' | 'user' | 'assistant' | 'tool'; content: string;
+  toolName: string; sequence: number; occurredAt: string;
+}
+
+export interface EvidenceItem { label: string; value: string; evidence: string; }
+
+export interface TopologyNode {
+  id: string; kind: NodeKind; label: string; subtitle: string; state: NodeState; x: number; y: number;
+  details: EvidenceItem[]; findingIds: string[];
+}
+
+export interface TopologyEdge { from: string; to: string; label?: string; }

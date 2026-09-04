@@ -1,49 +1,13 @@
 import { Injectable, signal } from '@angular/core';
 import PocketBase, { RecordModel } from 'pocketbase';
-import { Finding, Target, TlsObservation } from '../models';
-
-const demoTarget: Target = {
-  id: 'miroslav-petro-com',
-  name: 'Personal infrastructure',
-  hostname: 'miroslav-petro.com',
-  authorizationStatus: 'admin_override',
-  status: 'observed',
-  lastScanAt: new Date().toISOString(),
-  assetCount: 4,
-  findingCount: 2,
-  posture: 64
-};
-
-const demoFindings: Finding[] = [
-  {
-    id: 'public-management-surface',
-    title: 'Infrastructure control panel is publicly reachable',
-    summary: 'The public homepage identifies itself as an Easypanel management surface. Administrative interfaces deserve a narrower trust boundary even when authentication is enabled.',
-    severity: 'high', confidence: 96, asset: 'miroslav-petro.com:443',
-    evidence: ['HTTP 200 at the public origin', 'Document title: Easypanel', 'Server traffic passes through Cloudflare'],
-    created: new Date().toISOString(), status: 'open'
-  },
-  {
-    id: 'tls-valid',
-    title: 'TLS certificate is healthy',
-    summary: 'The certificate matches the host and is currently inside its validity window.',
-    severity: 'info', confidence: 100, asset: 'miroslav-petro.com:443',
-    evidence: ['Issuer: Google Trust Services WE1', 'SAN covers miroslav-petro.com and *.miroslav-petro.com'],
-    created: new Date().toISOString(), status: 'open'
-  }
-];
-
-const demoTls: TlsObservation = {
-  hostname: 'miroslav-petro.com', valid: true, issuer: 'Google Trust Services / WE1',
-  validFrom: '2026-07-17T20:21:26Z', validTo: '2026-10-15T21:19:01Z', daysRemaining: 41,
-  protocol: 'TLSv1.3', subjectAltNames: ['miroslav-petro.com', '*.miroslav-petro.com']
-};
+import { AgentActionRecord, AgentMessageRecord, Finding, Scan, Target, TlsObservation } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class PocketBaseService {
   readonly client = new PocketBase(window.location.origin);
   readonly connected = signal(false);
   readonly user = signal<RecordModel | null>(this.client.authStore.record);
+  readonly lastError = signal('');
 
   constructor() {
     this.client.autoCancellation(false);
@@ -54,51 +18,71 @@ export class PocketBaseService {
     await this.client.collection('users').authWithPassword(email, password);
     this.connected.set(true);
   }
-
-  signOut(): void {
-    this.client.authStore.clear();
+  signOut(): void { this.client.authStore.clear(); }
+  private failed(error: unknown): never {
+    this.lastError.set(error instanceof Error ? error.message : 'PocketBase request failed.');
+    throw error;
   }
 
   async targets(): Promise<Target[]> {
     try {
       const records = await this.client.collection('targets').getFullList({ sort: '-created' });
       this.connected.set(true);
-      return records.map((record) => ({
-        id: record.id, name: record['name'], hostname: record['hostname'],
-        authorizationStatus: record['authorizationStatus'], status: record['status'],
-        lastScanAt: record['lastScanAt'], assetCount: record['assetCount'] ?? 0,
-        findingCount: record['findingCount'] ?? 0, posture: record['posture'] ?? 100
-      } as Target));
-    } catch {
-      return [demoTarget];
-    }
+      return records.map((r) => ({ id: r.id, name: r['name'], hostname: r['hostname'], authorizationStatus: r['authorizationStatus'], status: r['status'], lastScanAt: r['lastScanAt'], assetCount: r['assetCount'] ?? 0, findingCount: r['findingCount'] ?? 0, posture: r['posture'] ?? 100 } as Target));
+    } catch (error) { return this.failed(error); }
   }
 
   async findings(targetId?: string): Promise<Finding[]> {
     try {
       const filter = targetId ? this.client.filter('target = {:targetId}', { targetId }) : '';
       const records = await this.client.collection('findings').getFullList({ filter, sort: '-created' });
-      return records.map((record) => ({
-        id: record.id, title: record['title'], summary: record['summary'], severity: record['severity'],
-        confidence: record['confidence'], asset: record['asset'], evidence: record['evidence'] ?? [],
-        source: record['source'], created: record['created'], status: record['status']
-      } as Finding));
-    } catch {
-      return demoFindings;
-    }
+      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], title: r['title'], summary: r['summary'], severity: r['severity'], confidence: r['confidence'], asset: r['asset'], evidence: r['evidence'] ?? [], remediation: r['remediation'] ?? '', sourceUrls: r['sourceUrls'] ?? [], created: r['created'], status: r['status'] } as Finding));
+    } catch (error) { return this.failed(error); }
   }
 
-  async tls(targetId?: string): Promise<TlsObservation> {
+  async tls(targetId?: string): Promise<TlsObservation | null> {
     try {
       const filter = targetId ? this.client.filter('target = {:targetId}', { targetId }) : '';
-      const record = await this.client.collection('tlsObservations').getFirstListItem(filter, { sort: '-created' });
-      return record['details'] as TlsObservation;
-    } catch {
-      return demoTls;
+      const r = await this.client.collection('tlsObservations').getFirstListItem(filter, { sort: '-created' });
+      return { id: r.id, scan: r['scan'], ...(r['details'] as TlsObservation) };
+    } catch (error: unknown) {
+      if ((error as { status?: number })?.status === 404) return null;
+      return this.failed(error);
     }
   }
 
-  async requestScan(targetId: string): Promise<void> {
-    await this.client.collection('scanRequests').create({ target: targetId, mode: 'standard', status: 'queued' });
+  async scans(targetId?: string): Promise<Scan[]> {
+    try {
+      const filter = targetId ? this.client.filter('target = {:targetId}', { targetId }) : '';
+      const records = await this.client.collection('scans').getFullList({ filter, sort: '-created' });
+      return records.map((r) => ({ id: r.id, target: r['target'], request: r['request'], status: r['status'], startedAt: r['startedAt'], completedAt: r['completedAt'], summary: r['summary'] ?? '', error: r['error'] ?? '', created: r['created'] } as Scan));
+    } catch (error) { return this.failed(error); }
+  }
+
+  async agentActions(options: { targetId?: string; scanId?: string } = {}): Promise<AgentActionRecord[]> {
+    try {
+      const clauses: string[] = [];
+      if (options.targetId) clauses.push(this.client.filter('target = {:targetId}', { targetId: options.targetId }));
+      if (options.scanId) clauses.push(this.client.filter('scan = {:scanId}', { scanId: options.scanId }));
+      const records = await this.client.collection('agentActions').getFullList({ filter: clauses.join(' && '), sort: 'occurredAt' });
+      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], tool: r['tool'], input: r['input'] ?? {}, summary: r['summary'] ?? '', occurredAt: r['occurredAt'] }));
+    } catch (error) { return this.failed(error); }
+  }
+
+  async agentMessages(options: { targetId?: string; scanId?: string } = {}): Promise<AgentMessageRecord[]> {
+    try {
+      const clauses: string[] = [];
+      if (options.targetId) clauses.push(this.client.filter('target = {:targetId}', { targetId: options.targetId }));
+      if (options.scanId) clauses.push(this.client.filter('scan = {:scanId}', { scanId: options.scanId }));
+      const records = await this.client.collection('agentMessages').getFullList({ filter: clauses.join(' && '), sort: 'sequence' });
+      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], role: r['role'], content: r['content'] ?? '', toolName: r['toolName'] ?? '', sequence: r['sequence'] ?? 0, occurredAt: r['occurredAt'] }));
+    } catch (error: unknown) {
+      if ((error as { status?: number })?.status === 404) return [];
+      return this.failed(error);
+    }
+  }
+
+  async requestScan(targetId: string, mode: 'light' | 'standard' = 'standard'): Promise<void> {
+    await this.client.collection('scanRequests').create({ target: targetId, mode, status: 'queued' });
   }
 }

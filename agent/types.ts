@@ -12,6 +12,14 @@ export interface AgentAction {
   at: string;
 }
 
+export interface AgentMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  toolName: string;
+  sequence: number;
+  at: string;
+}
+
 export type FindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 export interface AgentFinding {
@@ -46,6 +54,7 @@ export interface InvestigationReport {
   summary: string;
   findings: AgentFinding[];
   actions: AgentAction[];
+  conversation: AgentMessage[];
   tls: TlsEvidence[];
   startedAt: string;
   completedAt: string;

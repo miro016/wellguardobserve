@@ -1,46 +1,44 @@
-import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { PocketBaseService } from '../services/pocketbase.service';
+import { ThemeService } from '../services/theme.service';
 
 @Component({
   selector: 'wg-app-sidebar',
   imports: [RouterLink, RouterLinkActive],
   template: `
-    <aside class="app-sidebar" [class.mobile-open]="open()">
-      <div class="sidebar-top">
-        <a class="wordmark sidebar-wordmark" routerLink="/"><span class="brand-mark"><i></i></span><span>wellguard<em>observe</em></span></a>
-        <span class="preview-badge">private preview</span>
-      </div>
-      <nav class="app-navigation" aria-label="Workspace">
+    <aside class="app-sidebar">
+      <a class="wordmark sidebar-wordmark" routerLink="/" aria-label="Wellguard Observe home"><span class="brand-mark"><i></i></span><span>WELLGUARD<em>OBSERVE</em></span></a>
+      <div class="workspace-chip"><i></i><span><small>Workspace</small><strong>Private preview</strong></span></div>
+      <nav class="app-navigation" aria-label="Workspace navigation">
+        <span>Observe</span>
+        <a routerLink="/app" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}"><i>⌂</i>Overview</a>
+        <a routerLink="/app/targets" routerLinkActive="active"><i>◎</i>Targets</a>
+        <a routerLink="/app/surface" routerLinkActive="active"><i>⌘</i>Surface map</a>
+        <a routerLink="/app/findings" routerLinkActive="active"><i>△</i>Findings</a>
+        <a routerLink="/app/reports" routerLinkActive="active"><i>▤</i>Reports</a>
+        <span>Transparency</span>
+        <a routerLink="/app/traces" routerLinkActive="active"><i>›_</i>Agent traces</a>
+        <a routerLink="/app/sources" routerLinkActive="active"><i>⊙</i>Evidence sources</a>
         <span>Workspace</span>
-        <a routerLink="/app" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}"><i class="nav-icon overview-icon"></i>Overview</a>
-        <a routerLink="/app"><i class="nav-icon target-icon"></i>Targets <b>1</b></a>
-        <a href="#"><i class="nav-icon finding-icon"></i>Findings <b>2</b></a>
-        <a href="#"><i class="nav-icon trace-icon"></i>Agent traces</a>
-        <span class="navigation-section">Manage</span>
-        <a href="#"><i class="nav-icon integration-icon"></i>Sources</a>
-        <a href="#"><i class="nav-icon settings-icon"></i>Settings</a>
+        <a routerLink="/app/settings" routerLinkActive="active"><i>⚙</i>Settings</a>
       </nav>
-      <div class="sidebar-scope">
-        <div><span class="pulse-dot"></span><strong>Scan policy active</strong></div>
-        <p>Reconnaissance only<br>1 authorized root</p>
-      </div>
-      <div class="sidebar-user">
-        <span class="user-avatar">MP</span>
-        <div><strong>{{ pocketbase.user()?.['name'] || 'Miroslav Petro' }}</strong><small>Administrator</small></div>
-        <button type="button" aria-label="Sign out" (click)="signOut()">↗</button>
+      <div class="sidebar-status"><span><i></i>Observer ready</span><small>Recon only · scope locked</small></div>
+      <div class="sidebar-footer">
+        <button class="theme-toggle" type="button" (click)="theme.toggle()" [attr.aria-label]="'Switch to ' + (theme.theme() === 'dark' ? 'light' : 'dark') + ' theme'"><span>{{ theme.theme() === 'dark' ? '☼' : '☾' }}</span>{{ theme.theme() === 'dark' ? 'Light theme' : 'Dark theme' }}</button>
+        <div class="sidebar-user"><span class="user-avatar">{{ initials() }}</span><div><strong>{{ pocketbase.user()?.['name'] || pocketbase.user()?.['email'] || 'Administrator' }}</strong><small>Administrator</small></div><button type="button" aria-label="Sign out" (click)="signOut()">↗</button></div>
       </div>
     </aside>
   `,
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AppSidebarComponent {
-  readonly open = input(false);
   protected readonly pocketbase = inject(PocketBaseService);
+  protected readonly theme = inject(ThemeService);
   private readonly router = inject(Router);
-
-  protected signOut(): void {
-    this.pocketbase.signOut();
-    void this.router.navigateByUrl('/');
+  protected initials(): string {
+    const label = String(this.pocketbase.user()?.['name'] || this.pocketbase.user()?.['email'] || 'AD');
+    return label.split(/[\s@.]+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('');
   }
+  protected signOut(): void { this.pocketbase.signOut(); void this.router.navigateByUrl('/'); }
 }
