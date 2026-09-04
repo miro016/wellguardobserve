@@ -55,6 +55,6 @@ export class SurfaceComponent implements OnInit {
   });
   ngOnInit(): void { void this.db.targets().then((items) => { this.targets.set(items); const requested = this.route.snapshot.queryParamMap.get('target'); this.selectedId.set(items.some((item) => item.id === requested) ? requested! : items[0]?.id || ''); return this.loadEvidence(); }).catch((e) => this.error.set(e instanceof Error ? e.message : 'Could not load surface.')); }
   protected selectTarget(id: string): void { this.selectedId.set(id); void this.loadEvidence(); }
-  protected async loadEvidence(): Promise<void> { const id = this.selectedId(); if (!id) return; try { const [findings, tls, actions] = await Promise.all([this.db.findings(id), this.db.tls(id), this.db.agentActions({ targetId: id })]); this.findings.set(findings); this.tls.set(tls); this.actions.set(actions); } catch (e) { this.error.set(e instanceof Error ? e.message : 'Could not load evidence.'); } }
+  protected async loadEvidence(): Promise<void> { const id = this.selectedId(); if (!id) return; try { const [findings, tls, actions] = await Promise.all([this.db.findings(id), this.db.tls(id, this.target()?.hostname), this.db.agentActions({ targetId: id })]); this.findings.set(findings); this.tls.set(tls); this.actions.set(actions); } catch (e) { this.error.set(e instanceof Error ? e.message : 'Could not load evidence.'); } }
   protected issuer(value: string): string { return value.match(/(?:^|,)\s*O=([^,]+)/)?.[1] || value.match(/(?:^|,)\s*CN=([^,]+)/)?.[1] || value || 'Unknown issuer'; }
 }

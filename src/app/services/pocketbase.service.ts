@@ -63,9 +63,12 @@ export class PocketBaseService {
     } catch (error) { return this.failed(error); }
   }
 
-  async tls(targetId?: string): Promise<TlsObservation | null> {
+  async tls(targetId?: string, hostname?: string): Promise<TlsObservation | null> {
     try {
-      const filter = targetId ? this.client.filter('target = {:targetId}', { targetId }) : '';
+      const clauses: string[] = [];
+      if (targetId) clauses.push(this.client.filter('target = {:targetId}', { targetId }));
+      if (hostname) clauses.push(this.client.filter('hostname = {:hostname}', { hostname }));
+      const filter = clauses.join(' && ');
       const r = await this.client.collection('tlsObservations').getFirstListItem(filter, { sort: '-created' });
       return { id: r.id, scan: r['scan'], ...(r['details'] as TlsObservation) };
     } catch (error: unknown) {

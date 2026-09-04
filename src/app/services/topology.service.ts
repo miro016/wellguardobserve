@@ -21,7 +21,9 @@ export class TopologyService {
     };
     const registration = latestEvidence<{ source?: string; registrar?: { names?: string[]; organizations?: string[] }; events?: Record<string, string>; nameservers?: string[]; dnssec?: { delegationSigned?: boolean | null }; publicEmails?: string[] }>('inspect_domain_registration');
     const dnsPosture = latestEvidence<{ nameservers?: string[]; mx?: Array<{ exchange?: string; priority?: number }>; emailSecurity?: { spf?: string[]; dmarc?: string[]; dmarcPolicy?: string }; dnssec?: { enabled?: boolean } }>('inspect_dns_posture');
-    const networkRegistration = latestEvidence<{ networks?: Array<{ address?: string; name?: string; handle?: string; country?: string; startAddress?: string; endAddress?: string; source?: string }> }>('inspect_network_registration');
+    const rootNetworkAction = actions.filter((item) => item.tool === 'inspect_network_registration' && clean(item.input['hostname'] || target.hostname) === target.hostname).at(-1);
+    let networkRegistration: { networks?: Array<{ address?: string; name?: string; handle?: string; country?: string; startAddress?: string; endAddress?: string; source?: string }> } | null = null;
+    try { networkRegistration = rootNetworkAction ? JSON.parse(rootNetworkAction.summary) : null; } catch { /* No structured root network evidence is available. */ }
     const registrar = registration?.registrar?.organizations?.[0] || registration?.registrar?.names?.[0] || 'Not observed';
     const registrationEvents = registration?.events || {};
     const registrationPeriod = registrationEvents['registration'] ? `${registrationEvents['registration'].slice(0, 10)} → ${registrationEvents['expiration'] ? registrationEvents['expiration'].slice(0, 10) : 'not published'}` : 'Not observed';
@@ -185,6 +187,8 @@ export class TopologyService {
         if (product) {
           const genericIndex = services.findIndex((service) => service.hostname === url.hostname && service.port === port && !(service.productHints || []).length);
           if (genericIndex >= 0) services.splice(genericIndex, 1);
+        } else if (services.some((service) => service.hostname === url.hostname && service.port === port && Boolean(service.productHints?.length))) {
+          continue;
         }
         const duplicate = services.some((service) => service.hostname === url.hostname && service.port === port && (service.label.toLowerCase() === label.toLowerCase() || Boolean(product && service.productHints?.includes(product))));
         if (duplicate) continue;
