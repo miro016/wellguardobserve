@@ -17,7 +17,7 @@ import { scanProfile } from '../scan-profiles';
       @if (error()) { <div class="error-banner"><strong>Live view unavailable</strong><span>{{ error() }}</span></div> }
       @if (request(); as job) {
         <section class="investigation-status panel" [attr.data-status]="job.status">
-          <div class="scan-progress-head"><div><span class="section-index">{{ job.mode.toUpperCase() }} / REQUEST {{ job.id }}</span><h2>{{ statusLabel() }}</h2></div><strong>{{ progress() }}%</strong></div>
+          <div class="scan-progress-head"><div><span class="section-index">{{ policyName().toUpperCase() }} / REQUEST {{ job.id }}</span><h2>{{ statusLabel() }}</h2></div><strong>{{ progress() }}%</strong></div>
           <div class="scan-progress"><span [style.width.%]="progress()"></span></div>
           <div class="policy-receipt"><span><i>CONTRACT</i><strong>{{ policyName() }}</strong><small>{{ request()?.profileSnapshot?.version || 'pending worker signature' }}</small></span><span><i>BUDGET</i><strong>{{ actions().length }} / {{ actionBudget() }}</strong><small>tool calls</small></span><span><i>NUCLEI CEILING</i><strong>{{ nucleiRateLabel() }}</strong><small>reviewed templates only</small></span><span><i>METHODS</i><strong>{{ methodLabel() }}</strong><small>{{ request()?.profileSnapshot ? 'worker enforced' : 'awaiting claim' }}</small></span></div>
           <div class="live-phase"><span [attr.data-health]="heartbeatHealth()"><i></i>{{ heartbeatLabel() }}</span><div><small>CURRENT WORKER PHASE</small><strong>{{ job.phase || (job.status === 'queued' ? 'Waiting for observer worker' : 'Preparing investigation') }}</strong></div></div>
