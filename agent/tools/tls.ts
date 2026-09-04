@@ -7,7 +7,15 @@ function flattenName(value?: Record<string, string | string[] | undefined>): str
 }
 
 function certificateNames(cert: PeerCertificate): string[] {
-  return (cert.subjectaltname || '').split(',').map((value) => value.trim().replace(/^DNS:/, '')).filter(Boolean);
+  return (cert.subjectaltname || '').split(',').map((value) => value.trim()).filter((value) => /^(?:DNS|IP Address):/i.test(value)).map((value) => value.replace(/^(?:DNS|IP Address):/i, ''));
+}
+
+function certificateEmails(cert: PeerCertificate): string[] {
+  const subject = cert.subject as Record<string, string | string[] | undefined> | undefined;
+  const fromSubject = subject?.['emailAddress'];
+  const values = Array.isArray(fromSubject) ? fromSubject : fromSubject ? [fromSubject] : [];
+  const fromSans = (cert.subjectaltname || '').split(',').map((value) => value.trim()).flatMap((value) => /^email:/i.test(value) ? [value.replace(/^email:/i, '')] : []);
+  return [...new Set([...values, ...fromSans].filter((value) => /@/.test(value)))].slice(0, 20);
 }
 
 export async function inspectTls(scope: ScopeGuard, input: { hostname?: string; port?: number }): Promise<TlsEvidence> {
@@ -32,7 +40,7 @@ export async function inspectTls(scope: ScopeGuard, input: { hostname?: string; 
         validFrom: validFrom.toISOString(), validTo: validTo.toISOString(),
         daysRemaining: Math.floor((validTo.getTime() - Date.now()) / 86_400_000),
         protocol: socket.getProtocol() || 'unknown', cipher: socket.getCipher()?.name || 'unknown',
-        fingerprint256: cert.fingerprint256 || '', subjectAltNames: certificateNames(cert)
+        fingerprint256: cert.fingerprint256 || '', subjectAltNames: certificateNames(cert), certificateEmails: certificateEmails(cert)
       };
       socket.end(); resolve(result);
     });

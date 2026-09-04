@@ -28,7 +28,7 @@ WORKDIR /app
 ENV NODE_ENV=production \
     POCKETBASE_URL=http://127.0.0.1:8090 \
     POCKETBASE_DATA_DIR=/data \
-    OLLAMA_MODEL=glm-5.3-flash:cloud \
+    OLLAMA_MODEL=glm-5.3:cloud \
     SCAN_POLL_MS=4000
 COPY --from=pocketbase-download /out/pocketbase /usr/local/bin/pocketbase
 COPY --from=web-build /build/dist/wellguard-observe/browser /usr/share/nginx/html

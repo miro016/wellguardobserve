@@ -12,6 +12,12 @@ import { PocketBaseService } from '../services/pocketbase.service';
   @if (error()) { <div class="error-banner"><strong>Surface unavailable</strong><span>{{ error() }}</span></div> }
   @if (target(); as item) {
     <section class="panel topology-panel expanded"><div class="panel-heading"><div><span class="section-index">INTERACTIVE ASSET MAP</span><h2>{{ item.hostname }}</h2></div><div class="panel-actions"><span class="evidence-count">Drag to pan · wheel to zoom · click for provenance</span><a [routerLink]="['/app/targets', item.id]">Target detail →</a></div></div><wg-infrastructure-graph [target]="item" [findings]="findings()" [tls]="tls()" [actions]="actions()" /></section>
+    @if (domainIntelligence(); as intel) {
+      <section class="domain-intelligence-grid">
+        <article class="panel intelligence-card identity-ledger"><div class="panel-heading"><div><span class="section-index">AUTHORITATIVE IDENTITY</span><h2>Domain registration</h2></div>@if (intel.source) { <a [href]="intel.source" target="_blank" rel="noopener">RDAP evidence ↗</a> }</div><dl class="fact-list"><div><dt>Registrar</dt><dd>{{ intel.registrar }}</dd></div><div><dt>Registered</dt><dd>{{ intel.registered ? (intel.registered | date:'mediumDate') : 'Not published' }}</dd></div><div><dt>Expires</dt><dd>{{ intel.expires ? (intel.expires | date:'mediumDate') : 'Not published' }}</dd></div><div><dt>Public contacts</dt><dd>{{ intel.contacts.join(', ') || 'None published / redacted' }}</dd></div><div><dt>TLS identity email</dt><dd>{{ intel.tlsEmails.join(', ') || 'None in live certificate' }}</dd></div></dl><p class="evidence-note"><span>BOUNDARY</span>Private or redacted registration data remains undisclosed.</p></article>
+        <article class="panel intelligence-card dns-ledger"><div class="panel-heading"><div><span class="section-index">PUBLIC CONTROL PLANE</span><h2>DNS &amp; mail posture</h2></div><span class="state-pill" [attr.data-state]="intel.dnssec ? 'healthy' : 'warning'">DNSSEC {{ intel.dnssec ? 'on' : 'not seen' }}</span></div><div class="dns-route"><span>NS</span><p>{{ intel.nameservers.join(' · ') || 'No nameservers retained' }}</p></div><div class="dns-route"><span>MX</span><p>{{ intel.mx.join(' · ') || 'No mail exchangers retained' }}</p></div><div class="policy-cells"><div><small>SPF</small><strong>{{ intel.spf ? 'Published' : 'Not seen' }}</strong></div><div><small>DMARC</small><strong>{{ intel.dmarc }}</strong></div><div><small>CAA</small><strong>{{ intel.caa ? 'Constrained' : 'Not seen' }}</strong></div></div><p class="evidence-note"><span>EVIDENCE</span>Direct DNS resolution from the most recent retained posture inspection.</p></article>
+      </section>
+    }
     @if (certificateInventory(); as inventory) {
       <section class="panel certificate-inventory"><div class="panel-heading"><div><span class="section-index">PUBLIC CERTIFICATE HISTORY</span><h2>{{ inventory.total }} certificate-transparency records</h2></div><span class="evidence-count">Source · {{ inventory.source }}</span></div>
         @if (inventory.certificates.length) { <div class="certificate-table"><div class="certificate-head"><span>Common name / names</span><span>Issuer</span><span>Validity</span><span>Record</span></div>@for (certificate of inventory.certificates; track $index) { <details class="certificate-row"><summary><span><strong>{{ certificate.commonName || certificate.names[0] || 'Unnamed certificate' }}</strong><small>{{ certificate.names.length }} DNS name{{ certificate.names.length === 1 ? '' : 's' }}</small></span><span>{{ issuer(certificate.issuerName) }}</span><span><strong>{{ certificate.notAfter | date:'mediumDate' }}</strong><small>{{ certificate.notBefore | date:'mediumDate' }} → {{ certificate.notAfter | date:'mediumDate' }}</small></span><b>Evidence ↓</b></summary><div><dl><div><dt>All certificate names</dt><dd>{{ certificate.names.join(', ') || 'Not retained' }}</dd></div><div><dt>Full issuer</dt><dd>{{ certificate.issuerName || 'Not retained' }}</dd></div><div><dt>Issuer CA identifier</dt><dd>{{ certificate.issuerCaId ?? 'Not returned' }}</dd></div><div><dt>Serial number</dt><dd>{{ certificate.serialNumber || 'Not retained' }}</dd></div><div><dt>Matching entries</dt><dd>{{ certificate.resultCount || 1 }}</dd></div></dl><p><span>EVIDENCE</span>Public certificate-transparency record {{ certificate.id }} returned by {{ inventory.source }}.</p></div></details> }</div> }
@@ -30,6 +36,22 @@ export class SurfaceComponent implements OnInit {
       const data = JSON.parse(action.summary) as { source?: string; certificateCount?: number; certificates?: CertificateTransparencyRecord[] };
       return { source: data.source || 'certificate transparency', total: Number(data.certificateCount || data.certificates?.length || 0), certificates: data.certificates || [] };
     } catch { return null; }
+  });
+  protected readonly domainIntelligence = computed(() => {
+    const parse = <T>(tool: string): T | null => {
+      const action = this.actions().filter((item) => item.tool === tool).at(-1);
+      try { return action ? JSON.parse(action.summary) as T : null; } catch { return null; }
+    };
+    const registration = parse<{ source?: string; registrar?: { names?: string[]; organizations?: string[] }; events?: Record<string, string>; publicEmails?: string[] }>('inspect_domain_registration');
+    const dns = parse<{ nameservers?: string[]; mx?: Array<{ exchange?: string; priority?: number }>; caa?: unknown[]; emailSecurity?: { spf?: string[]; dmarcPolicy?: string }; dnssec?: { enabled?: boolean } }>('inspect_dns_posture');
+    if (!registration && !dns && !this.tls()?.certificateEmails?.length) return null;
+    return {
+      source: registration?.source || '', registrar: registration?.registrar?.organizations?.[0] || registration?.registrar?.names?.[0] || 'Not published',
+      registered: registration?.events?.['registration'] || '', expires: registration?.events?.['expiration'] || '', contacts: registration?.publicEmails || [],
+      tlsEmails: this.tls()?.certificateEmails || [], nameservers: dns?.nameservers || [],
+      mx: (dns?.mx || []).map((item) => `${item.priority ?? '–'} ${item.exchange || ''}`.trim()), dnssec: Boolean(dns?.dnssec?.enabled),
+      spf: Boolean(dns?.emailSecurity?.spf?.length), dmarc: dns?.emailSecurity?.dmarcPolicy || 'Not seen', caa: Boolean(dns?.caa?.length)
+    };
   });
   ngOnInit(): void { void this.db.targets().then((items) => { this.targets.set(items); const requested = this.route.snapshot.queryParamMap.get('target'); this.selectedId.set(items.some((item) => item.id === requested) ? requested! : items[0]?.id || ''); return this.loadEvidence(); }).catch((e) => this.error.set(e instanceof Error ? e.message : 'Could not load surface.')); }
   protected selectTarget(id: string): void { this.selectedId.set(id); void this.loadEvidence(); }

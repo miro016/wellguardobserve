@@ -64,7 +64,8 @@ export class InvestigationStore {
       await this.client.collection('findings').create({
         target: report.target.id, scan: scan.id, title: finding.title, summary: finding.summary,
         severity: finding.severity, confidence: finding.confidence, asset: finding.asset,
-        evidence: finding.evidence, remediation: finding.remediation, sourceUrls: finding.sourceUrls, status: 'open'
+        evidence: finding.evidence, remediation: finding.remediation, sourceUrls: finding.sourceUrls,
+        cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, status: 'open'
       });
     }
     for (const tls of report.tls) {

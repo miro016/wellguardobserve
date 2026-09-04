@@ -25,6 +25,7 @@ export interface CreateTargetInput {
 export interface Finding {
   id: string; target: string; scan: string; title: string; summary: string; severity: Severity;
   confidence: number; asset: string; evidence: string[]; remediation: string; sourceUrls: string[];
+  cveIds: string[]; weaknessIds: string[];
   created: string; status: 'open' | 'accepted' | 'resolved';
 }
 
@@ -32,6 +33,7 @@ export interface TlsObservation {
   id?: string; scan?: string; hostname: string; port?: number; valid: boolean; authorizationError?: string | null;
   issuer: string; subject?: string; validFrom: string; validTo: string; daysRemaining: number; protocol: string;
   cipher?: string; fingerprint256?: string; subjectAltNames: string[];
+  certificateEmails?: string[];
 }
 
 export interface Scan {

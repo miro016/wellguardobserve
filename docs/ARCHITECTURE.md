@@ -10,7 +10,7 @@ Users can read their targets, scans, findings, TLS observations, and agent actio
 
 The Bun process claims queued requests, loads the immutable authorized target, creates a scan, and starts a LangChain investigation. LangChain state is streamed: messages and completed tool calls are persisted during the run so the browser can show a live audit trail. The worker polls the request control state and aborts the agent before another tool call when cancellation is requested. Each agent tool is a small typed capability rather than a shell or generic network client.
 
-The agent chooses investigation order and depth. One bounded discovery tool combines stored host hints, a fixed passive-host query, and safe HTTPS verification before presenting distinct services to the agent. A single relative redirect may be followed only on the already validated hostname so locale/home redirects do not hide the application stack. Wildcard and generic reverse-proxy missing routes are removed. Direct HTML/header markers preserve technology evidence. Neither the topology nor the agent may identify a product from a hostname or policy note alone. The executor controls destination scope, private-address policy, request sizes, timeouts, candidate and port counts, protocol behavior, and total action budget.
+The agent chooses investigation order and depth. One bounded discovery tool combines stored host hints, a fixed passive-host query, and safe HTTPS verification before presenting distinct services to the agent. A single relative redirect may be followed only on the already validated hostname so locale/home redirects do not hide the application stack. Wildcard and generic reverse-proxy missing routes are removed. Direct HTML/header markers preserve technology evidence. Neither the topology nor the agent may identify a product from a hostname or policy note alone. Domain control-plane tools add authoritative RDAP, DNSSEC, CAA and mail-policy evidence. Service-specific tools inspect fixed unauthenticated metadata surfaces; the WordPress tool uses only REST `view` context and never treats a public author as an administrator. NVD correlation requires an exact observed product version and returned CPE applicability before a CVE can be confirmed. The executor controls destination scope, private-address policy, request sizes, timeouts, candidate and port counts, protocol behavior, and total action budget.
 
 ## Collections
 
@@ -18,7 +18,7 @@ The agent chooses investigation order and depth. One bounded discovery tool comb
 - `targets`: hostname scope, optional owned-host hints, and authorization evidence.
 - `scanRequests`: browser-to-worker queue.
 - `scans`: investigation lifecycle and final summary.
-- `findings`: evidence, severity, confidence, remediation, and sources.
+- `findings`: evidence, severity, confidence, remediation, sources, CWE weakness IDs, and confirmed CVE IDs.
 - `tlsObservations`: structured certificate and protocol evidence.
 - `agentActions`: auditable tool calls and bounded outputs.
 - `agentMessages`: the application-visible LangChain transcript for each scan.

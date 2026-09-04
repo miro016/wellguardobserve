@@ -32,6 +32,8 @@ export interface AgentFinding {
   evidence: string[];
   remediation: string;
   sourceUrls: string[];
+  cveIds: string[];
+  weaknessIds: string[];
 }
 
 export interface TlsEvidence {
@@ -48,6 +50,7 @@ export interface TlsEvidence {
   cipher: string;
   fingerprint256: string;
   subjectAltNames: string[];
+  certificateEmails: string[];
 }
 
 export interface InvestigationReport {

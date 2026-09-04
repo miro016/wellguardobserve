@@ -16,6 +16,8 @@ A scan runs only when its target is `verified` or `admin_override`. An override 
 - Service-host discovery makes one fixed HackerTarget passive query and verifies at most 80 in-scope HTTPS candidates with concurrency capped at five. It may follow one relative redirect on the same validated hostname to capture the rendered page identity and technology markers. Wildcard/missing responses are excluded.
 - Port discovery is capped at 40 explicit ports with limited concurrency and short connection timeouts.
 - TLS inspection performs a handshake only.
+- RDAP starts with the fixed IANA bootstrap registry, preserves registry redaction, and retains only fields the authoritative service publishes.
+- Configuration and application-specific tools use bounded anonymous GET requests against fixed or explicitly selected metadata paths. The WordPress tool uses public REST `view` context only; it never requests authenticated `edit` fields.
 - A user stop aborts the LangChain run before another tool begins; a bounded request already in flight is allowed to return or time out rather than being replaced with a more forceful action.
 
 ## Agent boundary
@@ -31,7 +33,7 @@ Service banners, HTML, JSON, documentation, and repository text are untrusted da
 - Exploit or payload execution
 - Persistence, evasion, or destructive requests
 - Scanning outside the recorded authorization scope
-- Claims of a specific vulnerability without matching evidence
+- Claims of a specific vulnerability without an exact observed version and matching applicability evidence
 
 ## Reporting
 

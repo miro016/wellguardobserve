@@ -3,7 +3,7 @@ import { inspectHttp } from './http';
 import type { TechnologySignal } from './http';
 
 const DEFAULT_LABELS = [
-  'auth', 'sso', 'keycloak', 'keycloak1', 'identity', 'login', 'accounts', 'admin', 'panel', 'api',
+  'www', 'auth', 'sso', 'keycloak', 'keycloak1', 'identity', 'login', 'accounts', 'admin', 'panel', 'api',
   'dev', 'staging', 'test', 'monitor', 'status', 'grafana', 'prometheus', 'jenkins', 'git', 'registry',
   'vpn', 'mail'
 ];

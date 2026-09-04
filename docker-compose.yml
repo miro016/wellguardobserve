@@ -8,7 +8,7 @@ services:
       POCKETBASE_SUPERUSER_EMAIL: admin@example.com
       POCKETBASE_SUPERUSER_PASSWORD: change-this-before-starting
       OLLAMA_BASE_URL: http://host.docker.internal:11434
-      OLLAMA_MODEL: glm-5.3-flash:cloud
+      OLLAMA_MODEL: glm-5.3:cloud
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

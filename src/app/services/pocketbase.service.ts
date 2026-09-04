@@ -59,7 +59,7 @@ export class PocketBaseService {
     try {
       const filter = targetId ? this.client.filter('target = {:targetId}', { targetId }) : '';
       const records = await this.client.collection('findings').getFullList({ filter, sort: '-created' });
-      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], title: r['title'], summary: r['summary'], severity: r['severity'], confidence: r['confidence'], asset: r['asset'], evidence: r['evidence'] ?? [], remediation: r['remediation'] ?? '', sourceUrls: r['sourceUrls'] ?? [], created: r['created'], status: r['status'] } as Finding));
+      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], title: r['title'], summary: r['summary'], severity: r['severity'], confidence: r['confidence'], asset: r['asset'], evidence: r['evidence'] ?? [], remediation: r['remediation'] ?? '', sourceUrls: r['sourceUrls'] ?? [], cveIds: r['cveIds'] ?? [], weaknessIds: r['weaknessIds'] ?? [], created: r['created'], status: r['status'] } as Finding));
     } catch (error) { return this.failed(error); }
   }
 

@@ -15,23 +15,42 @@ export class TopologyService {
     const edges: TopologyEdge[] = [];
     const related = (term: string) => findings.filter((f) => [f.title, f.summary, f.asset, ...f.evidence].join(' ').toLowerCase().includes(term.toLowerCase()));
     const strongest = (items: Finding[]) => items.sort((a, b) => ['info','low','medium','high','critical'].indexOf(b.severity) - ['info','low','medium','high','critical'].indexOf(a.severity))[0];
+    const latestEvidence = <T>(tool: string): T | null => {
+      const action = actions.filter((item) => item.tool === tool).at(-1);
+      try { return action ? JSON.parse(action.summary) as T : null; } catch { return null; }
+    };
+    const registration = latestEvidence<{ source?: string; registrar?: { names?: string[]; organizations?: string[] }; events?: Record<string, string>; nameservers?: string[]; dnssec?: { delegationSigned?: boolean | null }; publicEmails?: string[] }>('inspect_domain_registration');
+    const dnsPosture = latestEvidence<{ nameservers?: string[]; mx?: Array<{ exchange?: string; priority?: number }>; emailSecurity?: { spf?: string[]; dmarc?: string[]; dmarcPolicy?: string }; dnssec?: { enabled?: boolean } }>('inspect_dns_posture');
+    const networkRegistration = latestEvidence<{ networks?: Array<{ address?: string; name?: string; handle?: string; country?: string; startAddress?: string; endAddress?: string; source?: string }> }>('inspect_network_registration');
+    const registrar = registration?.registrar?.organizations?.[0] || registration?.registrar?.names?.[0] || 'Not observed';
+    const registrationEvents = registration?.events || {};
+    const domainEmails = [...new Set([...(registration?.publicEmails || []), ...(tls?.certificateEmails || [])])];
 
     nodes.push({
       id: 'domain', kind: 'domain', label: target.hostname, subtitle: 'Authorized domain', state: target.authorizationStatus === 'pending' ? 'warning' : 'observed', x: 12, y: 48,
       details: [
         { label: 'Authorization', value: target.authorizationStatus === 'admin_override' ? 'Admin approved' : target.authorizationStatus, evidence: 'Stored target authorization record.' },
-        { label: 'Registration', value: 'Not observed', evidence: 'The latest scan did not retain RDAP registration evidence.' },
+        { label: 'Registrar', value: registrar, evidence: registration ? `Authoritative RDAP evidence from ${registration.source || 'the registry service'}.` : 'The latest scan did not retain RDAP registration evidence.' },
+        { label: 'Registered / expires', value: registrationEvents['registration'] ? `${registrationEvents['registration'].slice(0, 10)} → ${(registrationEvents['expiration'] || 'not published').slice(0, 10)}` : 'Not observed', evidence: registration ? 'Domain lifecycle events returned by authoritative RDAP.' : 'No RDAP lifecycle evidence is available.' },
+        { label: 'Nameservers', value: (dnsPosture?.nameservers || registration?.nameservers || []).join(', ') || 'Not observed', evidence: dnsPosture ? 'Direct public NS resolution.' : registration ? 'Nameservers returned by RDAP.' : 'No nameserver evidence is available.' },
+        { label: 'DNSSEC', value: dnsPosture?.dnssec?.enabled || registration?.dnssec?.delegationSigned ? 'Delegation signed' : dnsPosture || registration ? 'Not observed as enabled' : 'Not observed', evidence: dnsPosture ? 'Public DS lookup result.' : 'RDAP secureDNS metadata.' },
+        { label: 'Mail policy', value: dnsPosture?.emailSecurity?.dmarcPolicy ? `DMARC ${dnsPosture.emailSecurity.dmarcPolicy} · SPF ${dnsPosture.emailSecurity.spf?.length ? 'present' : 'absent'}` : 'Not observed', evidence: dnsPosture?.emailSecurity?.dmarc?.[0] || dnsPosture?.emailSecurity?.spf?.[0] || 'No DNS mail-policy evidence is available.' },
+        { label: 'Public contact email', value: domainEmails.join(', ') || 'None published', evidence: domainEmails.length ? 'Explicitly public RDAP contact or TLS certificate identity field.' : 'Neither authoritative RDAP nor the live TLS certificate published an email address.' },
         { label: 'TLS identity', value: tls?.valid ? `Valid · ${tls.daysRemaining} days left` : tls ? 'Needs attention' : 'Not observed', evidence: tls ? `${tls.issuer}; ${tls.protocol}; valid until ${tls.validTo}.` : 'No TLS observation is available.' },
         { label: 'Certificate names', value: tls?.subjectAltNames?.join(', ') || 'Not observed', evidence: tls ? 'Certificate Subject Alternative Name extension.' : 'No certificate evidence is available.' }
       ], findingIds: findings.filter((f) => /dns|certificate|tls/i.test(f.title)).map((f) => f.id)
     });
 
     const cloudflare = lower.includes('cloudflare');
+    const network = networkRegistration?.networks?.find((item) => item.name || item.handle);
     const edgeId = cloudflare ? 'edge-cloudflare' : 'edge-unknown';
     nodes.push({
       id: edgeId, kind: 'edge', label: cloudflare ? 'Cloudflare' : 'Public edge', subtitle: cloudflare ? 'Proxy / tunnel provider' : 'Provider unresolved', state: cloudflare ? 'healthy' : 'unknown', x: 27, y: 48,
       details: [
         { label: 'Provider', value: cloudflare ? 'Cloudflare' : 'Not identified', evidence: cloudflare ? 'DNS and HTTP observations contain Cloudflare network indicators.' : 'No provider fingerprint was retained.' },
+        { label: 'Registered network', value: network?.name || network?.handle || 'Not observed', evidence: network ? `IP RDAP for ${network.address || 'the resolved address'}; source ${network.source || 'registry service'}.` : 'No IP-registration evidence is available.' },
+        { label: 'Public range', value: network?.startAddress && network?.endAddress ? `${network.startAddress} – ${network.endAddress}` : 'Not observed', evidence: network ? 'Range returned by the public IP RDAP registry.' : 'No network range was retained.' },
+        { label: 'Registration country', value: network?.country || 'Not published', evidence: network ? 'Registry country metadata; this is not treated as physical server geolocation.' : 'No network registration was retained.' },
         { label: 'Origin masking', value: cloudflare ? 'Active' : 'Unknown', evidence: cloudflare ? 'Public DNS resolves to CDN edge addresses; these are not treated as origin addresses.' : 'Origin relationship is not externally confirmed.' },
         { label: 'Rate limiting', value: 'Not externally verifiable', evidence: 'A safe recon scan does not trigger limits or send abusive traffic.' }
       ], findingIds: related('cloudflare').map((f) => f.id)

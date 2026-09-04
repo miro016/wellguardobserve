@@ -10,9 +10,11 @@ It is intentionally reconnaissance-only: no credential guessing, payload deliver
 - Administrator-created accounts and administrator-approved target creation; there is no public registration.
 - Verified or explicitly administrator-authorized target scope.
 - LangChain investigation driven by an Ollama model.
-- Safe DNS, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, HTTP, TLS, GitHub Advisory, CISA KEV, and bounded public-document tools.
-- Findings with separate severity and confidence, preserved evidence, remediation, and source URLs.
-- TLS hostname, trust, issuer, validity window, protocol, cipher, and expiry monitoring, plus a browsable certificate-transparency record inventory.
+- Safe DNS, RDAP registration, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, HTTP, TLS, public metadata, WordPress configuration, NVD, MITRE CWE, GitHub Advisory, OSV, CISA KEV, and bounded public-document tools.
+- Findings with separate severity and confidence, preserved evidence, remediation, source URLs, CWE weakness mappings, and version-matched CVE identifiers.
+- TLS hostname, trust, issuer, validity window, protocol, cipher, expiry, and explicitly published certificate-email monitoring, plus a browsable certificate-transparency record inventory.
+- DNS control-plane visibility for registrar lifecycle, public registration contacts, nameservers, DNSSEC, CAA, MX, SPF, DMARC, MTA-STS, and SMTP TLS reporting.
+- Read-only service configuration audits for HTTP security headers, CORS, fixed public API/metadata paths, and WordPress REST/login/readme/XML-RPC surfaces.
 - Evidence-backed web technology detection for common frameworks, CMS products, generators, runtimes, and server headers so same-title applications remain distinguishable.
 - Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase.
 - A pannable, zoomable evidence-linked topology connecting domains, edge providers, hidden origins, ports, and every identified service without collapsing nodes behind a “more” counter.
@@ -113,17 +115,20 @@ For a production deployment, set long random PocketBase credentials, a precise `
 | `WELLGUARD_ADMIN_PASSWORD` | Optional first administrator password | unset |
 | `PUBLIC_ORIGIN` | Allowed browser origin | `*` |
 | `OLLAMA_BASE_URL` | Ollama API used by LangChain | `http://127.0.0.1:11434` |
-| `OLLAMA_MODEL` | Investigator model | `glm-5.3-flash:cloud` |
+| `OLLAMA_MODEL` | Investigator model | `glm-5.3:cloud` |
 | `SCAN_POLL_MS` | Queue polling interval | `4000` |
 
 ## Free public evidence sources
 
 - Certificate Transparency through `crt.sh`
+- IANA's RDAP bootstrap registry and the TLD's authoritative RDAP service
 - Passive hostname candidates through the free HackerTarget Host Search API; candidates are never trusted until an in-scope HTTPS response is verified
+- NIST NVD CVE API 2.0 and the MITRE CWE REST API
 - GitHub reviewed Security Advisories and Releases APIs
 - CISA Known Exploited Vulnerabilities feed
 - OSV.dev package vulnerability API
-- DNS records and public TLS handshakes
+- DNS records, mail-security policies, and public TLS handshakes
+- Public application metadata and documented unauthenticated WordPress REST view endpoints
 - Vendor documentation selected by the investigator
 
 External responses are untrusted evidence and are never treated as agent instructions.
@@ -136,7 +141,7 @@ New investigations persist each application-visible LangChain message as it is e
 
 - PocketBase-backed polling is intended for a limited-access, single-instance MVP.
 - Cloudflare and other CDNs obscure origin reachability; a future read-only provider integration can evaluate origin firewall configuration.
-- Product/version identification remains probabilistic and is labelled with confidence. Wildcard DNS records and missing reverse-proxy routes are explicitly excluded from the service inventory.
+- Product/version identification remains probabilistic and is labelled with confidence. CVEs are only recordable after exact version and NVD applicability correlation; no-version product names never become CVE claims. Wildcard DNS records and missing reverse-proxy routes are explicitly excluded from the service inventory.
 - The current container bundles three processes for convenient MVP deployment. They should become separate services when scaling independently.
 
 ## License

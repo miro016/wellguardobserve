@@ -94,3 +94,90 @@ export async function queryGitHubReleases(input: { owner: string; repository: st
   const releases = await response.json() as Array<{ tag_name: string; published_at: string; html_url: string; prerelease: boolean; draft: boolean }>;
   return { source: 'GitHub Releases API', repository: `${input.owner}/${input.repository}`, releases: releases.map(({ tag_name, published_at, html_url, prerelease, draft }) => ({ tag_name, published_at, html_url, prerelease, draft })) };
 }
+
+function englishDescription(items: unknown): string {
+  if (!Array.isArray(items)) return '';
+  const descriptions = items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
+  return String(descriptions.find((item) => item['lang'] === 'en')?.['value'] || descriptions[0]?.['value'] || '').slice(0, 1_200);
+}
+
+function normalizedNvdMetric(metrics: unknown): Record<string, unknown> | null {
+  if (!metrics || typeof metrics !== 'object') return null;
+  const source = metrics as Record<string, unknown>;
+  for (const key of ['cvssMetricV40', 'cvssMetricV31', 'cvssMetricV30', 'cvssMetricV2']) {
+    const entries = source[key];
+    if (!Array.isArray(entries) || !entries.length || !entries[0] || typeof entries[0] !== 'object') continue;
+    const metric = entries[0] as Record<string, unknown>;
+    const data = metric['cvssData'] && typeof metric['cvssData'] === 'object' ? metric['cvssData'] as Record<string, unknown> : {};
+    return { version: data['version'] || key.replace('cvssMetricV', ''), score: data['baseScore'] ?? null, severity: data['baseSeverity'] || metric['baseSeverity'] || '', vector: data['vectorString'] || '' };
+  }
+  return null;
+}
+
+function nvdCpeRanges(configurations: unknown): Array<Record<string, unknown>> {
+  const ranges: Array<Record<string, unknown>> = [];
+  const walk = (value: unknown): void => {
+    if (ranges.length >= 30 || !value) return;
+    if (Array.isArray(value)) { value.forEach(walk); return; }
+    if (typeof value !== 'object') return;
+    const record = value as Record<string, unknown>;
+    if (typeof record['criteria'] === 'string') {
+      ranges.push({
+        criteria: record['criteria'], vulnerable: record['vulnerable'] ?? null,
+        versionStartIncluding: record['versionStartIncluding'] || '', versionStartExcluding: record['versionStartExcluding'] || '',
+        versionEndIncluding: record['versionEndIncluding'] || '', versionEndExcluding: record['versionEndExcluding'] || ''
+      });
+    }
+    Object.values(record).forEach(walk);
+  };
+  walk(configurations);
+  return ranges;
+}
+
+export async function queryNvdCves(input: { product: string; version: string }) {
+  const product = input.product.trim();
+  const version = input.version.trim();
+  if (!product || !version || product.length > 120 || version.length > 80) throw new Error('An exact observed product and version are required for NVD correlation.');
+  const query = new URLSearchParams({ keywordSearch: `${product} ${version}`, resultsPerPage: '10' });
+  const response = await fetch(`https://services.nvd.nist.gov/rest/json/cves/2.0?${query}`, {
+    signal: AbortSignal.timeout(15_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.1' }
+  });
+  if (!response.ok) throw new Error(`NVD CVE API returned ${response.status}.`);
+  const data = await response.json() as { totalResults?: number; vulnerabilities?: Array<{ cve?: Record<string, unknown> }> };
+  const candidates = (data.vulnerabilities || []).slice(0, 10).flatMap((wrapper) => {
+    const cve = wrapper.cve;
+    if (!cve) return [];
+    const weaknesses = Array.isArray(cve['weaknesses']) ? cve['weaknesses'] as Array<Record<string, unknown>> : [];
+    const references = Array.isArray(cve['references']) ? cve['references'] as Array<Record<string, unknown>> : [];
+    return [{
+      id: String(cve['id'] || ''), description: englishDescription(cve['descriptions']), published: cve['published'] || '', modified: cve['lastModified'] || '',
+      status: cve['vulnStatus'] || '', metric: normalizedNvdMetric(cve['metrics']),
+      cweIds: [...new Set(weaknesses.flatMap((weakness) => Array.isArray(weakness['description']) ? (weakness['description'] as Array<Record<string, unknown>>).map((item) => String(item['value'] || '')).filter((value) => /^CWE-\d+$/.test(value)) : []))],
+      applicability: nvdCpeRanges(cve['configurations']),
+      references: references.slice(0, 12).map((reference) => ({ url: String(reference['url'] || ''), source: String(reference['source'] || ''), tags: Array.isArray(reference['tags']) ? reference['tags'] : [] }))
+    }];
+  });
+  return {
+    source: 'NIST National Vulnerability Database CVE API 2.0', query: { product, version }, totalResults: data.totalResults || 0, candidates,
+    correlationNote: 'These are search candidates, not confirmed findings. Confirm the observed edition and version against each NVD CPE applicability range before recording a CVE.'
+  };
+}
+
+export async function queryCwe(cweId: string) {
+  const normalized = cweId.trim().toUpperCase();
+  const id = normalized.match(/^CWE-(\d{1,5})$/)?.[1];
+  if (!id) throw new Error('A valid CWE identifier such as CWE-200 is required.');
+  const response = await fetch(`https://cwe-api.mitre.org/api/v1/cwe/weakness/${id}`, {
+    signal: AbortSignal.timeout(12_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.1' }
+  });
+  if (!response.ok) throw new Error(`MITRE CWE API returned ${response.status}; the identifier may not represent a mappable weakness.`);
+  const data = await response.json() as Record<string, unknown>;
+  const weaknesses = Array.isArray(data['Weaknesses']) ? data['Weaknesses'] as Array<Record<string, unknown>> : [];
+  const item = weaknesses[0] || data;
+  return {
+    source: 'MITRE CWE REST API', id: `CWE-${id}`, name: String(item['Name'] || ''), abstraction: String(item['Abstraction'] || ''),
+    status: String(item['Status'] || ''), description: String(item['Description'] || '').slice(0, 1_500),
+    extendedDescription: String(item['ExtendedDescription'] || '').slice(0, 2_500), likelihoodOfExploit: String(item['LikelihoodOfExploit'] || ''),
+    sourceUrl: `https://cwe.mitre.org/data/definitions/${id}.html`
+  };
+}

@@ -4,15 +4,26 @@ import { ScopeGuard } from '../security/scope-guard';
 import { extractSignals, inspectHttp } from './http';
 import { discoverPorts } from './ports';
 import { classifyServiceObservation } from './service-hosts';
+import { assessHttpConfiguration } from './configuration';
+import { inspectWordPress, normalizeWordPressUsers } from './wordpress';
+import { summarizeRdap } from './domain';
 
 let server: Server;
 let port: number;
 const scope = new ScopeGuard({ id: 'local-test', hostname: '127.0.0.1', authorizationStatus: 'admin_override', allowPrivateAddresses: true });
 
 beforeAll(async () => {
-  server = createServer((_request, response) => {
+  server = createServer((request, response) => {
     response.setHeader('server', 'Example-Control/2.0');
     response.setHeader('x-powered-by', 'Bun');
+    if (request.url?.startsWith('/wp-json/wp/v2/users')) {
+      response.setHeader('content-type', 'application/json'); response.setHeader('x-wp-total', '1');
+      response.end(JSON.stringify([{ id: 1, name: 'owner@example.test', slug: 'ownerexample-test', link: 'https://example.test/author/owner/' }])); return;
+    }
+    if (request.url === '/wp-json/') { response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ namespaces: ['wp/v2'], routes: { '/wp/v2/users': {} } })); return; }
+    if (request.url === '/wp-login.php') { response.end('<title>Log In ‹ Example — WordPress</title>'); return; }
+    if (request.url === '/readme.html') { response.end('<h1>WordPress</h1><br> Version 6.8.2'); return; }
+    if (request.url === '/xmlrpc.php') { response.statusCode = 405; response.setHeader('allow', 'POST'); response.end('XML-RPC server accepts POST requests only.'); return; }
     response.end('<html><head><title>Easypanel</title></head><body>Control at https://panel.example.test and origin 203.0.113.42.</body></html>');
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -67,5 +78,37 @@ describe('bounded network tools', () => {
     const result = classifyServiceObservation(candidate);
     expect(result?.technologies[0]?.name).toBe('Angular');
     expect(result?.evidence).toContain('same-host redirect returned 200');
+  });
+
+  test('classifies missing HTTP protections as review evidence with CWE mappings', () => {
+    const checks = assessHttpConfiguration({ server: 'nginx/1.20.1' }, true);
+    expect(checks.find((check) => check.control === 'Framing protection')?.cweIds).toContain('CWE-1021');
+    expect(checks.find((check) => check.control === 'Server identity disclosure')?.state).toBe('exposed');
+  });
+
+  test('inspects WordPress public metadata without authenticated fields', async () => {
+    const result = await inspectWordPress(scope, { hostname: '127.0.0.1', port, tls: false });
+    expect(result.publicUserCount).toBe(1);
+    expect(result.emailLikePublicNames[0]?.name).toBe('owner@example.test');
+    expect(result.evidence.login.status).toBe(200);
+    expect(result.version).toBe('6.8.2');
+  });
+
+  test('normalizes only bounded public WordPress user fields', () => {
+    const users = normalizeWordPressUsers([{ id: 1, name: 'Owner', slug: 'owner', roles: ['administrator'], email: 'private@example.test' }]);
+    expect(users[0]).toEqual({ id: 1, name: 'Owner', slug: 'owner', link: '', description: '', url: '' });
+    expect(users[0]).not.toHaveProperty('roles');
+    expect(users[0]).not.toHaveProperty('email');
+  });
+
+  test('preserves RDAP redaction while extracting explicitly public registration evidence', () => {
+    const result = summarizeRdap({
+      ldhName: 'example.test', status: ['active'], events: [{ eventAction: 'registration', eventDate: '2024-01-01T00:00:00Z' }],
+      entities: [{ roles: ['registrar'], vcardArray: ['vcard', [['fn', {}, 'text', 'Example Registrar'], ['email', {}, 'text', 'abuse@example.test']]] }],
+      nameservers: [{ ldhName: 'ns1.example.test' }], secureDNS: { delegationSigned: true, dsData: [{}] }
+    }, 'https://rdap.example.test/domain/example.test');
+    expect(result.registrar?.names).toContain('Example Registrar');
+    expect(result.publicEmails).toContain('abuse@example.test');
+    expect(result.dnssec.delegationSigned).toBe(true);
   });
 });

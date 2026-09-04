@@ -7,7 +7,7 @@ function argument(name: string): string | undefined {
 
 const hostname = argument('target');
 if (!hostname) {
-  console.error('Usage: bun run agent:once -- --target example.com [--model glm-5.3-flash:cloud] [--json report.json]');
+  console.error('Usage: bun run agent:once -- --target example.com [--model glm-5.3:cloud] [--json report.json]');
   process.exit(2);
 }
 

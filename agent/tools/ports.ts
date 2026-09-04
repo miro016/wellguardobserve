@@ -1,7 +1,7 @@
 import { createConnection } from 'node:net';
 import type { ScopeGuard } from '../security/scope-guard';
 
-export const STANDARD_PORTS = [21, 22, 25, 53, 80, 110, 143, 443, 465, 587, 993, 995, 1433, 1521, 2375, 3000, 3306, 5432, 5601, 5672, 6379, 8000, 8080, 8081, 8443, 8888, 9000, 9090, 9200, 9443, 27017];
+export const STANDARD_PORTS = [21, 22, 23, 25, 53, 80, 110, 143, 389, 443, 445, 465, 587, 636, 993, 995, 1433, 1521, 2049, 2375, 2376, 3000, 3306, 3389, 5432, 5601, 5672, 6379, 6443, 8000, 8080, 8081, 8443, 8888, 9000, 9090, 9200, 9443, 15672, 27017];
 
 async function checkPort(address: string, family: 4 | 6, port: number, timeoutMs: number): Promise<boolean> {
   return await new Promise((resolve) => {
