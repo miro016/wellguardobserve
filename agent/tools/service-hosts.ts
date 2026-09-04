@@ -1,5 +1,6 @@
 import type { ScopeGuard } from '../security/scope-guard';
 import { inspectHttp } from './http';
+import type { TechnologySignal } from './http';
 
 const DEFAULT_LABELS = [
   'auth', 'sso', 'keycloak', 'keycloak1', 'identity', 'login', 'accounts', 'admin', 'panel', 'api',
@@ -17,6 +18,7 @@ interface CompactObservation {
   contentType: string;
   textSample: string;
   serviceWords: string[];
+  technologies: TechnologySignal[];
 }
 
 export interface ServiceHostObservation {
@@ -26,6 +28,7 @@ export interface ServiceHostObservation {
   location: string;
   server: string;
   productHints: string[];
+  technologies: TechnologySignal[];
   evidence: string;
 }
 
@@ -40,7 +43,12 @@ function compact(hostname: string, value: Record<string, unknown>): CompactObser
     server: String(headers['server'] || '').trim(),
     contentType: String(headers['content-type'] || '').trim(),
     textSample: String(signals['textSample'] || '').slice(0, 500),
-    serviceWords: Array.isArray(signals['serviceWords']) ? signals['serviceWords'].map(String) : []
+    serviceWords: Array.isArray(signals['serviceWords']) ? signals['serviceWords'].map(String) : [],
+    technologies: Array.isArray(signals['technologies']) ? signals['technologies'].flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const value = item as Record<string, unknown>;
+      return [{ name: String(value['name'] || ''), evidence: String(value['evidence'] || '') }].filter((technology) => technology.name);
+    }) : []
   };
 }
 
@@ -53,11 +61,11 @@ export function classifyServiceObservation(candidate: CompactObservation, root?:
   if (missing || candidate.status === 0) return null;
   const mirrorsRoot = root && normalizedIdentity(candidate) === normalizedIdentity(root);
   if (mirrorsRoot) return null;
-  const identity = [candidate.hostname, candidate.title, candidate.location, ...candidate.serviceWords].join(' ');
+  const identity = [candidate.title, candidate.location, ...candidate.serviceWords].join(' ');
   const productHints = [...new Set((identity.match(PRODUCT_PATTERN) || []).map((item) => item.toLowerCase()))];
   const response = `HTTPS GET / returned ${candidate.status}${candidate.title ? ` with title “${candidate.title}”` : ''}`;
   const redirect = candidate.location ? ` and Location ${candidate.location}` : '';
-  return { hostname: candidate.hostname, status: candidate.status, title: candidate.title, location: candidate.location, server: candidate.server, productHints, evidence: `${response}${redirect}.` };
+  return { hostname: candidate.hostname, status: candidate.status, title: candidate.title, location: candidate.location, server: candidate.server, productHints, technologies: candidate.technologies, evidence: `${response}${redirect}.` };
 }
 
 async function passiveHosts(scope: ScopeGuard): Promise<{ hosts: string[]; status: string }> {
@@ -104,13 +112,13 @@ export async function discoverServiceHosts(scope: ScopeGuard, input: { candidate
   const missingOrMirrored = observations.filter((observation) => observation && !classifyServiceObservation(observation, root)).length;
   const unreachable = observations.filter((observation) => !observation).length;
   return {
-    root: root ? { status: root.status, title: root.title, server: root.server } : null,
+    root: root ? { status: root.status, title: root.title, server: root.server, serviceWords: root.serviceWords, technologies: root.technologies } : null,
     passiveSource: passive.status,
     candidatesConsidered: candidates.length,
     serviceHosts,
     excludedAsMissingOrMirrored: missingOrMirrored,
     unreachable,
-    securityNote: 'Candidates are restricted to the authorized root. A hostname is retained only when its HTTPS response differs from the root and is not an EasyPanel-style missing-route response.'
+    securityNote: 'Candidates are restricted to the authorized root. A hostname is retained only when its HTTPS response differs from the root and is not a generic reverse-proxy missing-route response.'
   };
 }
 

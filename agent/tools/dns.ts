@@ -17,10 +17,21 @@ export async function inspectCertificateTransparency(scope: ScopeGuard) {
   const url = `https://crt.sh/?q=${encodeURIComponent(`%.${scope.rootHostname}`)}&output=json`;
   const response = await fetch(url, { signal: AbortSignal.timeout(12_000), headers: { 'user-agent': 'WellguardObserve/0.1' } });
   if (!response.ok) throw new Error(`Certificate transparency source returned ${response.status}.`);
-  const rows = await response.json() as Array<{ name_value?: string; issuer_name?: string; not_after?: string }>;
+  const rows = await response.json() as Array<{ id?: number; common_name?: string; name_value?: string; issuer_ca_id?: number; issuer_name?: string; not_before?: string; not_after?: string; serial_number?: string; result_count?: number }>;
   const names = [...new Set(rows.flatMap((row) => (row.name_value || '').split(/\r?\n/)))]
     .map((name) => name.toLowerCase().replace(/^\*\./, ''))
     .filter((name) => name === scope.rootHostname || name.endsWith(`.${scope.rootHostname}`))
     .slice(0, 100);
-  return { source: 'crt.sh', root: scope.rootHostname, names, certificateCount: rows.length };
+  const certificates = rows.slice(0, 100).map((row, index) => ({
+    id: row.id ?? index,
+    commonName: String(row.common_name || '').toLowerCase(),
+    names: [...new Set(String(row.name_value || '').split(/\r?\n/).map((name) => name.trim().toLowerCase()).filter(Boolean))],
+    issuerCaId: row.issuer_ca_id ?? null,
+    issuerName: String(row.issuer_name || ''),
+    notBefore: String(row.not_before || ''),
+    notAfter: String(row.not_after || ''),
+    serialNumber: String(row.serial_number || ''),
+    resultCount: row.result_count ?? 1
+  }));
+  return { source: 'crt.sh', root: scope.rootHostname, names, certificateCount: rows.length, certificatesRetained: certificates.length, certificates };
 }

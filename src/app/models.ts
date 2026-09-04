@@ -35,8 +35,13 @@ export interface TlsObservation {
 }
 
 export interface Scan {
-  id: string; target: string; request?: string; status: 'running' | 'completed' | 'failed'; startedAt: string;
+  id: string; target: string; request?: string; status: 'running' | 'cancelled' | 'completed' | 'failed'; startedAt: string;
   completedAt: string; summary: string; error: string; created: string;
+}
+
+export interface ScanRequest {
+  id: string; target: string; mode: 'light' | 'standard'; status: 'queued' | 'processing' | 'cancelling' | 'cancelled' | 'completed' | 'failed';
+  startedAt: string; completedAt: string; error: string; created: string;
 }
 
 export interface AgentActionRecord {
@@ -46,6 +51,11 @@ export interface AgentActionRecord {
 export interface AgentMessageRecord {
   id: string; target: string; scan: string; role: 'system' | 'user' | 'assistant' | 'tool'; content: string;
   toolName: string; sequence: number; occurredAt: string;
+}
+
+export interface CertificateTransparencyRecord {
+  id: string | number; commonName: string; names: string[]; issuerCaId: number | null; issuerName: string; notBefore: string; notAfter: string;
+  serialNumber: string; resultCount: number;
 }
 
 export interface EvidenceItem { label: string; value: string; evidence: string; }

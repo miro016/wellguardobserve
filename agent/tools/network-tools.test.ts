@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createServer, type Server } from 'node:http';
 import { ScopeGuard } from '../security/scope-guard';
-import { inspectHttp } from './http';
+import { extractSignals, inspectHttp } from './http';
 import { discoverPorts } from './ports';
 import { classifyServiceObservation } from './service-hosts';
 
@@ -43,10 +43,22 @@ describe('bounded network tools', () => {
   });
 
   test('separates a real redirected service from wildcard missing routes', () => {
-    const root = { hostname: 'example.com', status: 200, title: 'Easypanel', location: '', server: 'cloudflare', contentType: 'text/html', textSample: 'Easypanel', serviceWords: ['easypanel'] };
+    const root = { hostname: 'example.com', status: 200, title: 'Easypanel', location: '', server: 'cloudflare', contentType: 'text/html', textSample: 'Easypanel', serviceWords: ['easypanel'], technologies: [] };
     const missing = { ...root, hostname: 'keycloak.example.com', status: 404, title: 'Not Found', textSample: 'The application keycloak was not found on Easypanel.' };
     const service = { ...root, hostname: 'keycloak1.example.com', status: 302, title: '', location: 'https://project-keycloak.provider.test/admin/', textSample: '', serviceWords: [] };
     expect(classifyServiceObservation(missing, root)).toBeNull();
     expect(classifyServiceObservation(service, root)?.productHints).toContain('keycloak');
+  });
+
+  test('retains direct framework fingerprints with their evidence', () => {
+    const signals = extractSignals('<html><head><script id="__NEXT_DATA__">{}</script><script src="/_next/static/app.js"></script></head></html>', { server: 'nginx/1.26.0' });
+    expect(signals.technologies.map((item) => item.name)).toContain('Next.js');
+    expect(signals.technologies.map((item) => item.name)).toContain('nginx/1.26.0');
+    expect(signals.assets).toContain('/_next/static/app.js');
+  });
+
+  test('does not identify a product from the candidate hostname alone', () => {
+    const candidate = { hostname: 'easypanel.example.com', status: 200, title: 'Company portal', location: '', server: 'cloudflare', contentType: 'text/html', textSample: 'Welcome', serviceWords: [], technologies: [] };
+    expect(classifyServiceObservation(candidate)?.productHints).not.toContain('easypanel');
   });
 });

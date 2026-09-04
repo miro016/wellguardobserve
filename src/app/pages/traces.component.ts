@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { AppSidebarComponent } from '../components/app-sidebar.component';
 import { AgentActionRecord, AgentMessageRecord, Scan, Target } from '../models';
 import { PocketBaseService } from '../services/pocketbase.service';
@@ -13,8 +14,8 @@ import { PocketBaseService } from '../services/pocketbase.service';
   <div class="trace-notice"><span>TRANSPARENCY BOUNDARY</span><p>Host responses and public documents are treated as untrusted data. The trace is retained so users can audit the path from observation to finding.</p></div>
   </main></div>`, changeDetection: ChangeDetectionStrategy.OnPush })
 export class TracesComponent implements OnInit {
-  private readonly db = inject(PocketBaseService); protected readonly scans = signal<Scan[]>([]); protected readonly targets = signal<Target[]>([]); protected readonly scanId = signal(''); protected readonly messages = signal<AgentMessageRecord[]>([]); protected readonly actions = signal<AgentActionRecord[]>([]); protected readonly error = signal('');
-  ngOnInit(): void { void Promise.all([this.db.scans(), this.db.targets()]).then(([scans, targets]) => { this.scans.set(scans); this.targets.set(targets); const id = scans[0]?.id || ''; this.scanId.set(id); return this.loadTrace(id); }).catch((e) => this.error.set(e instanceof Error ? e.message : 'Could not load traces.')); }
+  private readonly db = inject(PocketBaseService); private readonly route = inject(ActivatedRoute); protected readonly scans = signal<Scan[]>([]); protected readonly targets = signal<Target[]>([]); protected readonly scanId = signal(''); protected readonly messages = signal<AgentMessageRecord[]>([]); protected readonly actions = signal<AgentActionRecord[]>([]); protected readonly error = signal('');
+  ngOnInit(): void { void Promise.all([this.db.scans(), this.db.targets()]).then(([scans, targets]) => { this.scans.set(scans); this.targets.set(targets); const targetId = this.route.snapshot.queryParamMap.get('target'); const id = scans.find((scan) => scan.target === targetId)?.id || scans[0]?.id || ''; this.scanId.set(id); return this.loadTrace(id); }).catch((e) => this.error.set(e instanceof Error ? e.message : 'Could not load traces.')); }
   protected selectScan(id: string): void { this.scanId.set(id); void this.loadTrace(id); }
   private async loadTrace(id: string): Promise<void> { if (!id) return; try { const [messages, actions] = await Promise.all([this.db.agentMessages({ scanId: id }), this.db.agentActions({ scanId: id })]); this.messages.set(messages); this.actions.set(actions); } catch (e) { this.error.set(e instanceof Error ? e.message : 'Could not load trace.'); } }
   protected targetName(id: string): string { return this.targets().find((t) => t.id === id)?.hostname || 'Unknown target'; }

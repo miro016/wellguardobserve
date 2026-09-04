@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AppSidebarComponent } from '../components/app-sidebar.component';
 import { InfrastructureGraphComponent } from '../components/infrastructure-graph.component';
 import { AgentActionRecord, Finding, Scan, Target, TlsObservation } from '../models';
@@ -13,7 +13,7 @@ import { PocketBaseService } from '../services/pocketbase.service';
       <header class="app-header"><div><a class="app-breadcrumb" routerLink="/app/targets">TARGETS / DETAIL</a><h1>{{ target()?.hostname || 'Loading target…' }}</h1><p>{{ target()?.name }}</p></div><div class="header-actions"><span class="authorization-badge"><i></i>{{ target()?.authorizationStatus === 'admin_override' ? 'Admin approved' : 'Ownership verified' }}</span><button class="button primary compact" type="button" (click)="scan()" [disabled]="scanState() !== 'idle'">{{ scanLabel() }} <span>◎</span></button></div></header>
       @if (error()) { <div class="error-banner"><strong>Target data unavailable</strong><span>{{ error() }}</span></div> }
       @if (target(); as item) {
-        <nav class="subnav"><a href="#map">Surface map</a><a href="#findings">Findings <b>{{ findings().length }}</b></a><a href="#tls">TLS</a><a routerLink="/app/traces">Agent trace</a><a routerLink="/app/reports">Reports</a></nav>
+        <nav class="subnav"><a [routerLink]="[]" fragment="map">Surface map</a><a [routerLink]="[]" fragment="findings">Findings <b>{{ findings().length }}</b></a><a [routerLink]="[]" fragment="tls">TLS</a><a routerLink="/app/traces" [queryParams]="{ target: item.id }">Agent trace</a><a routerLink="/app/reports" [queryParams]="{ target: item.id }">Reports</a></nav>
         <section class="target-facts"><div><small>STATUS</small><strong><i class="live-dot"></i>{{ item.status }}</strong></div><div><small>POSTURE</small><strong>{{ item.posture }} / 100</strong></div><div><small>LAST SCAN</small><strong>{{ item.lastScanAt | date:'MMM d, HH:mm:ss' }}</strong></div><div><small>RETAINED TOOLS</small><strong>{{ actions().length }}</strong></div><div><small>SCAN HISTORY</small><strong>{{ scans().length }}</strong></div></section>
         <section class="panel topology-panel" id="map"><div class="panel-heading"><div><span class="section-index">CLICK ANY ASSET</span><h2>Observed infrastructure</h2></div><span class="evidence-count">Evidence-linked model</span></div><wg-infrastructure-graph [target]="item" [findings]="findings()" [tls]="tls()" [actions]="actions()" /></section>
         <section class="target-detail-grid">
@@ -26,10 +26,10 @@ import { PocketBaseService } from '../services/pocketbase.service';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class TargetDetailComponent implements OnInit {
-  private readonly db = inject(PocketBaseService); private readonly route = inject(ActivatedRoute);
+  private readonly db = inject(PocketBaseService); private readonly route = inject(ActivatedRoute); private readonly router = inject(Router);
   protected readonly target = signal<Target | null>(null); protected readonly findings = signal<Finding[]>([]); protected readonly tls = signal<TlsObservation | null>(null); protected readonly actions = signal<AgentActionRecord[]>([]); protected readonly scans = signal<Scan[]>([]); protected readonly scanState = signal<'idle'|'requesting'|'queued'>('idle'); protected readonly error = signal('');
   protected readonly scanLabel = () => ({ idle: 'Run observation', requesting: 'Queueing…', queued: 'Queued' })[this.scanState()];
   ngOnInit(): void { void this.load(); }
   private async load(): Promise<void> { const id = this.route.snapshot.paramMap.get('id') || ''; try { const [targets, findings, tls, actions, scans] = await Promise.all([this.db.targets(), this.db.findings(id), this.db.tls(id), this.db.agentActions({ targetId: id }), this.db.scans(id)]); this.target.set(targets.find((x) => x.id === id) || null); this.findings.set(findings); this.tls.set(tls); this.actions.set(actions); this.scans.set(scans); } catch (e) { this.error.set(e instanceof Error ? e.message : 'Could not load target.'); } }
-  protected async scan(): Promise<void> { const target = this.target(); if (!target) return; this.scanState.set('requesting'); try { await this.db.requestScan(target.id); this.scanState.set('queued'); } catch { this.scanState.set('idle'); } }
+  protected async scan(): Promise<void> { const target = this.target(); if (!target) return; this.scanState.set('requesting'); try { const requestId = await this.db.requestScan(target.id); this.scanState.set('queued'); await this.router.navigate(['/app/investigations', requestId]); } catch { this.scanState.set('idle'); } }
 }

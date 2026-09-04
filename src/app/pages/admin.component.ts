@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AppSidebarComponent } from '../components/app-sidebar.component';
 import { Target } from '../models';
 import { PocketBaseService } from '../services/pocketbase.service';
@@ -39,6 +39,7 @@ import { PocketBaseService } from '../services/pocketbase.service';
 })
 export class AdminComponent implements OnInit {
   protected readonly db = inject(PocketBaseService);
+  private readonly router = inject(Router);
   protected readonly targets = signal<Target[]>([]); protected readonly busy = signal(false); protected readonly queued = signal<Record<string, boolean>>({}); protected readonly error = signal(''); protected readonly notice = signal('');
   protected name = ''; protected hostname = ''; protected hostHints = ''; protected reason = 'I own and administer this infrastructure.'; protected confirmed = false;
   ngOnInit(): void { void this.load(); }
@@ -53,7 +54,12 @@ export class AdminComponent implements OnInit {
     this.busy.set(true);
     try {
       const target = await this.db.createTarget({ name: this.name.trim(), hostname, hostHints: hints, authorizationReason: this.reason.trim() });
-      if (runScan) { await this.db.requestScan(target.id, 'standard'); this.queued.update((state) => ({ ...state, [target.id]: true })); }
+      if (runScan) {
+        const requestId = await this.db.requestScan(target.id, 'standard');
+        this.queued.update((state) => ({ ...state, [target.id]: true }));
+        await this.router.navigate(['/app/investigations', requestId]);
+        return;
+      }
       this.notice.set(runScan ? `${target.hostname} was approved and queued.` : `${target.hostname} was approved.`);
       this.name = ''; this.hostname = ''; this.hostHints = ''; this.confirmed = false;
       await this.load();
@@ -62,7 +68,7 @@ export class AdminComponent implements OnInit {
   }
   protected async run(target: Target): Promise<void> {
     this.error.set(''); this.notice.set(''); this.queued.update((state) => ({ ...state, [target.id]: true }));
-    try { await this.db.requestScan(target.id, 'standard'); this.notice.set(`${target.hostname} was queued for a standard investigation.`); }
+    try { const requestId = await this.db.requestScan(target.id, 'standard'); await this.router.navigate(['/app/investigations', requestId]); }
     catch (error) { this.queued.update((state) => ({ ...state, [target.id]: false })); this.error.set(error instanceof Error ? error.message : 'The scan could not be queued.'); }
   }
   protected scanState(target: Target): string { return this.queued()[target.id] ? 'Queued' : target.status === 'scanning' ? 'Scanning' : 'Ready'; }

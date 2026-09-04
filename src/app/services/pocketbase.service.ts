@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import PocketBase, { RecordModel } from 'pocketbase';
-import { AgentActionRecord, AgentMessageRecord, CreateTargetInput, Finding, Scan, Target, TlsObservation } from '../models';
+import { AgentActionRecord, AgentMessageRecord, CreateTargetInput, Finding, Scan, ScanRequest, Target, TlsObservation } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class PocketBaseService {
@@ -80,6 +80,29 @@ export class PocketBaseService {
       const records = await this.client.collection('scans').getFullList({ filter, sort: '-created' });
       return records.map((r) => ({ id: r.id, target: r['target'], request: r['request'], status: r['status'], startedAt: r['startedAt'], completedAt: r['completedAt'], summary: r['summary'] ?? '', error: r['error'] ?? '', created: r['created'] } as Scan));
     } catch (error) { return this.failed(error); }
+  }
+
+  async scanForRequest(requestId: string): Promise<Scan | null> {
+    try {
+      const filter = this.client.filter('request = {:requestId}', { requestId });
+      const r = await this.client.collection('scans').getFirstListItem(filter, { sort: '-created' });
+      return { id: r.id, target: r['target'], request: r['request'], status: r['status'], startedAt: r['startedAt'], completedAt: r['completedAt'], summary: r['summary'] ?? '', error: r['error'] ?? '', created: r['created'] } as Scan;
+    } catch (error: unknown) {
+      if ((error as { status?: number })?.status === 404) return null;
+      return this.failed(error);
+    }
+  }
+
+  async scanRequest(id: string): Promise<ScanRequest> {
+    try {
+      const r = await this.client.collection('scanRequests').getOne(id);
+      return { id: r.id, target: r['target'], mode: r['mode'], status: r['status'], startedAt: r['startedAt'], completedAt: r['completedAt'], error: r['error'] ?? '', created: r['created'] } as ScanRequest;
+    } catch (error) { return this.failed(error); }
+  }
+
+  async cancelScan(request: ScanRequest): Promise<void> {
+    if (!['queued', 'processing'].includes(request.status)) return;
+    await this.client.collection('scanRequests').update(request.id, { status: request.status === 'queued' ? 'cancelled' : 'cancelling' });
   }
 
   async agentActions(options: { targetId?: string; scanId?: string } = {}): Promise<AgentActionRecord[]> {

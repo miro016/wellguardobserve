@@ -10,6 +10,7 @@ export const routes: Routes = [
   guarded('app', () => import('./pages/dashboard.component').then((m) => m.DashboardComponent), 'Overview — Wellguard Observe'),
   guarded('app/targets', () => import('./pages/targets.component').then((m) => m.TargetsComponent), 'Targets — Wellguard Observe'),
   guarded('app/targets/:id', () => import('./pages/target-detail.component').then((m) => m.TargetDetailComponent), 'Target — Wellguard Observe'),
+  guarded('app/investigations/:requestId', () => import('./pages/live-investigation.component').then((m) => m.LiveInvestigationComponent), 'Live investigation — Wellguard Observe'),
   guarded('app/surface', () => import('./pages/surface.component').then((m) => m.SurfaceComponent), 'Surface map — Wellguard Observe'),
   guarded('app/findings', () => import('./pages/findings.component').then((m) => m.FindingsComponent), 'Findings — Wellguard Observe'),
   guarded('app/reports', () => import('./pages/reports.component').then((m) => m.ReportsComponent), 'Reports — Wellguard Observe'),

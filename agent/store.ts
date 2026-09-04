@@ -1,5 +1,5 @@
 import PocketBase, { type RecordModel } from 'pocketbase';
-import type { AgentAction, AuthorizedTarget, InvestigationReport } from './types';
+import type { AgentAction, AgentMessage, AuthorizedTarget, InvestigationReport } from './types';
 
 export class InvestigationStore {
   readonly client: PocketBase;
@@ -21,9 +21,12 @@ export class InvestigationStore {
     catch { return null; }
   }
 
-  async claim(record: RecordModel): Promise<void> {
+  async claim(record: RecordModel): Promise<boolean> {
+    const current = await this.client.collection('scanRequests').getOne(record.id);
+    if (current['status'] !== 'queued') return false;
     await this.client.collection('scanRequests').update(record.id, { status: 'processing', startedAt: new Date().toISOString(), error: '' });
     await this.client.collection('targets').update(record['target'], { status: 'scanning' });
+    return true;
   }
 
   async loadTarget(id: string): Promise<AuthorizedTarget> {
@@ -40,10 +43,23 @@ export class InvestigationStore {
     await this.client.collection('agentActions').create({ target: targetId, scan: scanId, tool: action.tool, input: action.input, summary: action.summary, occurredAt: action.at });
   }
 
+  async saveMessage(targetId: string, scanId: string, message: AgentMessage): Promise<void> {
+    await this.client.collection('agentMessages').create({ target: targetId, scan: scanId, role: message.role, content: message.content, toolName: message.toolName, sequence: message.sequence, occurredAt: message.at });
+  }
+
+  async isCancellationRequested(requestId: string): Promise<boolean> {
+    const request = await this.client.collection('scanRequests').getOne(requestId);
+    return request['status'] === 'cancelling' || request['status'] === 'cancelled';
+  }
+
+  async cancel(request: RecordModel, scan: RecordModel | null): Promise<void> {
+    const completedAt = new Date().toISOString();
+    await this.client.collection('scanRequests').update(request.id, { status: 'cancelled', completedAt, error: '' });
+    await this.client.collection('targets').update(request['target'], { status: 'observed' });
+    if (scan) await this.client.collection('scans').update(scan.id, { status: 'cancelled', completedAt, summary: 'Investigation stopped by the user.' });
+  }
+
   async complete(request: RecordModel, scan: RecordModel, report: InvestigationReport): Promise<void> {
-    for (const message of report.conversation) {
-      await this.client.collection('agentMessages').create({ target: report.target.id, scan: scan.id, role: message.role, content: message.content, toolName: message.toolName, sequence: message.sequence, occurredAt: message.at });
-    }
     for (const finding of report.findings) {
       await this.client.collection('findings').create({
         target: report.target.id, scan: scan.id, title: finding.title, summary: finding.summary,

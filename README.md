@@ -6,15 +6,17 @@ It is intentionally reconnaissance-only: no credential guessing, payload deliver
 
 ## What the MVP does
 
-- Direct Angular-to-PocketBase authentication, data access, and realtime-ready records.
+- Direct Angular-to-PocketBase authentication and data access, with a one-second live investigation view for the private-preview MVP.
 - Administrator-created accounts and administrator-approved target creation; there is no public registration.
 - Verified or explicitly administrator-authorized target scope.
 - LangChain investigation driven by an Ollama model.
 - Safe DNS, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, HTTP, TLS, GitHub Advisory, CISA KEV, and bounded public-document tools.
 - Findings with separate severity and confidence, preserved evidence, remediation, and source URLs.
-- TLS hostname, trust, issuer, validity window, protocol, cipher, and expiry monitoring.
+- TLS hostname, trust, issuer, validity window, protocol, cipher, and expiry monitoring, plus a browsable certificate-transparency record inventory.
+- Evidence-backed web technology detection for common frameworks, CMS products, generators, runtimes, and server headers so same-title applications remain distinguishable.
 - Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase.
-- An interactive evidence-linked topology connecting domains, edge providers, hidden origins, ports, and identified services.
+- A pannable, zoomable evidence-linked topology connecting domains, edge providers, hidden origins, ports, and every identified service without collapsing nodes behind a “more” counter.
+- A live scan console with model messages, tool inputs/results, progress, and safe user cancellation; evidence already retained remains auditable after a stop.
 - Working target administration and scan queue controls, target-scoped surface and finding views, all-target portfolio overview, scan reports, transparent agent traces, source catalog, and workspace settings.
 - A custom responsive light/dark security-operations interface and public product landing page.
 
@@ -128,7 +130,7 @@ External responses are untrusted evidence and are never treated as agent instruc
 
 ## Transparency
 
-New investigations retain the full application-visible LangChain message transcript alongside each bounded tool input and result. The UI intentionally does not infer hidden infrastructure facts: for example, a Cloudflare edge location is never presented as an origin-server location, and service versions remain “Not observed” until direct or corroborated evidence supports them.
+New investigations persist each application-visible LangChain message as it is emitted alongside every completed bounded tool input and result. Product identity requires a direct response fingerprint; hostnames and generic tool policy text are not product evidence. The UI intentionally does not infer hidden infrastructure facts: for example, a Cloudflare edge location is never presented as an origin-server location, and service versions remain “Not observed” until direct or corroborated evidence supports them.
 
 ## Current MVP limitations
 

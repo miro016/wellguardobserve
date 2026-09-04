@@ -16,12 +16,13 @@ A scan runs only when its target is `verified` or `admin_override`. An override 
 - Service-host discovery makes one fixed HackerTarget passive query and verifies at most 80 in-scope HTTPS candidates with concurrency capped at five. Wildcard/missing responses are excluded.
 - Port discovery is capped at 40 explicit ports with limited concurrency and short connection timeouts.
 - TLS inspection performs a handshake only.
+- A user stop aborts the LangChain run before another tool begins; a bounded request already in flight is allowed to return or time out rather than being replaced with a more forceful action.
 
 ## Agent boundary
 
 The model has no shell, filesystem, credential, arbitrary database, or general-purpose socket tool. It cannot modify a target service. Total tool actions are capped for each run.
 
-Service banners, HTML, JSON, documentation, and repository text are untrusted data. Prompts explicitly prohibit following instructions embedded in evidence. Tool policy is enforced in code regardless of model output.
+Service banners, HTML, JSON, documentation, and repository text are untrusted data. Prompts explicitly prohibit following instructions embedded in evidence. Product names require direct response evidence and cannot be inferred from hostnames or generic tool notes. Tool policy is enforced in code regardless of model output.
 
 ## Prohibited behavior
 

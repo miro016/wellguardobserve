@@ -11,17 +11,38 @@ while (true) {
   const request = await store.nextRequest();
   if (!request) { await Bun.sleep(pollMs); continue; }
   let scan: RecordModel | null = null;
+  let cancellationTimer: ReturnType<typeof setInterval> | undefined;
   try {
-    await store.claim(request);
+    if (!await store.claim(request)) continue;
     const target = await store.loadTarget(request['target']);
     scan = await store.createScan(target.id, request.id);
     console.log(`Investigating ${target.hostname} for request ${request.id}.`);
-    const maxActions = request['mode'] === 'light' ? 18 : 44;
-    const report = await investigate(target, { maxActions, onAction: (action) => store.saveAction(target.id, scan!.id, action) });
+    const controller = new AbortController();
+    let checkingCancellation = false;
+    cancellationTimer = setInterval(() => {
+      if (checkingCancellation || controller.signal.aborted) return;
+      checkingCancellation = true;
+      void store.isCancellationRequested(request.id).then((cancelled) => { if (cancelled) controller.abort(new Error('Investigation stopped by the user.')); }).catch(() => {}).finally(() => { checkingCancellation = false; });
+    }, 1_000);
+    const maxActions = request['mode'] === 'light' ? 22 : 64;
+    const report = await investigate(target, {
+      maxActions,
+      signal: controller.signal,
+      onAction: (action) => store.saveAction(target.id, scan!.id, action),
+      onMessage: (message) => store.saveMessage(target.id, scan!.id, message)
+    });
+    if (await store.isCancellationRequested(request.id)) { await store.cancel(request, scan); continue; }
     await store.complete(request, scan, report);
     console.log(`Completed ${target.hostname}: ${report.findings.length} findings.`);
   } catch (error) {
-    console.error('Investigation failed:', error);
-    await store.fail(request, scan, error);
+    if (await store.isCancellationRequested(request.id).catch(() => false)) {
+      console.log(`Stopped request ${request.id} at the user's request.`);
+      await store.cancel(request, scan);
+    } else {
+      console.error('Investigation failed:', error);
+      await store.fail(request, scan, error);
+    }
+  } finally {
+    if (cancellationTimer) clearInterval(cancellationTimer);
   }
 }
