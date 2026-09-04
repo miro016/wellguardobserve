@@ -12,6 +12,10 @@ function action(tool: string, input: Record<string, unknown>, output: unknown): 
 
 describe('explicit asset graph', () => {
   test('turns every distinct discovered host into a technology-aware service node', () => {
+    const findings: AgentFinding[] = [{
+      title: 'Keycloak administration surface is publicly reachable', summary: 'A direct request reached the observed Keycloak administration surface.', severity: 'low', confidence: 100,
+      asset: 'login.example.com', assetKey: 'hostname:login.example.com', relatedAssetKeys: [], relationKey: '', evidence: ['GET /admin returned 200.'], remediation: 'Restrict the administration route.', sourceUrls: [], cveIds: [], weaknessIds: ['CWE-284']
+    }];
     const graph = buildAssetGraph(target, [action('discover_service_hosts', {}, {
       root: { status: 200, title: 'Example', serviceWords: [], technologies: [{ name: 'Cloudflare' }] },
       serviceHosts: [
@@ -19,11 +23,12 @@ describe('explicit asset graph', () => {
         { hostname: 'client.example.com', status: 200, title: 'Client', productHints: [], technologies: [{ name: 'Angular' }, { name: 'Cloudflare' }], evidence: 'HTML contained an Angular app-root marker.' },
         { hostname: 'links.example.com', status: 200, title: 'Linkwarden', productHints: ['linkwarden'], technologies: [{ name: 'Next.js' }], evidence: 'HTTPS GET / returned the Linkwarden page.' }
       ]
-    })], [], []);
+    })], findings, []);
 
     expect(graph.assets.find((asset) => asset.key === 'service:login.example.com:443:keycloak')?.label).toBe('Keycloak');
     expect(graph.assets.find((asset) => asset.key === 'service:client.example.com:443:angular')?.details.some((detail) => detail.value.includes('Angular'))).toBeTrue();
     expect(graph.assets.find((asset) => asset.key === 'service:links.example.com:443:linkwarden')?.details.some((detail) => detail.value.includes('Next.js'))).toBeTrue();
+    expect(findings[0]?.assetKey).toBe('service:login.example.com:443:keycloak');
   });
 
   test('attaches a service disclosure to the relationship and both participating assets', () => {

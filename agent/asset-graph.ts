@@ -201,16 +201,21 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
   }
 
   const serviceForFinding = (finding: AgentFinding) => {
-    if (finding.assetKey && assets.has(finding.assetKey)) return finding.assetKey;
     const hostname = clean(finding.asset).replace(/^https?:\/\//, '').replace(/[/:].*$/, '').toLowerCase();
     const candidates = [...assets.values()].filter((asset) => asset.kind === 'service' && asset.subtitle.toLowerCase().startsWith(hostname));
     const product = candidates.find((asset) => finding.title.toLowerCase().includes(asset.label.toLowerCase()));
     return (product || candidates[0])?.key || (assets.has(hostKey(hostname)) ? hostKey(hostname) : domainKey);
   };
   for (const finding of findings) {
-    if (!finding.assetKey || !assets.has(finding.assetKey)) finding.assetKey = serviceForFinding(finding);
+    const suggestedAssetKey = serviceForFinding(finding);
+    const requestedAsset = finding.assetKey ? assets.get(finding.assetKey) : undefined;
+    const suggestedAsset = assets.get(suggestedAssetKey);
+    const namesObservedService = suggestedAsset?.kind === 'service'
+      && !['Web application', 'Website'].includes(suggestedAsset.label)
+      && `${finding.title} ${finding.summary}`.toLowerCase().includes(suggestedAsset.label.toLowerCase());
+    if (!requestedAsset || ((requestedAsset.kind === 'domain' || requestedAsset.kind === 'hostname') && namesObservedService)) finding.assetKey = suggestedAssetKey;
     finding.relatedAssetKeys ||= []; finding.relationKey ||= '';
-    const asset = assets.get(finding.assetKey); if (asset) asset.state = severityState(finding.severity);
+    const asset = finding.assetKey ? assets.get(finding.assetKey) : undefined; if (asset) asset.state = severityState(finding.severity);
     const relation = finding.relationKey ? relations.get(finding.relationKey) : null;
     if (relation) { relation.state = severityState(finding.severity); relation.findingTitles.push(finding.title); }
     for (const key of finding.relatedAssetKeys) { const related = assets.get(key); if (related && related.state === 'unknown') related.state = 'warning'; }
