@@ -7,7 +7,7 @@ const DEFAULT_LABELS = [
   'dev', 'staging', 'test', 'monitor', 'status', 'grafana', 'prometheus', 'jenkins', 'git', 'registry',
   'vpn', 'mail'
 ];
-const PRODUCT_PATTERN = /\b(keycloak|easypanel|grafana|prometheus|jenkins|gitlab|kibana|rabbitmq|phpmyadmin|portainer|traefik|swagger|openapi|jupyter|wordpress|beszel|excalidraw|linkwarden|logto|immich|minio)\b/gi;
+const PRODUCT_PATTERN = /\b(keycloak|easypanel|grafana|prometheus|jenkins|gitlab|kibana|rabbitmq|phpmyadmin|adminer|portainer|file browser|filebrowser|traefik|swagger|openapi|jupyter|wordpress|drupal|joomla|elasticsearch|apache solr|tomcat|spring boot|fastapi|django|laravel|beszel|excalidraw|linkwarden|logto|immich|minio)\b/gi;
 
 interface CompactObservation {
   hostname: string;

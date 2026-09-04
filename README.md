@@ -11,17 +11,17 @@ It is intentionally bounded: no credential guessing, exploit payloads, exploit e
 - Verified root/subdomain scope plus administrator-approved exact related hostnames. Approving `service.provider.example` never authorizes its parent or sibling tenants.
 - LangChain investigation driven by an Ollama model.
 - Three freely selectable PoC scan contracts: Baseline (22 tool actions), Standard (68), and Active validation (104). Target ownership approval remains mandatory, and the worker snapshots the selected limits and available tools into the job before investigation starts.
-- Safe DNS, RDAP registration, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, passive service banners, HTTP, TLS, public metadata, frontend-to-API discovery, curated safe web audits, bounded unknown-service recognition, versioned WordPress/Keycloak inspection, NVD, MITRE CWE, GitHub Advisory, OSV, CISA KEV, and bounded public-document tools.
-- Findings with separate severity and confidence, preserved evidence, remediation, source URLs, CWE weakness mappings, version-matched CVE identifiers, and curated OWASP WSTG, OWASP ASVS 5.0.0, and EU CRA relevance links.
+- Safe DNS, RDAP registration, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, passive service banners, HTTP, TLS, public metadata, frontend-to-API discovery, curated safe web audits, bounded unknown-service recognition, a 30-product versioned adapter catalog, NVD, MITRE CWE, GitHub Advisory, OSV, CISA KEV, and bounded public-document tools.
+- Findings with separate severity and confidence, preserved evidence, remediation, source URLs, CWE weakness mappings, version-matched CVE identifiers, curated OWASP/CRA relevance links, and a non-technical potential-incident path that visually separates observed facts from untested consequences.
 - TLS hostname, trust, issuer, validity window, protocol, cipher, expiry, and explicitly published certificate-email monitoring, plus a browsable certificate-transparency record inventory.
 - DNS control-plane visibility for registrar lifecycle, public registration contacts, nameservers, DNSSEC, CAA, MX, SPF, DMARC, MTA-STS, and SMTP TLS reporting.
-- Read-only service configuration audits for HTTP security headers, CORS, fixed public API/metadata paths, and WordPress REST/login/readme/XML-RPC surfaces; directly observed WordPress generator/component versions trigger up to three transparent NVD correlations.
+- Read-only service configuration audits for HTTP security headers, CORS, fixed public API/metadata paths, public directory indexes without file retrieval, and WordPress REST/login/readme/XML-RPC surfaces; directly observed WordPress generator/component versions trigger up to three transparent NVD correlations.
 - Evidence-backed technology detection using local markers and pinned, size-bounded ProjectDiscovery WappalyzerGo and Rapid7 Recog catalogues. Active validation can compare server/auth headers and a fixed public favicon against Recog; single-source matches remain labelled hypotheses.
 - A checksum-verified Nuclei 3.11.1 engine in the production image. It can run only five committed Wellguard templates, only in Active validation: Go expvar, Prometheus metrics, public OpenAPI, Spring Actuator metadata, and diagnostics indexes. Community downloads, redirects, OOB callbacks, code, headless, fuzzing, and DAST are disabled.
 - Bounded active checks: two anonymous GETs for cookie/CORS posture; three GETs comparing a neutral value with inert text containing one quote; and up to ten sequential anonymous GETs plus at most three reserved-address `X-Forwarded-For` comparisons after an observed HTTP 429. Values, cookies, and response secrets are not retained or replayed.
 - Report-level OWASP coverage receipts show which external checks actually ran. CRA references are explicitly evidence relevance only, never a legal conclusion or conformity assessment.
 - Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase.
-- A pannable, zoomable evidence-linked topology with service, network-context, and full-evidence lenses. The default domain → hostname → application view collapses repeated port/address transit records without discarding them. Findings can attach to a node or to a risky relationship such as “service advertises stale origin.”
+- A pannable, zoomable evidence-linked topology with service, network-context, and full-evidence lenses. Hovering an asset highlights its complete directed upstream and downstream path without lighting sibling branches. The default domain → hostname → application view collapses repeated port/address transit records without discarding them.
 - A target-scoped public identity ledger for names and mailboxes directly disclosed by owned services, RDAP, or `security.txt`. It supports owner-confirmed current/former status, shows only explicitly returned public links, and never guesses or scrapes social profiles.
 - A live job console with a five-second worker heartbeat, current phase, model messages, tool inputs/results, delayed/stalled indicators, safe user cancellation, and explicit recovery of jobs interrupted by a single-instance worker restart; evidence already retained remains auditable after a stop.
 - Working target administration and scan queue controls, target-scoped surface and finding views, all-target portfolio overview, scan reports, transparent agent traces, source catalog, and workspace settings.
@@ -44,7 +44,7 @@ Angular SPA ───────────── PocketBase API
                          policy-bounded read-only tools
 ```
 
-The Angular application does not use a Bun web API. Bun is an internal worker only. See [Architecture](docs/ARCHITECTURE.md) and [Agent safety](docs/AGENT_SAFETY.md).
+The Angular application does not use a Bun web API. Bun is an internal worker only. See [Architecture](docs/ARCHITECTURE.md), [Product adapters](docs/ADAPTERS.md), and [Agent safety](docs/AGENT_SAFETY.md).
 
 ## Local development
 
@@ -141,7 +141,7 @@ For a production deployment, set long random PocketBase credentials, a precise `
 - CISA Known Exploited Vulnerabilities feed
 - OSV.dev package vulnerability API
 - DNS records, mail-security policies, and public TLS handshakes
-- Public application metadata, shipped same-origin frontend bundles, the audited `safe-recon-v1` GET-only exposure checks, and versioned bounded WordPress/Keycloak adapters
+- Public application metadata, shipped same-origin frontend bundles, the audited `safe-recon-v1` GET-only exposure checks, and the versioned 30-product adapter catalog
 - OWASP Web Security Testing Guide, OWASP ASVS 5.0.0, and the official EUR-Lex Cyber Resilience Act text as curated evidence references
 - Vendor documentation selected by the investigator
 

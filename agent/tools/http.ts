@@ -55,7 +55,8 @@ function safeHeaders(headers: IncomingHttpHeaders): Record<string, string> {
     'cross-origin-embedder-policy', 'access-control-allow-origin', 'access-control-allow-credentials',
     'cache-control', 'x-redirect-by', 'x-robots-tag', 'allow', 'x-wp-total', 'x-wp-totalpages',
     'cf-ray', 'cf-cache-status', 'retry-after', 'ratelimit-limit', 'ratelimit-remaining', 'ratelimit-reset',
-    'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset'
+    'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset',
+    'x-jenkins', 'x-jenkins-session', 'kbn-name', 'kbn-version', 'x-elastic-product', 'x-aspnet-version'
   ];
   return Object.fromEntries(keep.flatMap((key) => headers[key] ? [[key, Array.isArray(headers[key]) ? headers[key]!.join(', ') : String(headers[key])]] : []));
 }
@@ -109,7 +110,7 @@ export function extractSignals(raw: string, headers: Record<string, string> = {}
   const urls = [...new Set(raw.match(/https?:\/\/[^\s"'<>\\)]+/gi) || [])].slice(0, 30);
   const ipv4 = [...new Set(raw.match(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b/g) || [])].filter((value) => value.split(/[.:]/).slice(0, 4).every((part) => Number(part) <= 255)).slice(0, 20);
   const textSample = raw.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 1_500);
-  const productPattern = /\b(?:easypanel|keycloak|grafana|prometheus|jenkins|gitlab|kibana|rabbitmq|phpmyadmin|portainer|traefik|swagger|openapi|jupyter|wordpress|beszel|excalidraw|linkwarden|logto|immich|minio)\b/gi;
+  const productPattern = /\b(?:easypanel|keycloak|grafana|prometheus|jenkins|gitlab|kibana|rabbitmq|phpmyadmin|adminer|portainer|file browser|filebrowser|traefik|swagger|openapi|jupyter|wordpress|drupal|joomla|elasticsearch|apache solr|tomcat|spring boot|fastapi|django|laravel|beszel|excalidraw|linkwarden|logto|immich|minio)\b/gi;
   const serviceWords = [...new Set((`${title} ${generator}`.match(productPattern) || []).map((value) => value.toLowerCase()))];
   const directMarkers: Array<[string, RegExp]> = [
     ['keycloak', /\bkeycloak-js\b|\/resources\/[^\s"']+\/(?:keycloak|login)\/|\bkcFormOptions\b/i],
@@ -117,7 +118,11 @@ export function extractSignals(raw: string, headers: Record<string, string> = {}
     ['prometheus', /\bPrometheus Time Series Collection and Processing Server\b/i],
     ['jenkins', /\bjenkins-agent-protocols\b|adjuncts\/[a-f0-9]+\/org\/kohsuke\/stapler/i],
     ['gitlab', /\bgl-performance-bar\b|assets\/webpack\/runtime\.[a-f0-9]+\.js/i],
-    ['easypanel', /\beasypanel\.io\b|\bdata-easypanel\b/i]
+    ['easypanel', /\beasypanel\.io\b|\bdata-easypanel\b/i],
+    ['file browser', /\bwindow\.FileBrowser\b|filebrowser\.svg/i],
+    ['elasticsearch', /"tagline"\s*:\s*"You Know, for Search"/i],
+    ['apache solr', /\bSolr Admin\b|\bsolr-admin\b/i],
+    ['spring boot', /"_links"\s*:\s*\{[\s\S]{0,400}"health"\s*:/i]
   ];
   for (const [product, pattern] of directMarkers) if (pattern.test(raw) && !serviceWords.includes(product)) serviceWords.push(product);
   const assets = [...new Set([...raw.matchAll(/(?:src|href)=["']([^"']{1,500})["']/gi)].map((match) => match[1]!).filter((value) => /(?:\.m?js|\.css|\/_next\/|\/_nuxt\/|\/_astro\/|\/_app\/|\/wp-(?:content|includes)\/)/i.test(value)))].slice(0, 40);

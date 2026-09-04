@@ -47,6 +47,13 @@ export interface FrameworkReference {
   note: string;
 }
 
+export interface CustomerNarrative {
+  observed: string;
+  possibleAttack: string;
+  businessImpact: string;
+  boundary: string;
+}
+
 export interface AgentFinding {
   title: string;
   summary: string;
@@ -59,6 +66,7 @@ export interface AgentFinding {
   cveIds: string[];
   weaknessIds: string[];
   frameworkRefs?: FrameworkReference[];
+  customerNarrative?: CustomerNarrative;
   assetKey?: string;
   relatedAssetKeys?: string[];
   relationKey?: string;

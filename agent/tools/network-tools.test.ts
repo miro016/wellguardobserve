@@ -8,11 +8,12 @@ import { classifyServiceObservation } from './service-hosts';
 import { assessHttpConfiguration } from './configuration';
 import { inspectWordPress, normalizeWordPressUsers } from './wordpress';
 import { summarizeRdap } from './domain';
-import { inspectWithAdapter } from '../adapters/registry';
+import { adapterCatalog, inspectWithAdapter } from '../adapters/registry';
 import { analyzeFrontendBundles } from './frontend-api';
 import { evaluateSafeTemplate, SAFE_WEB_TEMPLATES } from './safe-audit';
 import type { AuthorizedHttpResponse } from './http';
 import { inspectBrowserSessionControls, inspectInputErrorHandling, inspectRateLimitControls } from './active-validation';
+import { inspectPublicDirectoryIndex } from './directory-index';
 
 let server: Server;
 let port: number;
@@ -38,6 +39,9 @@ beforeAll(async () => {
       return;
     }
     if (request.url?.startsWith('/active/dynamic')) { dynamicRequests += 1; response.end(`dynamic ${dynamicRequests}`); return; }
+    if (request.url === '/framework') { response.setHeader('x-powered-by', 'Express'); response.end('<app-root ng-version="22.1.5"></app-root>'); return; }
+    if (request.url === '/listing') { response.statusCode = 301; response.setHeader('location', '/listing/'); response.end('redirect'); return; }
+    if (request.url === '/listing/') { response.end('<title>Index of /listing/</title><a href="backup.sql">backup.sql</a><a href="manual.pdf">manual.pdf</a>'); return; }
     if (request.url === '/active/rate') {
       if (request.headers['x-forwarded-for']) { response.end('accepted alternate identity'); return; }
       rateRequests += 1;
@@ -134,6 +138,38 @@ describe('bounded network tools', () => {
     expect(result.relations[0]?.toKey).toBe('hostname:stale-origin.example.test');
     expect(result.suggestedFindings.some((finding) => finding.relationKey === result.relations[0]?.key)).toBeTrue();
     expect(result.suggestedFindings.some((finding) => /administration surface/i.test(finding.title))).toBeTrue();
+  });
+
+  test('publishes thirty unique GET-only product adapters with hard request ceilings', () => {
+    const catalog = adapterCatalog();
+    expect(catalog).toHaveLength(30);
+    expect(new Set(catalog.map((item) => item.id)).size).toBe(30);
+    expect(catalog.every((item) => item.methods.length === 1 && item.methods[0] === 'GET')).toBeTrue();
+    expect(catalog.every((item) => item.maxRequests >= 1 && item.maxRequests <= 4)).toBeTrue();
+  });
+
+  test('declarative adapters require direct signatures and retain versions without bodies', async () => {
+    const angular = await inspectWithAdapter(scope, 'angular', { hostname: '127.0.0.1', port, tls: false, basePath: '/framework' });
+    const express = await inspectWithAdapter(scope, 'express', { hostname: '127.0.0.1', port, tls: false, basePath: '/framework' });
+    const nginx = await inspectWithAdapter(scope, 'nginx', { hostname: '127.0.0.1', port, tls: false, basePath: '/framework' });
+    expect(angular.identified).toBeTrue();
+    expect((angular.observations as { versions: string[] }).versions).toContain('22.1.5');
+    expect(express.identified).toBeTrue();
+    expect(nginx.identified).toBeFalse();
+    expect(JSON.stringify(angular.observations)).not.toContain('<app-root');
+  });
+
+  test('records a generated directory index without requesting listed files', async () => {
+    const result = await inspectPublicDirectoryIndex(scope, { hostname: '127.0.0.1', port, tls: false, path: '/listing' });
+    expect(result.identified).toBeTrue();
+    expect(result.requestCount).toBe(2);
+    expect(result.listedNames).toEqual(['backup.sql', 'manual.pdf']);
+    expect(result.sensitiveNames).toEqual(['backup.sql']);
+    expect(result.suggestedFindings[0]?.weaknessIds).toContain('CWE-548');
+  });
+
+  test('rejects file-like paths for the directory inspector', async () => {
+    expect(inspectPublicDirectoryIndex(scope, { hostname: '127.0.0.1', port, tls: false, path: '/backup.sql' })).rejects.toThrow('cannot request a file-like path');
   });
 
   test('normalizes only bounded public WordPress user fields', () => {

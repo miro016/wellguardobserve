@@ -13,6 +13,10 @@ export interface FrameworkReference {
   relationship: 'test-method' | 'verification-requirement' | 'regulatory-relevance'; note: string;
 }
 
+export interface CustomerNarrative {
+  observed: string; possibleAttack: string; businessImpact: string; boundary: string;
+}
+
 export interface Target {
   id: string;
   name: string;
@@ -43,6 +47,7 @@ export interface Finding {
   id: string; target: string; scan: string; title: string; summary: string; severity: Severity;
   confidence: number; asset: string; evidence: string[]; remediation: string; sourceUrls: string[];
   cveIds: string[]; weaknessIds: string[]; frameworkRefs: FrameworkReference[];
+  customerNarrative: CustomerNarrative | null;
   assetKey: string; relatedAssetKeys: string[]; relationKey: string;
   created: string; status: 'open' | 'accepted' | 'resolved';
 }

@@ -121,7 +121,7 @@ export class InvestigationStore {
         target: report.target.id, scan: scan.id, title: finding.title, summary: finding.summary,
         severity: finding.severity, confidence: finding.confidence, asset: finding.asset,
         evidence: finding.evidence, remediation: finding.remediation, sourceUrls: finding.sourceUrls,
-        cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, frameworkRefs: finding.frameworkRefs || [], assetKey: finding.assetKey || '',
+        cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, frameworkRefs: finding.frameworkRefs || [], customerNarrative: finding.customerNarrative || null, assetKey: finding.assetKey || '',
         relatedAssetKeys: finding.relatedAssetKeys || [], relationKey: finding.relationKey || '', status: 'open'
       });
     }

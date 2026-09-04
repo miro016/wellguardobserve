@@ -1,8 +1,9 @@
 import type { ScopeGuard } from '../security/scope-guard';
 import { keycloakAdapter } from './keycloak';
+import { declarativeAdapters } from './declarative';
 import type { AdapterInput, ServiceAdapter } from './types';
 
-const adapters: ServiceAdapter[] = [keycloakAdapter];
+const adapters: ServiceAdapter[] = [keycloakAdapter, ...declarativeAdapters()];
 
 export function adapterCatalog() {
   return adapters.map((adapter) => adapter.manifest);

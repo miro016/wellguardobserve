@@ -1,11 +1,14 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, HostListener, inject, input, signal, viewChild } from '@angular/core';
 import { Finding, Target, TlsObservation, AgentActionRecord, AssetRecord, AssetRelationRecord, NodeKind, TopologyEdge, TopologyNode } from '../models';
 import { Topology, TopologyService } from '../services/topology.service';
+import { topologyEdgeId, traceTopologyPath } from '../services/topology-path';
+import { FindingStoryComponent } from './finding-story.component';
 
 type GraphView = 'services' | 'infrastructure' | 'evidence';
 
 @Component({
   selector: 'wg-infrastructure-graph',
+  imports: [FindingStoryComponent],
   template: `
     <div class="topology-shell">
       <div class="topology-toolbar">
@@ -14,7 +17,7 @@ type GraphView = 'services' | 'infrastructure' | 'evidence';
         <button class="risk-filter" type="button" [class.active]="riskOnly()" (click)="riskOnly.set(!riskOnly())"><i></i>Needs action</button>
         <p><strong>{{ topology().nodes.length }} shown</strong><span>{{ collapsedLabel() }}</span></p>
       </div>
-      <div #canvas class="topology-canvas" [class.dragging]="dragging()" role="application" aria-label="Observed infrastructure topology. Drag to pan and use the controls or mouse wheel to zoom." (wheel)="zoomWheel($event)" (pointerdown)="panStart($event)" (pointermove)="panMove($event)" (pointerup)="panEnd($event)" (pointercancel)="panEnd($event)">
+      <div #canvas class="topology-canvas" [class.dragging]="dragging()" role="application" aria-label="Observed infrastructure topology. Hover a node to trace its complete upstream and downstream evidence path. Drag to pan and use the controls or mouse wheel to zoom." (wheel)="zoomWheel($event)" (pointerdown)="panStart($event)" (pointermove)="panMove($event)" (pointerup)="panEnd($event)" (pointercancel)="panEnd($event)">
         <div class="map-controls" aria-label="Map controls"><button type="button" title="Zoom in" aria-label="Zoom in" (click)="zoomBy(0.15)">+</button><span>{{ zoomPercent() }}%</span><button type="button" title="Zoom out" aria-label="Zoom out" (click)="zoomBy(-0.15)">−</button><button class="fit-control" type="button" title="Fit all nodes" (click)="resetView()">Fit</button></div>
         <div class="topology-stage" [style.height.px]="stageHeight()" [style.transform]="stageTransform()">
           <div class="topology-grid" aria-hidden="true"></div>
@@ -44,7 +47,7 @@ type GraphView = 'services' | 'infrastructure' | 'evidence';
           <div class="inspector-head"><span class="node-kind">relationship · {{ edge.type || 'observed' }}</span><span class="state-pill" [attr.data-state]="edge.state || 'observed'">{{ stateLabel(edge.state || 'observed') }}</span></div>
           <h3>{{ edge.label || edge.type || 'Observed relationship' }}</h3><p>{{ nodeLabel(edge.from) }} → {{ nodeLabel(edge.to) }}</p>
           <dl class="evidence-facts"><div><dt>Confidence</dt><dd>{{ edge.confidence || 'Unscored' }}{{ edge.confidence ? '%' : '' }}</dd><small><span>Basis</span>{{ basisLabel(edge.basis) }}</small></div>@for (item of edge.evidence || []; track item) { <div><dt>Relationship evidence</dt><dd>{{ item }}</dd><small><span>Attribution</span>This evidence belongs to the connection between both assets.</small></div> }</dl>
-          @for (finding of edgeFindings(); track finding.id) { <article class="node-finding" [attr.data-severity]="finding.severity"><span>{{ finding.severity }} · {{ finding.confidence }}%</span><strong>{{ finding.title }}</strong><p>{{ finding.summary }}</p><h4>Change on</h4><p>{{ finding.asset }}</p><h4>Recommended action</h4><p>{{ finding.remediation }}</p></article> }
+          @for (finding of edgeFindings(); track finding.id) { <article class="node-finding" [attr.data-severity]="finding.severity"><span>{{ finding.severity }} · {{ finding.confidence }}%</span><strong>{{ finding.title }}</strong><p>{{ finding.summary }}</p><wg-finding-story [finding]="finding" [compact]="true" /><h4>Change on</h4><p>{{ finding.asset }}</p><h4>Recommended action</h4><p>{{ finding.remediation }}</p></article> }
         } @else if (selected(); as node) {
           <div class="inspector-head"><span class="node-kind">{{ node.kind }}</span><span class="state-pill" [attr.data-state]="node.state">{{ stateLabel(node.state) }}</span></div>
           <h3>{{ node.label }}</h3><p>{{ node.subtitle }}</p>
@@ -54,7 +57,7 @@ type GraphView = 'services' | 'infrastructure' | 'evidence';
             }
           </dl>
           @for (finding of nodeFindings(); track finding.id) {
-            <article class="node-finding" [attr.data-severity]="finding.severity"><span>{{ finding.severity }} · {{ finding.confidence }}%</span><strong>{{ finding.title }}</strong><p>{{ finding.summary }}</p><h4>Recommended action</h4><p>{{ finding.remediation || 'Review the observed exposure and reduce public reachability if it is not required.' }}</p></article>
+            <article class="node-finding" [attr.data-severity]="finding.severity"><span>{{ finding.severity }} · {{ finding.confidence }}%</span><strong>{{ finding.title }}</strong><p>{{ finding.summary }}</p><wg-finding-story [finding]="finding" [compact]="true" /><h4>Recommended action</h4><p>{{ finding.remediation || 'Review the observed exposure and reduce public reachability if it is not required.' }}</p></article>
           }
         }
       </aside>
@@ -99,13 +102,7 @@ export class InfrastructureGraphComponent {
   });
   protected readonly selected = computed(() => this.topology().nodes.find((node) => node.id === this.selectedId()) || this.topology().nodes[0]);
   protected readonly selectedEdge = computed(() => this.topology().edges.find((edge) => (edge.id || edge.from + edge.to) === this.selectedEdgeId()) || null);
-  protected readonly connectedNodeIds = computed(() => {
-    const hovered = this.hoveredNodeId();
-    if (!hovered) return new Set<string>();
-    const connected = new Set<string>([hovered]);
-    for (const edge of this.topology().edges) if (edge.from === hovered || edge.to === hovered) { connected.add(edge.from); connected.add(edge.to); }
-    return connected;
-  });
+  protected readonly highlightedPath = computed(() => traceTopologyPath(this.topology().edges, this.hoveredNodeId()));
   protected readonly nodeFindings = computed(() => this.findings().filter((finding) => this.selected()?.findingIds.includes(finding.id)));
   protected readonly edgeFindings = computed(() => this.findings().filter((finding) => this.selectedEdge()?.findingIds?.includes(finding.id)));
   protected readonly zoom = signal(1);
@@ -139,8 +136,8 @@ export class InfrastructureGraphComponent {
     this.selectedEdgeId.set('');
   }
   protected selectEdge(id: string): void { this.selectedEdgeId.set(id); }
-  protected isConnectedNode(id: string): boolean { return this.connectedNodeIds().has(id); }
-  protected isHoveredEdge(edge: TopologyEdge): boolean { const hovered = this.hoveredNodeId(); return !!hovered && (edge.from === hovered || edge.to === hovered); }
+  protected isConnectedNode(id: string): boolean { return this.highlightedPath().nodeIds.has(id); }
+  protected isHoveredEdge(edge: TopologyEdge): boolean { return this.highlightedPath().edgeIds.has(topologyEdgeId(edge)); }
   protected setView(view: GraphView): void { this.viewMode.set(view); }
   protected changeQuery(event: Event): void { this.query.set((event.target as HTMLInputElement).value); }
   protected icon(kind: string): string { return ({ domain: '◎', hostname: '⌁', network: '◇', edge: '◇', server: '▣', port: ':', service: '◆' } as Record<string, string>)[kind] || '•'; }
