@@ -74,13 +74,13 @@ export class InfrastructureGraphComponent {
   protected readonly selectedId = signal('domain');
   protected readonly selectedEdgeId = signal('');
   protected readonly viewMode = signal<GraphView>('services');
-  protected readonly expandedHostId = signal('');
+  protected readonly expandedOwnerId = signal('');
   protected readonly query = signal('');
   protected readonly riskOnly = signal(false);
   protected readonly fullTopology = computed(() => this.builder.build(this.target(), this.findings(), this.tls(), this.actions(), this.assets(), this.relations()));
-  protected readonly hostServiceCounts = computed(() => {
+  protected readonly ownerServiceCounts = computed(() => {
     const topology = this.fullTopology();
-    return new Map(topology.nodes.filter((node) => node.kind === 'hostname').map((node) => [node.id, this.serviceDescendants(topology, node.id).size]));
+    return new Map(topology.nodes.filter((node) => node.kind === 'domain' || node.kind === 'hostname').map((node) => [node.id, this.servicesOwnedBy(topology, node.id).size]));
   });
   protected readonly topology = computed(() => this.layout(this.filter(this.project(this.fullTopology(), this.viewMode()))));
   protected readonly laneLabels = computed(() => ({ services: ['Domain', 'Hostnames', 'Focused applications'], infrastructure: ['Domain', 'Hostnames', 'Edge', 'Networks', 'Addresses'], evidence: ['Domain', 'Host', 'Edge', 'Network', 'Server', 'Ports', 'Services'] } as Record<GraphView, string[]>)[this.viewMode()]);
@@ -91,7 +91,7 @@ export class InfrastructureGraphComponent {
       const applications = this.fullTopology().nodes.filter((node) => node.kind === 'service').length;
       const visibleApplications = this.topology().nodes.filter((node) => node.kind === 'service').length;
       const grouped = Math.max(0, applications - visibleApplications);
-      if (!this.expandedHostId()) return `${applications} application${applications === 1 ? '' : 's'} grouped by host · click a host to open`;
+      if (!this.expandedOwnerId()) return `${applications} application${applications === 1 ? '' : 's'} grouped by host · click a node to open`;
       return `${visibleApplications} open · ${grouped} application${grouped === 1 ? '' : 's'} grouped elsewhere`;
     }
     return hidden ? `${hidden} application detail record${hidden === 1 ? '' : 's'} collapsed` : 'Every retained asset is visible';
@@ -126,7 +126,7 @@ export class InfrastructureGraphComponent {
   }
   protected select(id: string): void {
     const node = this.topology().nodes.find((item) => item.id === id);
-    if (this.viewMode() === 'services' && node?.kind === 'hostname' && (this.hostServiceCounts().get(id) || 0) > 0) this.expandedHostId.set(id);
+    if (this.viewMode() === 'services' && (node?.kind === 'domain' || node?.kind === 'hostname') && (this.ownerServiceCounts().get(id) || 0) > 0) this.expandedOwnerId.set(id);
     this.selectedId.set(id);
     this.selectedEdgeId.set('');
   }
@@ -135,8 +135,8 @@ export class InfrastructureGraphComponent {
   protected changeQuery(event: Event): void { this.query.set((event.target as HTMLInputElement).value); }
   protected icon(kind: string): string { return ({ domain: '◎', hostname: '⌁', network: '◇', edge: '◇', server: '▣', port: ':', service: '◆' } as Record<string, string>)[kind] || '•'; }
   protected nodeSubtitle(node: TopologyNode): string {
-    if (this.viewMode() !== 'services' || node.kind !== 'hostname') return node.subtitle;
-    const count = this.hostServiceCounts().get(node.id) || 0;
+    if (this.viewMode() !== 'services' || (node.kind !== 'domain' && node.kind !== 'hostname')) return node.subtitle;
+    const count = this.ownerServiceCounts().get(node.id) || 0;
     return count ? `${node.subtitle} · ${count} app${count === 1 ? '' : 's'}` : node.subtitle;
   }
   protected stateLabel(state: string): string { return ({ risk: 'Needs action', warning: 'Review', healthy: 'Healthy', observed: 'Observed', unknown: 'Unknown' } as Record<string, string>)[state] || state; }
@@ -233,7 +233,7 @@ export class InfrastructureGraphComponent {
     let projectedNodes = visibleNodes;
     let projectedEdges = [...projected.values()];
     if (view === 'services' && !this.query().trim() && !this.riskOnly()) {
-      const focusedServices = this.expandedHostId() ? this.serviceDescendants(topology, this.expandedHostId()) : new Set<string>();
+      const focusedServices = this.expandedOwnerId() ? this.servicesOwnedBy(topology, this.expandedOwnerId()) : new Set<string>();
       projectedNodes = visibleNodes.filter((node) => node.kind !== 'service' || focusedServices.has(node.id));
       const focusedIds = new Set(projectedNodes.map((node) => node.id));
       projectedEdges = projectedEdges.filter((edge) => focusedIds.has(edge.from) && focusedIds.has(edge.to));
@@ -241,23 +241,11 @@ export class InfrastructureGraphComponent {
     return { nodes: projectedNodes, edges: projectedEdges };
   }
 
-  private serviceDescendants(topology: Topology, hostnameId: string): Set<string> {
-    const nodes = new Map(topology.nodes.map((node) => [node.id, node]));
-    const outgoing = new Map<string, TopologyEdge[]>();
-    for (const edge of topology.edges) outgoing.set(edge.from, [...(outgoing.get(edge.from) || []), edge]);
-    const services = new Set<string>();
-    const queue: Array<{ id: string; depth: number }> = (outgoing.get(hostnameId) || []).map((edge) => ({ id: edge.to, depth: 1 }));
-    const visited = new Set<string>();
-    while (queue.length) {
-      const current = queue.shift()!;
-      if (visited.has(current.id) || current.depth > 8) continue;
-      visited.add(current.id);
-      const node = nodes.get(current.id);
-      if (!node || (node.kind === 'hostname' && node.id !== hostnameId)) continue;
-      if (node.kind === 'service') { services.add(node.id); continue; }
-      for (const edge of outgoing.get(current.id) || []) queue.push({ id: edge.to, depth: current.depth + 1 });
-    }
-    return services;
+  private servicesOwnedBy(topology: Topology, ownerId: string): Set<string> {
+    const owner = topology.nodes.find((node) => node.id === ownerId);
+    if (!owner) return new Set<string>();
+    const hostname = owner.label.toLowerCase().replace(/\.$/, '');
+    return new Set(topology.nodes.filter((node) => node.kind === 'service' && node.subtitle.toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '') === hostname).map((node) => node.id));
   }
 
   private filter(topology: Topology): Topology {
