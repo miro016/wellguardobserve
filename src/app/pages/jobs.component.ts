@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { AppSidebarComponent } from '../components/app-sidebar.component';
 import { Scan, ScanRequest, Target } from '../models';
 import { PocketBaseService } from '../services/pocketbase.service';
+import { scanProfile } from '../scan-profiles';
 
 @Component({
   selector: 'wg-jobs',
@@ -17,9 +18,9 @@ import { PocketBaseService } from '../services/pocketbase.service';
         <section class="active-job-stack" aria-live="polite">
           @for (job of active(); track job.id) {
             <article class="panel job-card" [attr.data-health]="health(job)">
-              <header><div class="job-orbit"><i></i><span></span></div><div><span class="section-index">{{ job.mode }} scan · {{ job.id }}</span><h2>{{ targetName(job.target) }}</h2></div><span class="job-health">{{ healthLabel(job) }}</span></header>
+              <header><div class="job-orbit"><i></i><span></span></div><div><span class="section-index">{{ profileName(job) }} contract · {{ job.id }}</span><h2>{{ targetName(job.target) }}</h2></div><span class="job-health">{{ healthLabel(job) }}</span></header>
               <div class="job-phase"><small>CURRENT PHASE</small><strong>{{ job.phase || (job.status === 'queued' ? 'Waiting for observer worker' : 'Preparing investigation') }}</strong><p>{{ activity(job) }}</p></div>
-              <div class="job-vitals"><div><small>STATE</small><strong>{{ job.status }}</strong></div><div><small>ELAPSED</small><strong>{{ elapsed(job) }}</strong></div><div><small>HEARTBEAT</small><strong>{{ heartbeatAge(job) }}</strong></div><div><small>RETAINED</small><strong>{{ retainedLabel(job) }}</strong></div></div>
+              <div class="job-vitals"><div><small>STATE</small><strong>{{ job.status }}</strong></div><div><small>ELAPSED</small><strong>{{ elapsed(job) }}</strong></div><div><small>HEARTBEAT</small><strong>{{ heartbeatAge(job) }}</strong></div><div><small>CONTRACT</small><strong>{{ job.actionCount }} / {{ actionBudget(job) }} tools</strong></div></div>
               <footer><span>{{ healthExplanation(job) }}</span><div>@if (job.status === 'queued' || job.status === 'processing') { <button class="button danger compact" type="button" (click)="stop(job)">Stop</button> }<a class="button primary compact" [routerLink]="['/app/investigations', job.id]">Open live trace →</a></div></footer>
             </article>
           }
@@ -47,6 +48,8 @@ export class JobsComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void { if (this.timer) clearTimeout(this.timer); }
 
   protected targetName(id: string): string { return this.targets().find((target) => target.id === id)?.hostname || 'Unknown target'; }
+  protected profileName(job: ScanRequest): string { return job.profileSnapshot?.name || scanProfile(job.mode).name; }
+  protected actionBudget(job: ScanRequest): number { return job.profileSnapshot?.maxActions || scanProfile(job.mode).maxActions; }
   protected scan(job: ScanRequest): Scan | undefined { return this.scans().find((scan) => scan.request === job.id); }
   protected actionCount(job: ScanRequest): number { return job.actionCount; }
   protected messageCount(job: ScanRequest): number { return job.messageCount; }

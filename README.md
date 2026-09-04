@@ -10,12 +10,14 @@ It is intentionally reconnaissance-only: no credential guessing, payload deliver
 - Administrator-created accounts and administrator-approved target creation; there is no public registration.
 - Verified root/subdomain scope plus administrator-approved exact related hostnames. Approving `service.provider.example` never authorizes its parent or sibling tenants.
 - LangChain investigation driven by an Ollama model.
-- Safe DNS, RDAP registration, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, passive service banners, HTTP, TLS, public metadata, frontend-to-API discovery, a curated safe web audit, versioned WordPress/Keycloak inspection, NVD, MITRE CWE, GitHub Advisory, OSV, CISA KEV, and bounded public-document tools.
+- Three explicit scan contracts: Baseline (22 tool actions), Standard (64), and customer-approved Extended lab (96). The worker snapshots the selected limits and available tools into the job before investigation starts.
+- Safe DNS, RDAP registration, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, passive service banners, HTTP, TLS, public metadata, frontend-to-API discovery, curated safe web audits, bounded unknown-service recognition, versioned WordPress/Keycloak inspection, NVD, MITRE CWE, GitHub Advisory, OSV, CISA KEV, and bounded public-document tools.
 - Findings with separate severity and confidence, preserved evidence, remediation, source URLs, CWE weakness mappings, and version-matched CVE identifiers.
 - TLS hostname, trust, issuer, validity window, protocol, cipher, expiry, and explicitly published certificate-email monitoring, plus a browsable certificate-transparency record inventory.
 - DNS control-plane visibility for registrar lifecycle, public registration contacts, nameservers, DNSSEC, CAA, MX, SPF, DMARC, MTA-STS, and SMTP TLS reporting.
 - Read-only service configuration audits for HTTP security headers, CORS, fixed public API/metadata paths, and WordPress REST/login/readme/XML-RPC surfaces; directly observed WordPress generator/component versions trigger up to three transparent NVD correlations.
-- Evidence-backed technology detection using local markers and pinned, size-bounded ProjectDiscovery WappalyzerGo and Rapid7 Recog catalogues. Unknown services remain unknown rather than inheriting a product from a hostname.
+- Evidence-backed technology detection using local markers and pinned, size-bounded ProjectDiscovery WappalyzerGo and Rapid7 Recog catalogues. Extended lab can compare server/auth headers and a fixed public favicon against Recog; single-source matches remain labelled hypotheses.
+- A checksum-verified Nuclei 3.11.1 engine in the production image. It can run only five committed Wellguard templates, only in Extended lab: Go expvar, Prometheus metrics, public OpenAPI, Spring Actuator metadata, and diagnostics indexes. Community downloads, redirects, OOB callbacks, code, headless, fuzzing, and DAST are disabled.
 - Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase.
 - A pannable, zoomable evidence-linked topology with service, network-context, and full-evidence lenses. The default domain → hostname → application view collapses repeated port/address transit records without discarding them. Findings can attach to a node or to a risky relationship such as “service advertises stale origin.”
 - A target-scoped public identity ledger for names and mailboxes directly disclosed by owned services, RDAP, or `security.txt`. It supports owner-confirmed current/former status, shows only explicitly returned public links, and never guesses or scrapes social profiles.
@@ -83,7 +85,7 @@ The Angular dev server proxies `/api` to PocketBase on `127.0.0.1:8090`.
 To run a one-off authorized investigation without PocketBase:
 
 ```bash
-bun run agent:once -- --target example.com --json report.json
+bun run agent:once -- --target example.com --profile standard --json report.json
 ```
 
 Only use the CLI against infrastructure you own or have explicit permission to test.
@@ -120,6 +122,8 @@ For a production deployment, set long random PocketBase credentials, a precise `
 | `PUBLIC_ORIGIN` | Allowed browser origin | `*` |
 | `OLLAMA_BASE_URL` | Ollama API used by LangChain | `http://127.0.0.1:11434` |
 | `OLLAMA_MODEL` | Investigator model | `glm-5.3:cloud` |
+| `WELLGUARD_NUCLEI_TEMPLATES` | Immutable reviewed Nuclei template directory | `/app/nuclei/templates` |
+| `NUCLEI_BINARY` | Pinned Nuclei executable | `nuclei` |
 | `SCAN_POLL_MS` | Queue polling interval | `4000` |
 
 ## Free public evidence sources
@@ -128,7 +132,8 @@ For a production deployment, set long random PocketBase credentials, a precise `
 - IANA's RDAP bootstrap registry and the TLD's authoritative RDAP service
 - Passive hostname candidates through the free HackerTarget Host Search API; candidates are never trusted until an in-scope HTTPS response is verified
 - ProjectDiscovery WappalyzerGo web fingerprints, pinned to a reviewed MIT-licensed revision
-- Rapid7 Recog banner fingerprints, pinned to a reviewed BSD-2-Clause revision and limited to passive SSH/FTP/SMTP greetings
+- Rapid7 Recog fingerprints, pinned to a reviewed BSD-2-Clause revision and limited to passive SSH/FTP/SMTP greetings plus web server/auth headers and favicon hashes
+- ProjectDiscovery Nuclei 3.11.1 as an execution engine for the committed Wellguard GET-only allowlist; public community templates are not downloaded at runtime
 - NIST NVD CVE API 2.0 and the MITRE CWE REST API
 - GitHub reviewed Security Advisories and Releases APIs
 - CISA Known Exploited Vulnerabilities feed
@@ -148,7 +153,7 @@ New investigations persist each application-visible LangChain message as it is e
 - PocketBase-backed polling is intended for a limited-access, single-instance MVP.
 - Cloudflare and other CDNs obscure origin reachability; a future read-only provider integration can evaluate origin firewall configuration.
 - Product/version identification remains probabilistic and is labelled with confidence. CVEs are only recordable after exact version and NVD applicability correlation; no-version product names never become CVE claims. Wildcard DNS records and missing reverse-proxy routes are explicitly excluded from the service inventory.
-- `safe-recon-v1` is intentionally not an unrestricted Nuclei runner. It permits five reviewed, sequential, GET-only checks with strict response signatures and excludes fuzzing, authentication, payloads, OOB callbacks, headless actions, and CVE exploit templates. Expanding it requires code review and explicit policy metadata.
+- Neither audit is an unrestricted Nuclei service. Standard provides `safe-recon-v1`; Extended adds five local Nuclei templates at two requests per second and concurrency one. Both use strict response signatures and exclude fuzzing, authentication, payloads, OOB callbacks, headless actions, code, DAST, and CVE exploit templates. Expanding either allowlist requires a code review.
 - The current container bundles three processes for convenient MVP deployment. They should become separate services when scaling independently.
 
 ## License

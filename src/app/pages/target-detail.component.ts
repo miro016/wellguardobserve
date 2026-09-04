@@ -1,16 +1,19 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { AppSidebarComponent } from '../components/app-sidebar.component';
 import { InfrastructureGraphComponent } from '../components/infrastructure-graph.component';
-import { AgentActionRecord, AssetRecord, AssetRelationRecord, Finding, Scan, Target, TlsObservation } from '../models';
+import { AgentActionRecord, AssetRecord, AssetRelationRecord, Finding, Scan, ScanMode, Target, TlsObservation } from '../models';
 import { PocketBaseService } from '../services/pocketbase.service';
+import { SCAN_PROFILES, scanProfile, storedScanProfile } from '../scan-profiles';
 
 @Component({
-  selector: 'wg-target-detail', imports: [AppSidebarComponent, InfrastructureGraphComponent, DatePipe, RouterLink],
+  selector: 'wg-target-detail', imports: [AppSidebarComponent, InfrastructureGraphComponent, DatePipe, RouterLink, FormsModule],
   template: `
     <div class="app-layout"><wg-app-sidebar /><main class="app-main">
-      <header class="app-header"><div><a class="app-breadcrumb" routerLink="/app/targets">TARGETS / DETAIL</a><h1>{{ target()?.hostname || 'Loading target…' }}</h1><p>{{ target()?.name }}</p></div><div class="header-actions"><span class="authorization-badge"><i></i>{{ target()?.authorizationStatus === 'admin_override' ? 'Admin approved' : 'Ownership verified' }}</span><button class="button primary compact" type="button" (click)="scan()" [disabled]="scanState() !== 'idle'">{{ scanLabel() }} <span>◎</span></button></div></header>
+      <header class="app-header"><div><a class="app-breadcrumb" routerLink="/app/targets">TARGETS / DETAIL</a><h1>{{ target()?.hostname || 'Loading target…' }}</h1><p>{{ target()?.name }}</p></div><div class="header-actions"><span class="authorization-badge"><i></i>{{ target()?.authorizationStatus === 'admin_override' ? 'Admin approved' : 'Ownership verified' }}</span><label class="header-profile"><span>SCAN PROFILE</span><select [(ngModel)]="scanMode" (ngModelChange)="profileChanged()">@for (profile of profiles; track profile.id) { <option [ngValue]="profile.id">{{ profile.name }} · {{ profile.maxActions }}</option> }</select></label><button class="button primary compact" type="button" (click)="scan()" [disabled]="scanState() !== 'idle' || (selectedProfile().requiresConsent && !extendedConsent)">{{ scanLabel() }} <span>◎</span></button></div></header>
+      @if (selectedProfile().requiresConsent) { <label class="profile-consent"><input type="checkbox" [(ngModel)]="extendedConsent"><span><strong>Extended lab authorization</strong><small>I confirm this target is non-production or the customer explicitly approved this bounded profile. It remains GET-only and non-exploitative.</small></span><b>{{ selectedProfile().requestRate }} · {{ selectedProfile().maxActions }} tool ceiling</b></label> }
       @if (error()) { <div class="error-banner"><strong>Target data unavailable</strong><span>{{ error() }}</span></div> }
       @if (target(); as item) {
         <nav class="subnav"><a [routerLink]="[]" fragment="map">Surface map</a><a [routerLink]="[]" fragment="findings">Findings <b>{{ findings().length }}</b></a><a [routerLink]="[]" fragment="tls">TLS</a><a routerLink="/app/traces" [queryParams]="{ target: item.id }">Agent trace</a><a routerLink="/app/reports" [queryParams]="{ target: item.id }">Reports</a></nav>
@@ -28,8 +31,11 @@ import { PocketBaseService } from '../services/pocketbase.service';
 export class TargetDetailComponent implements OnInit {
   private readonly db = inject(PocketBaseService); private readonly route = inject(ActivatedRoute); private readonly router = inject(Router);
   protected readonly target = signal<Target | null>(null); protected readonly findings = signal<Finding[]>([]); protected readonly tls = signal<TlsObservation | null>(null); protected readonly actions = signal<AgentActionRecord[]>([]); protected readonly assets = signal<AssetRecord[]>([]); protected readonly relations = signal<AssetRelationRecord[]>([]); protected readonly scans = signal<Scan[]>([]); protected readonly scanState = signal<'idle'|'requesting'|'queued'>('idle'); protected readonly error = signal('');
+  protected readonly profiles = SCAN_PROFILES; protected scanMode: ScanMode = storedScanProfile(); protected extendedConsent = false;
+  protected selectedProfile() { return scanProfile(this.scanMode); }
+  protected profileChanged(): void { this.extendedConsent = false; }
   protected readonly scanLabel = () => ({ idle: 'Run observation', requesting: 'Queueing…', queued: 'Queued' })[this.scanState()];
   ngOnInit(): void { void this.load(); }
   private async load(): Promise<void> { const id = this.route.snapshot.paramMap.get('id') || ''; try { const targets = await this.db.targets(); const target = targets.find((x) => x.id === id) || null; const scans = await this.db.scans(id); const latest = scans.find((scan) => scan.status === 'completed') || scans[0]; const scanId = latest?.id; const [findings, tls, actions, assets, relations] = await Promise.all([this.db.findings(id, scanId), this.db.tls(id, target?.hostname), this.db.agentActions({ targetId: id, scanId }), this.db.assets(id, scanId), this.db.assetRelations(id, scanId)]); this.target.set(target); this.findings.set(findings); this.tls.set(tls); this.actions.set(actions); this.assets.set(assets); this.relations.set(relations); this.scans.set(scans); } catch (e) { this.error.set(e instanceof Error ? e.message : 'Could not load target.'); } }
-  protected async scan(): Promise<void> { const target = this.target(); if (!target) return; this.scanState.set('requesting'); try { const requestId = await this.db.requestScan(target.id); this.scanState.set('queued'); await this.router.navigate(['/app/investigations', requestId]); } catch { this.scanState.set('idle'); } }
+  protected async scan(): Promise<void> { const target = this.target(); if (!target || (this.selectedProfile().requiresConsent && !this.extendedConsent)) return; this.scanState.set('requesting'); try { const requestId = await this.db.requestScan(target.id, this.scanMode, this.extendedConsent); this.scanState.set('queued'); await this.router.navigate(['/app/investigations', requestId]); } catch { this.scanState.set('idle'); } }
 }

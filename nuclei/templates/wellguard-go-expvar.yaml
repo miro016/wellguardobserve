@@ -1,0 +1,27 @@
+id: wellguard-go-expvar
+
+info:
+  name: Public Go expvar diagnostics
+  author: wellguard-observe
+  severity: medium
+  description: Detects a public Go expvar response using strict JSON markers.
+  tags: wellguard,exposure,go
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/debug/vars"
+    redirects: false
+    max-redirects: 0
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: header
+        words: ["application/json"]
+      - type: word
+        part: body
+        condition: and
+        words: ['"cmdline"', '"memstats"']
+

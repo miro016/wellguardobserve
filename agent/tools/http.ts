@@ -15,6 +15,14 @@ export interface AuthorizedHttpResponse {
   truncated: boolean;
 }
 
+export interface AuthorizedBinaryHttpResponse {
+  requestedUrl: string;
+  status: number;
+  headers: Record<string, string>;
+  body: Buffer;
+  truncated: boolean;
+}
+
 export interface TechnologySignal {
   name: string;
   evidence: string;
@@ -82,6 +90,11 @@ export function extractSignals(raw: string, headers: Record<string, string> = {}
 }
 
 export async function requestAuthorizedHttp(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; path?: string; maxBodyBytes?: number }): Promise<AuthorizedHttpResponse> {
+  const response = await requestAuthorizedBytes(scope, input);
+  return { ...response, raw: response.body.toString('utf8') };
+}
+
+export async function requestAuthorizedBytes(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; path?: string; maxBodyBytes?: number }): Promise<AuthorizedBinaryHttpResponse> {
   const hostname = scope.assertHostname(input.hostname);
   const useTls = input.tls ?? true;
   const port = input.port ?? (useTls ? 443 : 80);
@@ -91,7 +104,7 @@ export async function requestAuthorizedHttp(scope: ScopeGuard, input: { hostname
   const [{ address, family }] = await scope.resolve(hostname);
   const transport = useTls ? https : http;
 
-  return await new Promise<AuthorizedHttpResponse>((resolve, reject) => {
+  return await new Promise<AuthorizedBinaryHttpResponse>((resolve, reject) => {
     const request = transport.request({
       hostname, port, path, method: 'GET', servername: useTls ? hostname : undefined,
       headers: { host: hostname, 'user-agent': 'WellguardObserve/0.1 (+authorized reconnaissance)', accept: 'text/html,application/json,text/plain;q=0.8,*/*;q=0.2' },
@@ -113,11 +126,10 @@ export async function requestAuthorizedHttp(scope: ScopeGuard, input: { hostname
         if (chunk.length > remaining) truncated = true;
       });
       response.on('end', () => {
-        const raw = Buffer.concat(chunks).toString('utf8');
         const headers = safeHeaders(response.headers);
         resolve({
           requestedUrl: `${useTls ? 'https' : 'http'}://${hostname}${port === (useTls ? 443 : 80) ? '' : `:${port}`}${path}`,
-          status: response.statusCode || 0, headers, raw, truncated
+          status: response.statusCode || 0, headers, body: Buffer.concat(chunks), truncated
         });
       });
     });

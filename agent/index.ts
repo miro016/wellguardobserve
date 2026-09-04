@@ -1,6 +1,7 @@
 import type { RecordModel } from 'pocketbase';
 import { investigate } from './investigator';
 import { InvestigationStore } from './store';
+import { policySnapshot, resolveScanProfile } from './profiles';
 
 const store = new InvestigationStore();
 await store.connect();
@@ -14,7 +15,9 @@ while (true) {
   let cancellationTimer: ReturnType<typeof setInterval> | undefined;
   let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   try {
-    if (!await store.claim(request)) continue;
+    const profile = resolveScanProfile(request['mode']);
+    if (profile.consentRequired && request['extendedConsent'] !== true) throw new Error('Extended lab profile was not explicitly authorized on this scan request.');
+    if (!await store.claim(request, policySnapshot(profile))) continue;
     const target = await store.loadTarget(request['target']);
     scan = await store.createScan(target.id, request.id);
     console.log(`Investigating ${target.hostname} for request ${request.id}.`);
@@ -30,9 +33,8 @@ while (true) {
       checkingCancellation = true;
       void store.isCancellationRequested(request.id).then((cancelled) => { if (cancelled) controller.abort(new Error('Investigation stopped by the user.')); }).catch(() => {}).finally(() => { checkingCancellation = false; });
     }, 1_000);
-    const maxActions = request['mode'] === 'light' ? 22 : 64;
     const report = await investigate(target, {
-      maxActions,
+      profile,
       signal: controller.signal,
       onAction: async (action) => { await store.saveAction(target.id, scan!.id, action); actionCount += 1; await store.heartbeat(request.id, currentPhase, actionCount, messageCount); },
       onMessage: async (message) => { await store.saveMessage(target.id, scan!.id, message); messageCount += 1; await store.heartbeat(request.id, currentPhase, actionCount, messageCount); },

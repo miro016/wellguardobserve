@@ -1,6 +1,12 @@
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type NodeState = 'risk' | 'warning' | 'healthy' | 'observed' | 'unknown';
 export type NodeKind = 'domain' | 'hostname' | 'network' | 'edge' | 'server' | 'port' | 'service';
+export type ScanMode = 'light' | 'standard' | 'extended';
+
+export interface ScanPolicySnapshot {
+  id: ScanMode; name: string; version: string; maxActions: number; nucleiRequestsPerSecond: number;
+  methods: string[]; enabledTools: string[]; nucleiPolicy: string; consentRequired: boolean;
+}
 
 export interface Target {
   id: string;
@@ -49,8 +55,9 @@ export interface Scan {
 }
 
 export interface ScanRequest {
-  id: string; target: string; mode: 'light' | 'standard'; status: 'queued' | 'processing' | 'cancelling' | 'cancelled' | 'completed' | 'failed';
+  id: string; target: string; mode: ScanMode; status: 'queued' | 'processing' | 'cancelling' | 'cancelled' | 'completed' | 'failed';
   startedAt: string; completedAt: string; heartbeatAt: string; phase: string; actionCount: number; messageCount: number; error: string; created: string;
+  profileSnapshot: ScanPolicySnapshot | null; extendedConsent: boolean;
 }
 
 export interface AgentActionRecord {

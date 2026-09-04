@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import PocketBase, { RecordModel } from 'pocketbase';
-import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, CreateTargetInput, Finding, PublicIdentity, Scan, ScanRequest, Target, TargetScope, TlsObservation } from '../models';
+import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, CreateTargetInput, Finding, PublicIdentity, Scan, ScanMode, ScanRequest, Target, TargetScope, TlsObservation } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class PocketBaseService {
@@ -121,7 +121,9 @@ export class PocketBaseService {
   private request(r: RecordModel): ScanRequest {
     return {
       id: r.id, target: r['target'], mode: r['mode'], status: r['status'], startedAt: r['startedAt'], completedAt: r['completedAt'],
-      heartbeatAt: r['heartbeatAt'] ?? '', phase: r['phase'] ?? '', actionCount: r['actionCount'] ?? 0, messageCount: r['messageCount'] ?? 0, error: r['error'] ?? '', created: r['created']
+      heartbeatAt: r['heartbeatAt'] ?? '', phase: r['phase'] ?? '', actionCount: r['actionCount'] ?? 0, messageCount: r['messageCount'] ?? 0,
+      profileSnapshot: r['profileSnapshot'] && typeof r['profileSnapshot'] === 'object' ? r['profileSnapshot'] : null, extendedConsent: Boolean(r['extendedConsent']),
+      error: r['error'] ?? '', created: r['created']
     } as ScanRequest;
   }
 
@@ -153,8 +155,9 @@ export class PocketBaseService {
     }
   }
 
-  async requestScan(targetId: string, mode: 'light' | 'standard' = 'standard'): Promise<string> {
-    const record = await this.client.collection('scanRequests').create({ target: targetId, mode, status: 'queued' });
+  async requestScan(targetId: string, mode: ScanMode = 'standard', extendedConsent = false): Promise<string> {
+    if (mode === 'extended' && !extendedConsent) throw new Error('Extended lab scans require explicit non-production or customer authorization.');
+    const record = await this.client.collection('scanRequests').create({ target: targetId, mode, extendedConsent: mode === 'extended' && extendedConsent, status: 'queued' });
     return record.id;
   }
 

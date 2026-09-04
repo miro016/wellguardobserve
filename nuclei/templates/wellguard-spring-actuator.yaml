@@ -1,0 +1,30 @@
+id: wellguard-spring-actuator
+
+info:
+  name: Public Spring Actuator metadata
+  author: wellguard-observe
+  severity: medium
+  description: Detects public Spring Actuator discovery, mappings, or beans metadata using JSON markers.
+  tags: wellguard,exposure,spring
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/actuator"
+      - "{{BaseURL}}/actuator/mappings"
+      - "{{BaseURL}}/actuator/beans"
+    stop-at-first-match: true
+    redirects: false
+    max-redirects: 0
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: header
+        words: ["application/json"]
+      - type: regex
+        part: body
+        regex:
+          - '(?s)(?:"_links"\s*:\s*\{.*"self"|"contexts"\s*:\s*\{.*"(?:mappings|beans)")'
+

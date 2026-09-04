@@ -13,6 +13,8 @@ import { inspectWordPress } from './tools/wordpress';
 import { inspectPublicMetadata, PUBLIC_METADATA_PATHS, type PublicMetadataPath } from './tools/metadata';
 import { inspectFrontendApi } from './tools/frontend-api';
 import { inspectSafeWebAudit } from './tools/safe-audit';
+import { runNucleiAudit } from './tools/nuclei';
+import { inspectUnknownWebService } from './tools/unknown-web';
 import { discoverServiceHosts } from './tools/service-hosts';
 import { queryCisaKev, queryCwe, queryGitHubAdvisory, queryGitHubReleases, queryNvdCves, queryOsv, readPublicSource } from './tools/sources';
 import { adapterCatalog, inspectWithAdapter } from './adapters/registry';
@@ -21,6 +23,7 @@ import { recogCatalog } from './fingerprints/recog';
 import type { AdapterResult } from './adapters/types';
 import type { AgentAction, AgentFinding, AgentMessage, AuthorizedTarget, InvestigationReport, TlsEvidence } from './types';
 import { buildAssetGraph } from './asset-graph';
+import { AGENT_SCAN_PROFILES, type AgentScanProfile } from './profiles';
 
 const SYSTEM_PROMPT = `You are Wellguard Observe, a defensive external-exposure investigator working only on infrastructure its owner authorized.
 
@@ -28,7 +31,7 @@ Your job is to identify forgotten services, public management interfaces, accide
 
 Drive the investigation adaptively. Begin with DNS, DNS posture, authoritative domain RDAP, public network registration, certificate transparency, TLS and the root HTTP response. Always use discover_service_hosts once: it combines stored hints, passive host data and bounded HTTPS verification while excluding wildcard/CDN missing routes. Use a bounded port check, then choose deeper service checks from actual evidence. A CDN edge can make ports look open; do not mistake CDN ports for origin services. IP registration describes the public network holder, not a physical server location. Use public sources when they materially improve identification or remediation.
 
-Review every verified service host returned by discover_service_hosts and prioritize public administration, monitoring, storage, development, identity and API surfaces. Inspect DNS and public network registration for each separately approved exact hostname and for a distinct service host when its address attribution is relevant. Compare the retained technology markers and confidence scores so pages with similar titles are still distinguished by their observed stack. Treat every hostname independently: never transfer a framework, product, or version marker from one host to another just because their titles or redirects look similar. The discovery result already contains each host's root response; use inspect_http, inspect_http_configuration and inspect_public_metadata for meaningful deeper evidence instead of repeating the root path. When a public page is a JavaScript application or appears to call a backend, use inspect_frontend_api once to inspect its shipped same-origin bundles and identify API routes/client technology without invoking discovered business operations. Use inspect_safe_web_audit on higher-value public application and administration surfaces; it is a fixed GET-only allowlist and automatically records only strict matches. Use list_service_adapters to see the versioned deeper-inspection capabilities. If direct response evidence identifies Keycloak, call inspect_service_adapter with adapterId keycloak; it automatically records evidence-backed hostname and administration-surface review findings. If direct evidence identifies WordPress, always call inspect_wordpress for that hostname. Public REST users, email-like display names, login surfaces, version disclosures and metadata routes must be described precisely; never infer administrator roles from a public author record. The WordPress tool automatically records an evidence finding when anonymous users are returned and automatically runs up to three NVD correlations for directly observed generator/component versions; do not duplicate those calls or the automatic finding. For a reachable non-HTTP port that may emit a passive banner, use inspect_service_banner once. For other products, choose only documented unauthenticated metadata paths supported by evidence.
+Review every verified service host returned by discover_service_hosts and prioritize public administration, monitoring, storage, development, identity and API surfaces. Inspect DNS and public network registration for each separately approved exact hostname and for a distinct service host when its address attribution is relevant. Compare the retained technology markers and confidence scores so pages with similar titles are still distinguished by their observed stack. Treat every hostname independently: never transfer a framework, product, or version marker from one host to another just because their titles or redirects look similar. The discovery result already contains each host's root response; use inspect_http, inspect_http_configuration and inspect_public_metadata for meaningful deeper evidence instead of repeating the root path. When a public page is a JavaScript application or appears to call a backend, use inspect_frontend_api once to inspect its shipped same-origin bundles and identify API routes/client technology without invoking discovered business operations. When the active profile provides inspect_safe_web_audit, use it on higher-value public application and administration surfaces. When Extended provides inspect_reviewed_nuclei, use it once on meaningful public web surfaces; its strict matches record themselves. Use inspect_unknown_web_service only when an important web surface remains unidentified after normal response fingerprinting. Use list_service_adapters to see the versioned deeper-inspection capabilities. If direct response evidence identifies Keycloak, call inspect_service_adapter with adapterId keycloak; it automatically records evidence-backed hostname and administration-surface review findings. If direct evidence identifies WordPress, always call inspect_wordpress for that hostname. Public REST users, email-like display names, login surfaces, version disclosures and metadata routes must be described precisely; never infer administrator roles from a public author record. The WordPress tool automatically records an evidence finding when anonymous users are returned and automatically runs up to three NVD correlations for directly observed generator/component versions; do not duplicate those calls or the automatic finding. For a reachable non-HTTP port that may emit a passive banner, use inspect_service_banner once. For other products, choose only documented unauthenticated metadata paths supported by evidence.
 
 Map observed configuration weaknesses to specific mappable CWE weakness IDs and verify their names with query_cwe when useful. A CWE classifies the underlying weakness; it is not proof of exploitability. Only search vulnerability databases after an exact product version has been directly observed. Treat NVD/OSV results as candidates until edition and version ranges match. Record only confirmed matching CVE identifiers; do not attach CVEs based on a product name alone.
 
@@ -88,6 +91,7 @@ export interface InvestigatorOptions {
   model?: string;
   baseUrl?: string;
   maxActions?: number;
+  profile?: AgentScanProfile;
   onAction?: (action: AgentAction) => void | Promise<void>;
   onMessage?: (message: AgentMessage) => void | Promise<void>;
   onProgress?: (phase: string) => void | Promise<void>;
@@ -100,7 +104,8 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
   const actions: AgentAction[] = [];
   const findings: AgentFinding[] = [];
   const tlsEvidence: TlsEvidence[] = [];
-  const maxActions = options.maxActions ?? 24;
+  const profile = options.profile ?? AGENT_SCAN_PROFILES.standard;
+  const maxActions = options.maxActions ?? profile.maxActions;
 
   async function recordFinding(value: unknown): Promise<AgentFinding> {
     const normalized = findingSchema.parse(value) as AgentFinding;
@@ -191,6 +196,18 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       description: 'Run the audited safe-recon-v1 web checks on one authorized host: five sequential GET-only templates for accidentally exposed .env, Git metadata, Apache status, phpinfo and Spring Actuator environment data. Strict matches are recorded automatically; no payload, fuzzing, authentication, OOB callback or exploit template is allowed.',
       schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true) })
     }),
+    tool(async ({ hostname, port, tls }) => tracked('inspect_reviewed_nuclei', { hostname, port, tls, policy: 'reviewed-get-v1' }, () => runNucleiAudit(scope, { hostname, port, tls }, options.signal), async (result) => {
+      for (const finding of result.suggestedFindings) await recordFinding(finding);
+    }), {
+      name: 'inspect_reviewed_nuclei',
+      description: 'Extended profile only. Run five repository-reviewed, strict-match HTTP GET templates for public Go expvar, Prometheus metrics, OpenAPI schema, Spring Actuator metadata, and application diagnostics. Fixed at 2 requests/second and concurrency 1; redirects, OOB, code, headless, fuzzing, DAST, and downloaded templates are disabled.',
+      schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true) })
+    }),
+    tool(async ({ hostname, port, tls }) => tracked('inspect_unknown_web_service', { hostname, port, tls }, () => inspectUnknownWebService(scope, { hostname, port, tls })), {
+      name: 'inspect_unknown_web_service',
+      description: 'Extended profile only. Investigate an unidentified authorized web service using one root GET, one fixed favicon GET, selected headers, existing web markers, and pinned Rapid7 Recog server/auth/favicon fingerprints. Treat any single fingerprint as a hypothesis until corroborated.',
+      schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true) })
+    }),
     tool(async ({ hostname, port, tls, basePath }) => tracked('inspect_wordpress', { hostname, port, tls, basePath }, () => inspectWordPress(scope, { hostname, port, tls, basePath }), async (observation) => {
       const publicUsers = observation.evidence.publicUsers.users;
       const versionedComponents: Array<{ product: string; version: string }> = [];
@@ -236,7 +253,7 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       description: 'Inspect selected fixed public metadata locations such as security.txt, robots, sitemap, OpenAPI, Swagger, GraphQL landing and health metadata using bounded GET requests. Published API paths are observations, not authorization to invoke them.',
       schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), paths: z.array(z.enum(PUBLIC_METADATA_PATHS)).max(8).optional() })
     }),
-    tool(async () => tracked('list_service_adapters', {}, async () => ({ adapters: adapterCatalog(), fingerprintPacks: [fingerprintCatalog(), recogCatalog()], note: 'Adapters are versioned executable capabilities. Fingerprints only identify candidates and cannot expand scan scope.' })), {
+    tool(async () => tracked('list_service_adapters', {}, async () => ({ activeProfile: { id: profile.id, name: profile.name, enabledTools: profile.enabledTools, nucleiPolicy: profile.nucleiPolicy }, adapters: adapterCatalog(), fingerprintPacks: [fingerprintCatalog(), recogCatalog()], note: 'Adapters are versioned executable capabilities. Fingerprints only identify candidates and cannot expand scan scope.' })), {
       name: 'list_service_adapters',
       description: 'List the installed, versioned service adapters and pinned public fingerprint packs available for deeper identification.',
       schema: z.object({})
@@ -299,6 +316,14 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
     })
   ];
 
+  const profileGates: Record<string, boolean> = {
+    inspect_safe_web_audit: profile.allowSafeWebAudit,
+    inspect_reviewed_nuclei: profile.allowNucleiAudit,
+    inspect_unknown_web_service: profile.allowUnknownWebInspection
+  };
+  const availableTools = tools.filter((item) => profileGates[(item as { name?: string }).name || ''] !== false);
+  const effectiveSystemPrompt = `${SYSTEM_PROMPT}\n\nACTIVE SCAN CONTRACT: ${profile.name} (${profile.version}). Maximum ${profile.maxActions} tool calls; permitted methods: ${profile.methods.join(', ')}; reviewed Nuclei rate ceiling: ${profile.nucleiRequestsPerSecond ? `${profile.nucleiRequestsPerSecond}/second` : 'disabled'}. ${profile.agentInstructions}`;
+
   const model = new ChatOllama({
     model: options.model || process.env['OLLAMA_MODEL'] || 'glm-5.3:cloud',
     baseUrl: options.baseUrl || process.env['OLLAMA_BASE_URL'] || 'http://127.0.0.1:11434',
@@ -307,14 +332,14 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
 
   const agent = createAgent({
     model,
-    tools,
-    systemPrompt: SYSTEM_PROMPT
+    tools: availableTools,
+    systemPrompt: effectiveSystemPrompt
   });
 
   const hints = target.hostHints?.length ? ` Administrator-provided service hints: ${target.hostHints.join(', ')}.` : '';
   const exactScope = target.authorizedHosts?.length ? ` Separately approved exact hostnames: ${target.authorizedHosts.join(', ')}. Their parent and sibling hostnames are not authorized.` : '';
-  const userPrompt = `Investigate the authorized public target ${scope.rootHostname}. Authorization method: ${target.authorizationStatus}.${hints}${exactScope} Use no more than ${maxActions} total tool calls. Build an evidence-based picture of what an unauthenticated outsider can observe, including distinct services on subdomains and their meaningful public metadata.`;
-  const conversation: AgentMessage[] = [{ role: 'system', content: SYSTEM_PROMPT, toolName: '', sequence: 0, at: startedAt }];
+  const userPrompt = `Investigate the authorized public target ${scope.rootHostname}. Authorization method: ${target.authorizationStatus}.${hints}${exactScope} The immutable scan contract is ${profile.name}; use no more than ${maxActions} total tool calls and only the tools made available by that profile. Build an evidence-based picture of what an unauthenticated outsider can observe, including distinct services on subdomains and their meaningful public metadata.`;
+  const conversation: AgentMessage[] = [{ role: 'system', content: effectiveSystemPrompt, toolName: '', sequence: 0, at: startedAt }];
   await options.onMessage?.(conversation[0]!);
   await options.onProgress?.('Waiting for agent plan');
   let result: unknown = {};

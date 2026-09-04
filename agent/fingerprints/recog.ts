@@ -1,6 +1,9 @@
 const RECOG_REVISION = 'd3d20938da9f5f1e442c2419fe6c30cd651b6878';
 const MAX_XML_BYTES = 2 * 1024 * 1024;
-const supported = new Set(['ssh', 'ftp', 'smtp']);
+const packs: Record<string, string> = {
+  ssh: 'ssh_banners.xml', ftp: 'ftp_banners.xml', smtp: 'smtp_banners.xml',
+  favicon: 'favicons.xml', http_server: 'http_servers.xml', http_auth: 'http_wwwauth.xml'
+};
 const cache = new Map<string, Promise<{ rules: Rule[]; source: string; status: string }>>();
 
 type Rule = { pattern: RegExp; description: string; product: string; versionPosition: number | null };
@@ -33,8 +36,8 @@ function parse(xml: string): Rule[] {
 }
 
 async function load(protocol: string) {
-  if (!supported.has(protocol)) return { rules: [] as Rule[], source: '', status: `No Recog pack is enabled for ${protocol}.` };
-  const source = `https://raw.githubusercontent.com/rapid7/recog/${RECOG_REVISION}/xml/${protocol}_banners.xml`;
+  if (!packs[protocol]) return { rules: [] as Rule[], source: '', status: `No Recog pack is enabled for ${protocol}.` };
+  const source = `https://raw.githubusercontent.com/rapid7/recog/${RECOG_REVISION}/xml/${packs[protocol]}`;
   try {
     const response = await fetch(source, { signal: AbortSignal.timeout(12_000), headers: { 'user-agent': 'WellguardObserve/0.2', accept: 'application/xml,text/xml' } });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -60,5 +63,5 @@ export async function fingerprintBanner(protocol: string, banner: string) {
 }
 
 export function recogCatalog() {
-  return { id: 'rapid7-recog', version: RECOG_REVISION, source: `https://github.com/rapid7/recog/tree/${RECOG_REVISION}`, license: 'BSD-2-Clause', capabilities: ['ssh-banner', 'ftp-banner', 'smtp-banner'], trust: 'Pinned source revision; size-bounded XML and JavaScript-compatible regular expressions only.' };
+  return { id: 'rapid7-recog', version: RECOG_REVISION, source: `https://github.com/rapid7/recog/tree/${RECOG_REVISION}`, license: 'BSD-2-Clause', capabilities: ['ssh-banner', 'ftp-banner', 'smtp-banner', 'http-server-header', 'http-auth-challenge', 'favicon-md5'], trust: 'Pinned source revision; size-bounded XML and JavaScript-compatible regular expressions only.' };
 }

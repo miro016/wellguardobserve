@@ -1,0 +1,25 @@
+id: wellguard-debug-diagnostics
+
+info:
+  name: Public application diagnostics index
+  author: wellguard-observe
+  severity: medium
+  description: Detects a public Go pprof or ELMAH diagnostics index with strict product markers.
+  tags: wellguard,exposure,diagnostics
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/debug/pprof/"
+      - "{{BaseURL}}/elmah.axd"
+    redirects: false
+    max-redirects: 0
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: regex
+        part: body
+        regex:
+          - '(?i)(?:<title>\s*/debug/pprof/\s*</title>|<title>\s*Error Log for|Powered by ELMAH)'
+

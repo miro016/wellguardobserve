@@ -87,4 +87,18 @@ describe('explicit asset graph', () => {
     expect(api?.details.some((detail) => detail.label === 'Frontend API references')).toBeTrue();
     expect(graph.relations.some((relation) => relation.type === 'calls_api' && relation.toKey === api?.key)).toBeTrue();
   });
+
+  test('upgrades an unknown web node with a corroboratable recognition hypothesis', () => {
+    const actions = [
+      action('discover_service_hosts', {}, { root: { hostname: 'example.com', status: 200, title: '', serviceWords: [], technologies: [], evidence: 'A generic page responded.' }, serviceHosts: [] }),
+      action('inspect_unknown_web_service', { hostname: 'example.com', port: 443 }, {
+        hostname: 'example.com', port: 443, hypotheses: [{ product: 'Metabase', confidence: 92, evidence: 'Favicon MD5 matched a pinned Rapid7 Recog fingerprint.' }],
+        favicon: { requestedUrl: 'https://example.com/favicon.ico', bytes: 5430, sha256: 'a'.repeat(64) }
+      })
+    ];
+    const graph = buildAssetGraph(target, actions, [], []);
+    const service = graph.assets.find((asset) => asset.kind === 'service' && asset.subtitle === 'example.com');
+    expect(service?.label).toBe('Metabase');
+    expect(service?.details.some((detail) => detail.label === 'Favicon SHA-256')).toBeTrue();
+  });
 });

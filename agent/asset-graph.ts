@@ -172,6 +172,25 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
       const service = [...assets.values()].find((asset) => asset.kind === 'service' && asset.subtitle.toLowerCase().startsWith(hostname.toLowerCase()));
       if (service) service.details.push(fact('Safe web audit', matched.length ? `${matched.length} strict match${matched.length === 1 ? '' : 'es'}` : 'No strict exposure markers matched', `safe-recon-v1 used five sequential GET-only checks; ${matched.length ? `matched ${matched.join(', ')}` : 'no response satisfied a strict template'}.`, 100));
     }
+    if (action.tool === 'inspect_reviewed_nuclei') {
+      const hostname = clean(data['hostname'] || action.input['hostname'] || target.hostname);
+      const matches = Array.isArray(data['matches']) ? data['matches'].flatMap((value) => value && typeof value === 'object' ? [value as Record<string, unknown>] : []) : [];
+      const service = [...assets.values()].find((asset) => asset.kind === 'service' && asset.subtitle.toLowerCase().startsWith(hostname.toLowerCase()));
+      if (service) service.details.push(fact('Reviewed Nuclei audit', matches.length ? `${matches.length} strict match${matches.length === 1 ? '' : 'es'}` : 'No strict markers matched', `reviewed-get-v1 ran only repository-reviewed GET templates at concurrency 1; ${matches.length ? `matched ${matches.map((item) => clean(item['templateId'])).join(', ')}` : 'no template matched'}.`, 100));
+    }
+    if (action.tool === 'inspect_unknown_web_service') {
+      const hostname = clean(data['hostname'] || action.input['hostname'] || target.hostname); const port = Number(data['port'] || action.input['port'] || 443);
+      const hypotheses = Array.isArray(data['hypotheses']) ? data['hypotheses'].flatMap((value) => value && typeof value === 'object' ? [value as Record<string, unknown>] : []) : [];
+      const first = hypotheses[0]; const product = clean(first?.['product']);
+      const existing = [...assets.values()].find((asset) => asset.kind === 'service' && asset.key.startsWith(`service:${hostname}:${port}:`) && (asset.label === 'Web application' || asset.label === 'Website' || asset.label.startsWith('Unknown ')));
+      const serviceKey = existing?.key || ensureService(hostname, port, product ? displayProduct(product) : 'Unknown web service', clean(first?.['evidence']) || 'Bounded unknown-service recognition completed.');
+      const service = assets.get(serviceKey)!;
+      if (product && existing) { service.label = displayProduct(product); service.confidence = Math.max(service.confidence, Number(first?.['confidence'] || 75)); service.basis = 'observed'; }
+      for (const hypothesis of hypotheses.slice(0, 8)) service.details.push(fact('Recognition hypothesis', `${displayProduct(clean(hypothesis['product']))}${clean(hypothesis['version']) ? ` ${clean(hypothesis['version'])}` : ''}`, clean(hypothesis['evidence']) || 'A direct header, page, or favicon fingerprint matched.', Number(hypothesis['confidence'] || 75)));
+      const favicon = data['favicon'] as Record<string, unknown> | undefined;
+      if (favicon && clean(favicon['sha256'])) service.details.push(fact('Favicon SHA-256', clean(favicon['sha256']), `Fixed GET ${clean(favicon['requestedUrl'])} returned ${Number(favicon['bytes'] || 0)} bytes; the raw icon was not retained.`, 100));
+      if (!hypotheses.length) service.details.push(fact('Identification state', 'Unresolved', 'Root response, selected headers, public favicon, and pinned fingerprints did not provide a reliable product marker.', 100));
+    }
     if (action.tool === 'inspect_service_banner') {
       const hostname = clean(data['hostname']); const port = Number(data['port']); const fingerprinting = (data['fingerprinting'] || {}) as Record<string, unknown>; const matches = Array.isArray(fingerprinting['matches']) ? fingerprinting['matches'] : [];
       const first = matches[0] && typeof matches[0] === 'object' ? matches[0] as Record<string, unknown> : null; const protocol = clean(data['protocolHint']) || 'TCP'; const product = clean(first?.['product']) || `Unknown ${protocol.toUpperCase()} service`;

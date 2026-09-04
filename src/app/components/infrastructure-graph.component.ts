@@ -21,7 +21,7 @@ type GraphView = 'services' | 'infrastructure' | 'evidence';
           <div class="topology-lanes" aria-hidden="true" [style.grid-template-columns]="'repeat(' + laneLabels().length + ',1fr)'">@for (label of laneLabels(); track label) { <span>{{ label }}</span> }</div>
           <svg class="topology-links" [attr.viewBox]="viewBox()" preserveAspectRatio="none" aria-label="Observed asset relationships">
             @for (edge of topology().edges; track edge.id || edge.from + edge.to) {
-              <g class="topology-link" [class.selected]="selectedEdge()?.id === edge.id" [attr.data-state]="edge.state || 'observed'" role="button" tabindex="0" (click)="selectEdge(edge.id || edge.from + edge.to)" (keydown.enter)="selectEdge(edge.id || edge.from + edge.to)">
+              <g class="topology-link" [class.selected]="selectedEdge()?.id === edge.id" [class.connection-active]="isHoveredEdge(edge)" [class.connection-muted]="!!hoveredNodeId() && !isHoveredEdge(edge)" [attr.data-state]="edge.state || 'observed'" role="button" tabindex="0" (click)="selectEdge(edge.id || edge.from + edge.to)" (keydown.enter)="selectEdge(edge.id || edge.from + edge.to)">
                 <path class="link-hit" [attr.d]="path(edge.from, edge.to)" /><path [attr.d]="path(edge.from, edge.to)" />
               </g>
             }
@@ -30,7 +30,7 @@ type GraphView = 'services' | 'infrastructure' | 'evidence';
             @if (edge.state === 'risk' || edge.state === 'warning') { <button type="button" class="topology-edge-badge" [class.selected]="selectedEdge()?.id === edge.id" [attr.data-state]="edge.state" [style.left.%]="midXPercent(edge.from, edge.to)" [style.top.px]="midY(edge.from, edge.to) - 28" (pointerdown)="$event.stopPropagation()" (click)="selectEdge(edge.id || edge.from + edge.to)">{{ edge.label }}</button> }
           }
           @for (node of topology().nodes; track node.id) {
-            <button class="topology-node" type="button" [class.selected]="!selectedEdge() && selected().id === node.id" [attr.data-state]="node.state" [attr.data-kind]="node.kind" [style.left.%]="node.x" [style.top.%]="node.y" [style.--node-left]="node.x + '%'" [style.--node-top]="node.y + '%'" (click)="select(node.id)">
+            <button class="topology-node" type="button" [class.selected]="!selectedEdge() && selected().id === node.id" [class.connection-source]="hoveredNodeId() === node.id" [class.connection-active]="isConnectedNode(node.id)" [class.connection-muted]="!!hoveredNodeId() && !isConnectedNode(node.id)" [attr.data-state]="node.state" [attr.data-kind]="node.kind" [style.left.%]="node.x" [style.top.%]="node.y" [style.--node-left]="node.x + '%'" [style.--node-top]="node.y + '%'" (pointerenter)="hoveredNodeId.set(node.id)" (pointerleave)="hoveredNodeId.set('')" (focus)="hoveredNodeId.set(node.id)" (blur)="hoveredNodeId.set('')" (click)="select(node.id)">
               <i aria-hidden="true">{{ icon(node.kind) }}</i><span><strong>{{ node.label }}</strong><small>{{ nodeSubtitle(node) }}</small></span>
               @if (node.findingIds.length) { <b>{{ node.findingIds.length }}</b> }
             </button>
@@ -73,6 +73,7 @@ export class InfrastructureGraphComponent {
   private readonly canvas = viewChild<ElementRef<HTMLElement>>('canvas');
   protected readonly selectedId = signal('domain');
   protected readonly selectedEdgeId = signal('');
+  protected readonly hoveredNodeId = signal('');
   protected readonly viewMode = signal<GraphView>('services');
   protected readonly expandedOwnerId = signal('');
   protected readonly query = signal('');
@@ -98,6 +99,13 @@ export class InfrastructureGraphComponent {
   });
   protected readonly selected = computed(() => this.topology().nodes.find((node) => node.id === this.selectedId()) || this.topology().nodes[0]);
   protected readonly selectedEdge = computed(() => this.topology().edges.find((edge) => (edge.id || edge.from + edge.to) === this.selectedEdgeId()) || null);
+  protected readonly connectedNodeIds = computed(() => {
+    const hovered = this.hoveredNodeId();
+    if (!hovered) return new Set<string>();
+    const connected = new Set<string>([hovered]);
+    for (const edge of this.topology().edges) if (edge.from === hovered || edge.to === hovered) { connected.add(edge.from); connected.add(edge.to); }
+    return connected;
+  });
   protected readonly nodeFindings = computed(() => this.findings().filter((finding) => this.selected()?.findingIds.includes(finding.id)));
   protected readonly edgeFindings = computed(() => this.findings().filter((finding) => this.selectedEdge()?.findingIds?.includes(finding.id)));
   protected readonly zoom = signal(1);
@@ -131,6 +139,8 @@ export class InfrastructureGraphComponent {
     this.selectedEdgeId.set('');
   }
   protected selectEdge(id: string): void { this.selectedEdgeId.set(id); }
+  protected isConnectedNode(id: string): boolean { return this.connectedNodeIds().has(id); }
+  protected isHoveredEdge(edge: TopologyEdge): boolean { const hovered = this.hoveredNodeId(); return !!hovered && (edge.from === hovered || edge.to === hovered); }
   protected setView(view: GraphView): void { this.viewMode.set(view); }
   protected changeQuery(event: Event): void { this.query.set((event.target as HTMLInputElement).value); }
   protected icon(kind: string): string { return ({ domain: '◎', hostname: '⌁', network: '◇', edge: '◇', server: '▣', port: ':', service: '◆' } as Record<string, string>)[kind] || '•'; }

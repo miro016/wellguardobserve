@@ -1,5 +1,5 @@
 import PocketBase, { type RecordModel } from 'pocketbase';
-import type { AgentAction, AgentMessage, AuthorizedTarget, InvestigationReport } from './types';
+import type { AgentAction, AgentMessage, AuthorizedTarget, InvestigationReport, ScanPolicySnapshot } from './types';
 
 export class InvestigationStore {
   readonly client: PocketBase;
@@ -41,11 +41,11 @@ export class InvestigationStore {
     catch { return null; }
   }
 
-  async claim(record: RecordModel): Promise<boolean> {
+  async claim(record: RecordModel, profileSnapshot: ScanPolicySnapshot): Promise<boolean> {
     const current = await this.client.collection('scanRequests').getOne(record.id);
     if (current['status'] !== 'queued') return false;
     const startedAt = new Date().toISOString();
-    await this.client.collection('scanRequests').update(record.id, { status: 'processing', startedAt, heartbeatAt: startedAt, phase: 'Preparing investigation', actionCount: 0, messageCount: 0, error: '' });
+    await this.client.collection('scanRequests').update(record.id, { status: 'processing', startedAt, heartbeatAt: startedAt, phase: 'Preparing investigation', actionCount: 0, messageCount: 0, profileSnapshot, error: '' });
     await this.client.collection('targets').update(record['target'], { status: 'scanning' });
     return true;
   }

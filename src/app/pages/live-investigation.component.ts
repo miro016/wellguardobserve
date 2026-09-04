@@ -5,6 +5,7 @@ import { AppSidebarComponent } from '../components/app-sidebar.component';
 import { AgentActionRecord, AgentMessageRecord, Scan, ScanRequest, Target } from '../models';
 import { PocketBaseService } from '../services/pocketbase.service';
 import { ReportSummaryComponent } from '../components/report-summary.component';
+import { scanProfile } from '../scan-profiles';
 
 @Component({
   selector: 'wg-live-investigation',
@@ -18,6 +19,7 @@ import { ReportSummaryComponent } from '../components/report-summary.component';
         <section class="investigation-status panel" [attr.data-status]="job.status">
           <div class="scan-progress-head"><div><span class="section-index">{{ job.mode.toUpperCase() }} / REQUEST {{ job.id }}</span><h2>{{ statusLabel() }}</h2></div><strong>{{ progress() }}%</strong></div>
           <div class="scan-progress"><span [style.width.%]="progress()"></span></div>
+          <div class="policy-receipt"><span><i>CONTRACT</i><strong>{{ policyName() }}</strong><small>{{ request()?.profileSnapshot?.version || 'pending worker signature' }}</small></span><span><i>BUDGET</i><strong>{{ actions().length }} / {{ actionBudget() }}</strong><small>tool calls</small></span><span><i>NUCLEI CEILING</i><strong>{{ nucleiRateLabel() }}</strong><small>reviewed templates only</small></span><span><i>METHODS</i><strong>{{ methodLabel() }}</strong><small>{{ request()?.profileSnapshot ? 'worker enforced' : 'awaiting claim' }}</small></span></div>
           <div class="live-phase"><span [attr.data-health]="heartbeatHealth()"><i></i>{{ heartbeatLabel() }}</span><div><small>CURRENT WORKER PHASE</small><strong>{{ job.phase || (job.status === 'queued' ? 'Waiting for observer worker' : 'Preparing investigation') }}</strong></div></div>
           <div class="scan-vitals"><div><small>STARTED</small><strong>{{ job.startedAt ? (job.startedAt | date:'mediumTime') : 'Waiting for worker' }}</strong></div><div><small>TOOL CALLS</small><strong>{{ actions().length }}</strong></div><div><small>MESSAGES</small><strong>{{ messages().length }}</strong></div><div><small>LAST EVENT</small><strong>{{ lastEvent() | date:'mediumTime' }}</strong></div></div>
           @if (job.status === 'cancelling') { <p class="stop-note">The agent will stop after the active bounded network request returns. No new tool call will begin.</p> }
@@ -50,9 +52,10 @@ export class LiveInvestigationComponent implements OnInit, OnDestroy {
   protected readonly progress = computed(() => {
     const status = this.request()?.status;
     if (status === 'completed') return 100;
-    if (status === 'cancelled' || status === 'failed') return Math.min(96, 10 + this.actions().length * 3);
-    if (status === 'cancelling') return Math.min(94, 18 + this.actions().length * 3);
-    if (status === 'processing') return Math.min(92, 12 + this.actions().length * 3);
+    const progressPerAction = 80 / Math.max(1, this.actionBudget());
+    if (status === 'cancelled' || status === 'failed') return Math.min(96, Math.round(10 + this.actions().length * progressPerAction));
+    if (status === 'cancelling') return Math.min(94, Math.round(18 + this.actions().length * progressPerAction));
+    if (status === 'processing') return Math.min(92, Math.round(12 + this.actions().length * progressPerAction));
     return 4;
   });
   protected readonly lastEvent = computed(() => this.actions().at(-1)?.occurredAt || this.messages().at(-1)?.occurredAt || this.request()?.startedAt || this.request()?.created || '');
@@ -68,6 +71,11 @@ export class LiveInvestigationComponent implements OnInit, OnDestroy {
   protected json(value: unknown): string { return JSON.stringify(value, null, 2); }
   protected pretty(value: string): string { try { return JSON.stringify(JSON.parse(value), null, 2); } catch { return value; } }
   protected heartbeatLabel(): string { if (this.request()?.status === 'queued') return 'Waiting to be claimed'; const age = this.heartbeatAge(); return age < 2 ? 'Worker heartbeat now' : `Worker heartbeat ${age}s ago`; }
+  protected fallbackProfile() { return scanProfile(this.request()?.mode); }
+  protected policyName(): string { return this.request()?.profileSnapshot?.name || this.fallbackProfile().name; }
+  protected actionBudget(): number { return this.request()?.profileSnapshot?.maxActions || this.fallbackProfile().maxActions; }
+  protected nucleiRateLabel(): string { const rate = this.request()?.profileSnapshot?.nucleiRequestsPerSecond; return rate ? `${rate} requests / sec` : this.fallbackProfile().requestRate; }
+  protected methodLabel(): string { return this.request()?.profileSnapshot?.methods.join(' · ') || this.fallbackProfile().methods; }
 
   protected async stop(): Promise<void> {
     const request = this.request(); if (!request || !this.isActive()) return;

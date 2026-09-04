@@ -1,0 +1,32 @@
+id: wellguard-openapi-exposure
+
+info:
+  name: Public OpenAPI schema
+  author: wellguard-observe
+  severity: info
+  description: Detects a public JSON OpenAPI or Swagger schema at common fixed paths.
+  tags: wellguard,inventory,api
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/openapi.json"
+      - "{{BaseURL}}/swagger.json"
+      - "{{BaseURL}}/swagger/v1/swagger.json"
+      - "{{BaseURL}}/v3/api-docs"
+    stop-at-first-match: true
+    redirects: false
+    max-redirects: 0
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: regex
+        part: header
+        regex:
+          - '(?i)application/(?:[^;+]+\+)?json'
+      - type: regex
+        part: body
+        regex:
+          - '(?i)"(?:openapi|swagger)"\s*:\s*"(?:2\.0|3\.)'
+

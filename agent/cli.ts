@@ -1,4 +1,5 @@
 import { investigate } from './investigator';
+import { resolveScanProfile } from './profiles';
 
 function argument(name: string): string | undefined {
   const index = Bun.argv.indexOf(`--${name}`);
@@ -7,14 +8,14 @@ function argument(name: string): string | undefined {
 
 const hostname = argument('target');
 if (!hostname) {
-  console.error('Usage: bun run agent:once -- --target example.com [--model glm-5.3:cloud] [--json report.json]');
+  console.error('Usage: bun run agent:once -- --target example.com [--profile light|standard|extended] [--model glm-5.3:cloud] [--json report.json]');
   process.exit(2);
 }
 
 const report = await investigate({ id: hostname, hostname, authorizationStatus: 'admin_override' }, {
+  profile: resolveScanProfile(argument('profile')),
   model: argument('model'),
   baseUrl: argument('ollama-url'),
-  maxActions: 44,
   onAction: (action) => console.error(`[${action.at}] ${action.tool}: ${action.summary.replace(/\s+/g, ' ').slice(0, 180)}`)
 });
 

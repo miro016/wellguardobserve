@@ -7,6 +7,20 @@ export interface AuthorizedTarget {
   allowPrivateAddresses?: boolean;
 }
 
+export type ScanMode = 'light' | 'standard' | 'extended';
+
+export interface ScanPolicySnapshot {
+  id: ScanMode;
+  name: string;
+  version: string;
+  maxActions: number;
+  nucleiRequestsPerSecond: number;
+  methods: string[];
+  enabledTools: string[];
+  nucleiPolicy: string;
+  consentRequired: boolean;
+}
+
 export interface AgentAction {
   tool: string;
   input: Record<string, unknown>;

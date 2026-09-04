@@ -1,0 +1,28 @@
+id: wellguard-prometheus-metrics
+
+info:
+  name: Public Prometheus-format metrics
+  author: wellguard-observe
+  severity: low
+  description: Detects a public Prometheus exposition response with strict format markers.
+  tags: wellguard,exposure,metrics
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/metrics"
+    redirects: false
+    max-redirects: 0
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: regex
+        part: body
+        regex:
+          - '(?m)^# (?:HELP|TYPE) [a-zA-Z_:][a-zA-Z0-9_:]*'
+      - type: regex
+        part: body
+        regex:
+          - '(?m)^[a-zA-Z_:][a-zA-Z0-9_:]*(?:\{[^\r\n]*\})? [+-]?(?:[0-9]+(?:\.[0-9]+)?|Inf|NaN)(?: [0-9]+)?$'
+
