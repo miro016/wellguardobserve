@@ -2,7 +2,7 @@
 
 Wellguard Observe is an agent-led external exposure monitor for developers and small infrastructure teams. It investigates infrastructure from the public internet, explains what it can observe, and records the evidence behind every conclusion.
 
-It is intentionally reconnaissance-only: no credential guessing, payload delivery, exploit execution, or state-changing requests.
+It is intentionally bounded: no credential guessing, exploit payloads, exploit execution, load testing, or state-changing requests. The Active validation profile adds only fixed, code-reviewed GET comparisons with hard request ceilings.
 
 ## What the MVP does
 
@@ -10,14 +10,16 @@ It is intentionally reconnaissance-only: no credential guessing, payload deliver
 - Administrator-created accounts and administrator-approved target creation; there is no public registration.
 - Verified root/subdomain scope plus administrator-approved exact related hostnames. Approving `service.provider.example` never authorizes its parent or sibling tenants.
 - LangChain investigation driven by an Ollama model.
-- Three explicit scan contracts: Baseline (22 tool actions), Standard (64), and customer-approved Extended lab (96). The worker snapshots the selected limits and available tools into the job before investigation starts.
+- Three freely selectable PoC scan contracts: Baseline (22 tool actions), Standard (68), and Active validation (104). Target ownership approval remains mandatory, and the worker snapshots the selected limits and available tools into the job before investigation starts.
 - Safe DNS, RDAP registration, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, passive service banners, HTTP, TLS, public metadata, frontend-to-API discovery, curated safe web audits, bounded unknown-service recognition, versioned WordPress/Keycloak inspection, NVD, MITRE CWE, GitHub Advisory, OSV, CISA KEV, and bounded public-document tools.
-- Findings with separate severity and confidence, preserved evidence, remediation, source URLs, CWE weakness mappings, and version-matched CVE identifiers.
+- Findings with separate severity and confidence, preserved evidence, remediation, source URLs, CWE weakness mappings, version-matched CVE identifiers, and curated OWASP WSTG, OWASP ASVS 5.0.0, and EU CRA relevance links.
 - TLS hostname, trust, issuer, validity window, protocol, cipher, expiry, and explicitly published certificate-email monitoring, plus a browsable certificate-transparency record inventory.
 - DNS control-plane visibility for registrar lifecycle, public registration contacts, nameservers, DNSSEC, CAA, MX, SPF, DMARC, MTA-STS, and SMTP TLS reporting.
 - Read-only service configuration audits for HTTP security headers, CORS, fixed public API/metadata paths, and WordPress REST/login/readme/XML-RPC surfaces; directly observed WordPress generator/component versions trigger up to three transparent NVD correlations.
-- Evidence-backed technology detection using local markers and pinned, size-bounded ProjectDiscovery WappalyzerGo and Rapid7 Recog catalogues. Extended lab can compare server/auth headers and a fixed public favicon against Recog; single-source matches remain labelled hypotheses.
-- A checksum-verified Nuclei 3.11.1 engine in the production image. It can run only five committed Wellguard templates, only in Extended lab: Go expvar, Prometheus metrics, public OpenAPI, Spring Actuator metadata, and diagnostics indexes. Community downloads, redirects, OOB callbacks, code, headless, fuzzing, and DAST are disabled.
+- Evidence-backed technology detection using local markers and pinned, size-bounded ProjectDiscovery WappalyzerGo and Rapid7 Recog catalogues. Active validation can compare server/auth headers and a fixed public favicon against Recog; single-source matches remain labelled hypotheses.
+- A checksum-verified Nuclei 3.11.1 engine in the production image. It can run only five committed Wellguard templates, only in Active validation: Go expvar, Prometheus metrics, public OpenAPI, Spring Actuator metadata, and diagnostics indexes. Community downloads, redirects, OOB callbacks, code, headless, fuzzing, and DAST are disabled.
+- Bounded active checks: two anonymous GETs for cookie/CORS posture; three GETs comparing a neutral value with inert text containing one quote; and up to ten sequential anonymous GETs plus at most three reserved-address `X-Forwarded-For` comparisons after an observed HTTP 429. Values, cookies, and response secrets are not retained or replayed.
+- Report-level OWASP coverage receipts show which external checks actually ran. CRA references are explicitly evidence relevance only, never a legal conclusion or conformity assessment.
 - Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase.
 - A pannable, zoomable evidence-linked topology with service, network-context, and full-evidence lenses. The default domain → hostname → application view collapses repeated port/address transit records without discarding them. Findings can attach to a node or to a risky relationship such as “service advertises stale origin.”
 - A target-scoped public identity ledger for names and mailboxes directly disclosed by owned services, RDAP, or `security.txt`. It supports owner-confirmed current/former status, shows only explicitly returned public links, and never guesses or scrapes social profiles.
@@ -140,6 +142,7 @@ For a production deployment, set long random PocketBase credentials, a precise `
 - OSV.dev package vulnerability API
 - DNS records, mail-security policies, and public TLS handshakes
 - Public application metadata, shipped same-origin frontend bundles, the audited `safe-recon-v1` GET-only exposure checks, and versioned bounded WordPress/Keycloak adapters
+- OWASP Web Security Testing Guide, OWASP ASVS 5.0.0, and the official EUR-Lex Cyber Resilience Act text as curated evidence references
 - Vendor documentation selected by the investigator
 
 External responses are untrusted evidence and are never treated as agent instructions.
@@ -153,7 +156,11 @@ New investigations persist each application-visible LangChain message as it is e
 - PocketBase-backed polling is intended for a limited-access, single-instance MVP.
 - Cloudflare and other CDNs obscure origin reachability; a future read-only provider integration can evaluate origin firewall configuration.
 - Product/version identification remains probabilistic and is labelled with confidence. CVEs are only recordable after exact version and NVD applicability correlation; no-version product names never become CVE claims. Wildcard DNS records and missing reverse-proxy routes are explicitly excluded from the service inventory.
-- Neither audit is an unrestricted Nuclei service. Standard provides `safe-recon-v1`; Extended adds five local Nuclei templates at two requests per second and concurrency one. Both use strict response signatures and exclude fuzzing, authentication, payloads, OOB callbacks, headless actions, code, DAST, and CVE exploit templates. Expanding either allowlist requires a code review.
+- Neither audit is an unrestricted Nuclei service. Standard provides `safe-recon-v1`; Active validation adds five local Nuclei templates at two requests per second and concurrency one. Both use strict response signatures and exclude fuzzing, authentication, exploit payloads, OOB callbacks, headless actions, code, DAST, and CVE exploit templates. Expanding either allowlist requires a code review.
+- The quoted-input differential is deliberately not presented as proof of SQL injection. A strict database error proves an error-disclosure/input-handling condition and requires code review or isolated testing to establish exploitability.
+- Ten anonymous GETs without HTTP 429 do not prove that rate limiting is missing. The result applies only to that endpoint, identity, cost and short observation window.
+- Cookie/session checks inspect attributes only. They do not authenticate, replay cookies, test session fixation, or verify logout. Generic default-password testing is prohibited because even one attempt can create sessions, trigger audit state or contribute to account lockout.
+- External observations can support OWASP verification and CRA risk assessment, but they do not establish OWASP certification, CRA applicability, or CRA conformity.
 - The current container bundles three processes for convenient MVP deployment. They should become separate services when scaling independently.
 
 ## License

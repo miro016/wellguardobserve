@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createServer, type Server } from 'node:http';
 import { ScopeGuard } from '../security/scope-guard';
 import { extractSignals, inspectHttp } from './http';
+import { cookieMetadata } from './http';
 import { discoverPorts } from './ports';
 import { classifyServiceObservation } from './service-hosts';
 import { assessHttpConfiguration } from './configuration';
@@ -11,15 +12,38 @@ import { inspectWithAdapter } from '../adapters/registry';
 import { analyzeFrontendBundles } from './frontend-api';
 import { evaluateSafeTemplate, SAFE_WEB_TEMPLATES } from './safe-audit';
 import type { AuthorizedHttpResponse } from './http';
+import { inspectBrowserSessionControls, inspectInputErrorHandling, inspectRateLimitControls } from './active-validation';
 
 let server: Server;
 let port: number;
+let rateRequests = 0;
+let dynamicRequests = 0;
 const scope = new ScopeGuard({ id: 'local-test', hostname: '127.0.0.1', authorizationStatus: 'admin_override', allowPrivateAddresses: true });
 
 beforeAll(async () => {
   server = createServer((request, response) => {
     response.setHeader('server', 'Example-Control/2.0');
     response.setHeader('x-powered-by', 'Bun');
+    if (request.url?.startsWith('/active/cookies')) {
+      response.setHeader('set-cookie', 'session_id=secret-value-never-returned; Path=/; SameSite=None');
+      if (request.headers.origin) {
+        response.setHeader('access-control-allow-origin', request.headers.origin);
+        response.setHeader('access-control-allow-credentials', 'true');
+      }
+      response.end('browser controls'); return;
+    }
+    if (request.url?.startsWith('/active/input')) {
+      if (request.url.includes('%27')) { response.statusCode = 500; response.end('PostgreSQL ERROR: unterminated quoted string'); }
+      else response.end('stable control');
+      return;
+    }
+    if (request.url?.startsWith('/active/dynamic')) { dynamicRequests += 1; response.end(`dynamic ${dynamicRequests}`); return; }
+    if (request.url === '/active/rate') {
+      if (request.headers['x-forwarded-for']) { response.end('accepted alternate identity'); return; }
+      rateRequests += 1;
+      if (rateRequests >= 4) { response.statusCode = 429; response.setHeader('retry-after', '30'); response.end('slow down'); return; }
+      response.end('ok'); return;
+    }
     if (request.url?.includes('/realms/master/.well-known/openid-configuration')) {
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ issuer: 'https://stale-origin.example.test/realms/master', authorization_endpoint: 'https://stale-origin.example.test/realms/master/protocol/openid-connect/auth' })); return;
@@ -143,8 +167,47 @@ describe('bounded network tools', () => {
 
   test('safe web templates require strict signatures and reject an SPA fallback', () => {
     const template = SAFE_WEB_TEMPLATES.find((item) => item.id === 'exposed-git-head')!;
-    const response = (raw: string, contentType: string): AuthorizedHttpResponse => ({ requestedUrl: 'https://app.example.test/.git/HEAD', status: 200, headers: { 'content-type': contentType }, raw, truncated: false });
+    const response = (raw: string, contentType: string): AuthorizedHttpResponse => ({ requestedUrl: 'https://app.example.test/.git/HEAD', status: 200, headers: { 'content-type': contentType }, raw, truncated: false, cookies: [] });
     expect(evaluateSafeTemplate(template, response('ref: refs/heads/main\n', 'text/plain'))).toBeTrue();
     expect(evaluateSafeTemplate(template, response('<html><app-root></app-root></html>', 'text/html'))).toBeFalse();
+  });
+
+  test('retains cookie attributes without retaining cookie values', () => {
+    const result = cookieMetadata({ 'set-cookie': ['session_id=top-secret; Secure; HttpOnly; SameSite=Lax; Path=/'] });
+    expect(result).toEqual([{ name: 'session_id', secure: true, httpOnly: true, sameSite: 'Lax', path: '/', domainScoped: false, persistent: false, prefix: 'none', likelySensitive: true }]);
+    expect(JSON.stringify(result)).not.toContain('top-secret');
+  });
+
+  test('records strict cookie and credentialed CORS evidence without credentials', async () => {
+    const result = await inspectBrowserSessionControls(scope, { hostname: '127.0.0.1', port, tls: false, path: '/active/cookies' });
+    expect(result.cookies[0]?.name).toBe('session_id');
+    expect(result.cors.reflectedCredentialedOrigin).toBeTrue();
+    expect(result.suggestedFindings.some((finding) => finding.weaknessIds.includes('CWE-942'))).toBeTrue();
+    expect(JSON.stringify(result)).not.toContain('secret-value-never-returned');
+  });
+
+  test('uses a fixed quote differential but never claims SQL injection', async () => {
+    const result = await inspectInputErrorHandling(scope, { hostname: '127.0.0.1', port, tls: false, path: '/active/input', parameter: 'q' });
+    expect(result.result).toBe('database-error-disclosure-observed');
+    expect(result.sqlInjectionConfirmed).toBeFalse();
+    expect(result.suggestedFindings[0]?.weaknessIds).toContain('CWE-209');
+    expect(JSON.stringify(result.policy.excluded)).toContain('SQL keywords');
+  });
+
+  test('labels dynamic controls inconclusive before considering a body differential', async () => {
+    dynamicRequests = 0;
+    const result = await inspectInputErrorHandling(scope, { hostname: '127.0.0.1', port, tls: false, path: '/active/dynamic', parameter: 'q' });
+    expect(result.result).toBe('control-response-unstable');
+    expect(result.suggestedFindings).toHaveLength(0);
+  });
+
+  test('stops a bounded rate test and only then compares reserved forwarding identities', async () => {
+    rateRequests = 0;
+    const result = await inspectRateLimitControls(scope, { hostname: '127.0.0.1', port, tls: false, path: '/active/rate' });
+    expect(result.limitedAt).toBe(4);
+    expect(result.burst).toHaveLength(4);
+    expect(result.forwardingComparison).toHaveLength(3);
+    expect(result.headerTrustSignal).toBeTrue();
+    expect(result.policy.maximumRequests).toBe(13);
   });
 });

@@ -9,7 +9,6 @@ export interface ScanProfileDefinition {
   requestRate: string;
   methods: string;
   capabilities: string[];
-  requiresConsent: boolean;
 }
 
 export const SCAN_PROFILES: readonly ScanProfileDefinition[] = [
@@ -17,19 +16,19 @@ export const SCAN_PROFILES: readonly ScanProfileDefinition[] = [
     id: 'light', name: 'Baseline', signal: 'LOW TRAFFIC',
     description: 'Essential perimeter inventory for frequent checks and production-safe monitoring.',
     maxActions: 22, requestRate: 'Nuclei disabled', methods: 'DNS · TLS · TCP connect · GET',
-    capabilities: ['DNS and certificate posture', 'Root web fingerprints', 'Bounded port sample'], requiresConsent: false
+    capabilities: ['DNS and certificate posture', 'Root web fingerprints', 'Bounded port sample']
   },
   {
     id: 'standard', name: 'Standard', signal: 'RECOMMENDED',
-    description: 'Adaptive service discovery with deeper application metadata and safe exposure checks.',
-    maxActions: 64, requestRate: 'Nuclei disabled', methods: 'DNS · TLS · TCP connect · GET',
-    capabilities: ['Service-host discovery', 'Technology and API evidence', 'Reviewed safe web audit'], requiresConsent: false
+    description: 'Adaptive discovery plus observable browser, cookie, CORS, and safe exposure checks.',
+    maxActions: 68, requestRate: 'Nuclei disabled', methods: 'DNS · TLS · TCP connect · GET',
+    capabilities: ['Service-host discovery', 'Technology and API evidence', 'Cookie and CORS posture']
   },
   {
-    id: 'extended', name: 'Extended lab', signal: 'NON-PRODUCTION',
-    description: 'A wider evidence budget for explicitly approved test estates and stubborn unknown services.',
-    maxActions: 96, requestRate: '2 requests / sec', methods: 'DNS · TLS · TCP connect · GET',
-    capabilities: ['Reviewed local Nuclei templates', 'Favicon and header recognition', 'More adaptive follow-up'], requiresConsent: true
+    id: 'extended', name: 'Active validation', signal: 'POC / BOUNDED',
+    description: 'Fixed low-impact validation for input errors, browser trust, throttling, and stubborn unknown services.',
+    maxActions: 104, requestRate: 'Max 13-request rate check', methods: 'DNS · TLS · TCP connect · GET only',
+    capabilities: ['Quoted-input differential', 'Cookie, CORS and rate controls', 'Reviewed local Nuclei templates']
   }
 ] as const;
 

@@ -16,7 +16,6 @@ while (true) {
   let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   try {
     const profile = resolveScanProfile(request['mode']);
-    if (profile.consentRequired && request['extendedConsent'] !== true) throw new Error('Extended lab profile was not explicitly authorized on this scan request.');
     if (!await store.claim(request, policySnapshot(profile))) continue;
     const target = await store.loadTarget(request['target']);
     scan = await store.createScan(target.id, request.id);

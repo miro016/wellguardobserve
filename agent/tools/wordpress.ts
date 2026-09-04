@@ -52,7 +52,7 @@ export function extractWordPressComponents(raw: string) {
 
 async function safeObservation(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean }, path: string): Promise<AuthorizedHttpResponse & { error?: string }> {
   try { return await requestAuthorizedHttp(scope, { ...input, path }); }
-  catch (error) { return { requestedUrl: path, status: 0, headers: {} as Record<string, string>, raw: '', truncated: false, error: error instanceof Error ? error.message : String(error) }; }
+  catch (error) { return { requestedUrl: path, status: 0, headers: {} as Record<string, string>, raw: '', truncated: false, cookies: [], error: error instanceof Error ? error.message : String(error) }; }
 }
 
 export async function inspectWordPress(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; basePath?: string }) {

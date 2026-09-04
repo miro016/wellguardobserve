@@ -6,14 +6,15 @@ describe('scan profiles', () => {
     expect(resolveScanProfile('anything').id).toBe('standard');
   });
 
-  test('extended capability is explicit and snapshot contains no internal gates', () => {
+  test('active validation is available without an extra consent gate and snapshot contains no internal gates', () => {
     const profile = resolveScanProfile('extended');
     const snapshot = policySnapshot(profile);
     expect(profile.allowNucleiAudit).toBe(true);
-    expect(snapshot.maxActions).toBe(96);
+    expect(snapshot.maxActions).toBe(104);
     expect(snapshot.methods).toEqual(['DNS', 'TLS handshake', 'TCP connect', 'HTTP GET']);
     expect(snapshot.nucleiPolicy).toContain('reviewed local templates only');
+    expect(snapshot.consentRequired).toBe(false);
+    expect(snapshot.enabledTools).toContain('bounded-rate-controls-v1');
     expect(snapshot).not.toHaveProperty('agentInstructions');
   });
 });
-

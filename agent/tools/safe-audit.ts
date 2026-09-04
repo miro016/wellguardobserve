@@ -1,6 +1,7 @@
 import type { AgentFinding, FindingSeverity } from '../types';
 import type { ScopeGuard } from '../security/scope-guard';
 import { requestAuthorizedHttp, type AuthorizedHttpResponse } from './http';
+import { frameworkReferences } from '../compliance';
 
 interface SafeTemplate {
   id: string;
@@ -75,7 +76,7 @@ export async function inspectSafeWebAudit(scope: ScopeGuard, input: { hostname?:
         severity: template.severity, confidence: 100, asset: hostname,
         evidence: [template.evidence(response)], remediation: template.remediation,
         sourceUrls: template.weaknessIds.map((id) => `https://cwe.mitre.org/data/definitions/${id.slice(4)}.html`),
-        cveIds: [], weaknessIds: template.weaknessIds, assetKey: '', relatedAssetKeys: [], relationKey: ''
+        cveIds: [], weaknessIds: template.weaknessIds, frameworkRefs: frameworkReferences('CRA-I-1', 'CRA-I-2b', 'CRA-I-2j', 'CRA-II-3'), assetKey: '', relatedAssetKeys: [], relationKey: ''
       });
     } catch (error) {
       checks.push({ templateId: template.id, path: template.path, status: 0, matched: false, observation: error instanceof Error ? error.message : String(error) });

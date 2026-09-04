@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { isIP } from 'node:net';
 import type { ScopeGuard } from '../security/scope-guard';
 import type { AgentFinding, FindingSeverity } from '../types';
+import { frameworkReferences } from '../compliance';
 
 const TEMPLATE_DIRECTORY = process.env['WELLGUARD_NUCLEI_TEMPLATES'] || '/app/nuclei/templates';
 const NUCLEI_BINARY = process.env['NUCLEI_BINARY'] || 'nuclei';
@@ -68,7 +69,7 @@ export async function runNucleiAudit(scope: ScopeGuard, input: { hostname?: stri
       return {
         title: policy.title, summary: policy.summary, severity: policy.severity, confidence: 99,
         asset: `${hostname}:${port}`, evidence: [`Reviewed Nuclei template ${match.templateId} strictly matched ${match.url}.`, match.observedIp ? `The connection used the pre-authorized public address ${match.observedIp}.` : 'The authorized public host returned the matching response.'],
-        remediation: policy.remediation, sourceUrls: ['https://docs.projectdiscovery.io/templates/structure'], cveIds: [], weaknessIds: policy.weaknesses,
+        remediation: policy.remediation, sourceUrls: ['https://docs.projectdiscovery.io/templates/structure'], cveIds: [], weaknessIds: policy.weaknesses, frameworkRefs: frameworkReferences('CRA-I-1', 'CRA-I-2j', 'CRA-II-3'),
         assetKey: `service:${hostname}:${port}:web`, relatedAssetKeys: [`hostname:${hostname}`, `port:${hostname}:${port}`]
       };
     });

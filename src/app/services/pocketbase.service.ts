@@ -66,7 +66,7 @@ export class PocketBaseService {
       if (scanId) clauses.push(this.client.filter('scan = {:scanId}', { scanId }));
       const filter = clauses.join(' && ');
       const records = await this.client.collection('findings').getFullList({ filter, sort: '-created' });
-      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], title: r['title'], summary: r['summary'], severity: r['severity'], confidence: r['confidence'], asset: r['asset'], evidence: r['evidence'] ?? [], remediation: r['remediation'] ?? '', sourceUrls: r['sourceUrls'] ?? [], cveIds: r['cveIds'] ?? [], weaknessIds: r['weaknessIds'] ?? [], assetKey: r['assetKey'] ?? '', relatedAssetKeys: r['relatedAssetKeys'] ?? [], relationKey: r['relationKey'] ?? '', created: r['created'], status: r['status'] } as Finding));
+      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], title: r['title'], summary: r['summary'], severity: r['severity'], confidence: r['confidence'], asset: r['asset'], evidence: r['evidence'] ?? [], remediation: r['remediation'] ?? '', sourceUrls: r['sourceUrls'] ?? [], cveIds: r['cveIds'] ?? [], weaknessIds: r['weaknessIds'] ?? [], frameworkRefs: r['frameworkRefs'] ?? [], assetKey: r['assetKey'] ?? '', relatedAssetKeys: r['relatedAssetKeys'] ?? [], relationKey: r['relationKey'] ?? '', created: r['created'], status: r['status'] } as Finding));
     } catch (error) { return this.failed(error); }
   }
 
@@ -155,9 +155,8 @@ export class PocketBaseService {
     }
   }
 
-  async requestScan(targetId: string, mode: ScanMode = 'standard', extendedConsent = false): Promise<string> {
-    if (mode === 'extended' && !extendedConsent) throw new Error('Extended lab scans require explicit non-production or customer authorization.');
-    const record = await this.client.collection('scanRequests').create({ target: targetId, mode, extendedConsent: mode === 'extended' && extendedConsent, status: 'queued' });
+  async requestScan(targetId: string, mode: ScanMode = 'standard'): Promise<string> {
+    const record = await this.client.collection('scanRequests').create({ target: targetId, mode, status: 'queued' });
     return record.id;
   }
 

@@ -8,6 +8,11 @@ export interface ScanPolicySnapshot {
   methods: string[]; enabledTools: string[]; nucleiPolicy: string; consentRequired: boolean;
 }
 
+export interface FrameworkReference {
+  framework: 'OWASP WSTG' | 'OWASP ASVS' | 'EU CRA'; control: string; title: string; url: string;
+  relationship: 'test-method' | 'verification-requirement' | 'regulatory-relevance'; note: string;
+}
+
 export interface Target {
   id: string;
   name: string;
@@ -37,7 +42,7 @@ export interface TargetScope {
 export interface Finding {
   id: string; target: string; scan: string; title: string; summary: string; severity: Severity;
   confidence: number; asset: string; evidence: string[]; remediation: string; sourceUrls: string[];
-  cveIds: string[]; weaknessIds: string[];
+  cveIds: string[]; weaknessIds: string[]; frameworkRefs: FrameworkReference[];
   assetKey: string; relatedAssetKeys: string[]; relationKey: string;
   created: string; status: 'open' | 'accepted' | 'resolved';
 }

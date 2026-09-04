@@ -7,12 +7,25 @@ import { fingerprintWebResponse } from '../fingerprints/web';
 const MAX_BODY_BYTES = 96 * 1024;
 const MAX_EXTENDED_BODY_BYTES = 1280 * 1024;
 
+export interface CookieMetadata {
+  name: string;
+  secure: boolean;
+  httpOnly: boolean;
+  sameSite: 'Strict' | 'Lax' | 'None' | 'unset';
+  path: string;
+  domainScoped: boolean;
+  persistent: boolean;
+  prefix: '__Host-' | '__Secure-' | 'none';
+  likelySensitive: boolean;
+}
+
 export interface AuthorizedHttpResponse {
   requestedUrl: string;
   status: number;
   headers: Record<string, string>;
   raw: string;
   truncated: boolean;
+  cookies: CookieMetadata[];
 }
 
 export interface AuthorizedBinaryHttpResponse {
@@ -21,6 +34,12 @@ export interface AuthorizedBinaryHttpResponse {
   headers: Record<string, string>;
   body: Buffer;
   truncated: boolean;
+  cookies: CookieMetadata[];
+}
+
+interface AuthorizedRequestControls {
+  fixedHeaders?: Partial<Record<'origin' | 'x-forwarded-for', string>>;
+  timeoutMs?: number;
 }
 
 export interface TechnologySignal {
@@ -35,9 +54,53 @@ function safeHeaders(headers: IncomingHttpHeaders): Record<string, string> {
     'referrer-policy', 'permissions-policy', 'cross-origin-opener-policy', 'cross-origin-resource-policy',
     'cross-origin-embedder-policy', 'access-control-allow-origin', 'access-control-allow-credentials',
     'cache-control', 'x-redirect-by', 'x-robots-tag', 'allow', 'x-wp-total', 'x-wp-totalpages',
-    'cf-ray', 'cf-cache-status'
+    'cf-ray', 'cf-cache-status', 'retry-after', 'ratelimit-limit', 'ratelimit-remaining', 'ratelimit-reset',
+    'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset'
   ];
   return Object.fromEntries(keep.flatMap((key) => headers[key] ? [[key, Array.isArray(headers[key]) ? headers[key]!.join(', ') : String(headers[key])]] : []));
+}
+
+export function cookieMetadata(headers: IncomingHttpHeaders): CookieMetadata[] {
+  const values = headers['set-cookie'] || [];
+  const cookies = (Array.isArray(values) ? values : [values]).flatMap((line) => {
+    const parts = String(line).split(';').map((part) => part.trim()).filter(Boolean);
+    const separator = parts[0]?.indexOf('=') ?? -1;
+    if (separator < 1) return [];
+    const name = parts[0]!.slice(0, separator).replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 120);
+    if (!name) return [];
+    const attributes = parts.slice(1);
+    const attribute = (key: string) => attributes.find((part) => part.toLowerCase().startsWith(`${key.toLowerCase()}=`))?.slice(key.length + 1).trim() || '';
+    const sameSiteValue = attribute('samesite').toLowerCase();
+    const sameSite: CookieMetadata['sameSite'] = sameSiteValue === 'strict' ? 'Strict' : sameSiteValue === 'lax' ? 'Lax' : sameSiteValue === 'none' ? 'None' : 'unset';
+    const prefix: CookieMetadata['prefix'] = name.startsWith('__Host-') ? '__Host-' : name.startsWith('__Secure-') ? '__Secure-' : 'none';
+    return [{
+      name,
+      secure: attributes.some((part) => /^secure$/i.test(part)),
+      httpOnly: attributes.some((part) => /^httponly$/i.test(part)),
+      sameSite,
+      path: attribute('path').slice(0, 160),
+      domainScoped: Boolean(attribute('domain')),
+      persistent: attributes.some((part) => /^(?:expires|max-age)=/i.test(part)),
+      prefix,
+      likelySensitive: /(?:^|[._-])(?:auth|identity|jwt|sid|sess(?:ion)?|token)(?:$|[._-])/i.test(name) || /^(?:JSESSIONID|PHPSESSID|connect\.sid)$/i.test(name)
+    }];
+  });
+  return cookies.slice(0, 30);
+}
+
+function controlledHeaders(controls: AuthorizedRequestControls): Record<string, string> {
+  const result: Record<string, string> = {};
+  const origin = controls.fixedHeaders?.origin;
+  if (origin !== undefined) {
+    if (origin !== 'https://wellguard.invalid') throw new Error('Only the fixed Wellguard synthetic Origin is permitted.');
+    result.origin = origin;
+  }
+  const forwardedFor = controls.fixedHeaders?.['x-forwarded-for'];
+  if (forwardedFor !== undefined) {
+    if (!/^198\.51\.100\.(?:1[0-9]|2[0-9]|30)$/.test(forwardedFor)) throw new Error('Only reserved Wellguard documentation addresses are permitted for forwarding-header comparison.');
+    result['x-forwarded-for'] = forwardedFor;
+  }
+  return result;
 }
 
 export function extractSignals(raw: string, headers: Record<string, string> = {}) {
@@ -89,12 +152,12 @@ export function extractSignals(raw: string, headers: Record<string, string> = {}
   return { title, generator, urls, ipv4, serviceWords, assets, technologies, textSample };
 }
 
-export async function requestAuthorizedHttp(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; path?: string; maxBodyBytes?: number }): Promise<AuthorizedHttpResponse> {
-  const response = await requestAuthorizedBytes(scope, input);
+export async function requestAuthorizedHttp(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; path?: string; maxBodyBytes?: number }, controls: AuthorizedRequestControls = {}): Promise<AuthorizedHttpResponse> {
+  const response = await requestAuthorizedBytes(scope, input, controls);
   return { ...response, raw: response.body.toString('utf8') };
 }
 
-export async function requestAuthorizedBytes(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; path?: string; maxBodyBytes?: number }): Promise<AuthorizedBinaryHttpResponse> {
+export async function requestAuthorizedBytes(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; path?: string; maxBodyBytes?: number }, controls: AuthorizedRequestControls = {}): Promise<AuthorizedBinaryHttpResponse> {
   const hostname = scope.assertHostname(input.hostname);
   const useTls = input.tls ?? true;
   const port = input.port ?? (useTls ? 443 : 80);
@@ -107,7 +170,7 @@ export async function requestAuthorizedBytes(scope: ScopeGuard, input: { hostnam
   return await new Promise<AuthorizedBinaryHttpResponse>((resolve, reject) => {
     const request = transport.request({
       hostname, port, path, method: 'GET', servername: useTls ? hostname : undefined,
-      headers: { host: hostname, 'user-agent': 'WellguardObserve/0.1 (+authorized reconnaissance)', accept: 'text/html,application/json,text/plain;q=0.8,*/*;q=0.2' },
+      headers: { host: hostname, 'user-agent': 'WellguardObserve/0.1 (+authorized reconnaissance)', accept: 'text/html,application/json,text/plain;q=0.8,*/*;q=0.2', ...controlledHeaders(controls) },
       lookup: (_name, options, callback) => {
         if (typeof options === 'object' && options.all) {
           const allCallback = callback as unknown as (error: null, addresses: Array<{ address: string; family: 4 | 6 }>) => void;
@@ -116,7 +179,7 @@ export async function requestAuthorizedBytes(scope: ScopeGuard, input: { hostnam
           callback(null, address, family);
         }
       },
-      timeout: 8_000, rejectUnauthorized: true
+      timeout: Math.max(1_000, Math.min(8_000, controls.timeoutMs || 8_000)), rejectUnauthorized: true
     }, (response) => {
       const chunks: Buffer[] = []; let size = 0; let truncated = false;
       response.on('data', (chunk: Buffer) => {
@@ -129,7 +192,7 @@ export async function requestAuthorizedBytes(scope: ScopeGuard, input: { hostnam
         const headers = safeHeaders(response.headers);
         resolve({
           requestedUrl: `${useTls ? 'https' : 'http'}://${hostname}${port === (useTls ? 443 : 80) ? '' : `:${port}`}${path}`,
-          status: response.statusCode || 0, headers, body: Buffer.concat(chunks), truncated
+          status: response.statusCode || 0, headers, body: Buffer.concat(chunks), truncated, cookies: cookieMetadata(response.headers)
         });
       });
     });
@@ -150,6 +213,7 @@ export async function inspectHttp(scope: ScopeGuard, input: { hostname?: string;
     requestedUrl: response.requestedUrl,
     status: response.status,
     headers: response.headers,
+    cookies: response.cookies,
     truncated: response.truncated,
     signals,
     fingerprinting,

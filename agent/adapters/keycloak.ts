@@ -2,10 +2,11 @@ import { isIP } from 'node:net';
 import type { ScopeGuard } from '../security/scope-guard';
 import { extractSignals, requestAuthorizedHttp, type AuthorizedHttpResponse } from '../tools/http';
 import type { AdapterFindingSuggestion, AdapterInput, AdapterResult, ServiceAdapter } from './types';
+import { frameworkReferences } from '../compliance';
 
 async function observe(scope: ScopeGuard, input: AdapterInput, path: string): Promise<AuthorizedHttpResponse & { error?: string }> {
   try { return await requestAuthorizedHttp(scope, { hostname: input.hostname, port: input.port, tls: input.tls, path }); }
-  catch (error) { return { requestedUrl: path, status: 0, headers: {}, raw: '', truncated: false, error: error instanceof Error ? error.message : String(error) }; }
+  catch (error) { return { requestedUrl: path, status: 0, headers: {}, raw: '', truncated: false, cookies: [], error: error instanceof Error ? error.message : String(error) }; }
 }
 
 function urlHosts(value: unknown): Array<{ url: string; hostname: string }> {
@@ -63,7 +64,7 @@ export const keycloakAdapter: ServiceAdapter = {
         relatedAssetKeys: relations.map((item) => item.toKey), relationKey: relation.key,
         evidence: relations.flatMap((item) => item.evidence).slice(0, 12),
         remediation: 'Review KC_HOSTNAME, KC_HOSTNAME_ADMIN, proxy headers, realm frontend URLs and backchannel settings. Keep only intentional canonical URLs and remove stale origin references.',
-        sourceUrls: [this.manifest.sourceUrl], cveIds: [], weaknessIds: ['CWE-200']
+        sourceUrls: [this.manifest.sourceUrl], cveIds: [], weaknessIds: ['CWE-200'], frameworkRefs: frameworkReferences('CRA-I-1', 'CRA-I-2j')
       });
     }
     const adminSignals = extractSignals(admin.raw, admin.headers);
@@ -74,7 +75,7 @@ export const keycloakAdapter: ServiceAdapter = {
       severity: 'low', confidence: 100, asset: hostname, assetKey: serviceKey, relatedAssetKeys: [], relationKey: '',
       evidence: [`GET ${admin.requestedUrl} returned ${admin.status}${adminSignals.title ? ` with title “${adminSignals.title}”` : ''}.`],
       remediation: 'Restrict administration routes at the reverse proxy or a trusted access layer, keep strong administrator authentication enabled, and use a dedicated KC_HOSTNAME_ADMIN when appropriate.',
-      sourceUrls: [this.manifest.sourceUrl], cveIds: [], weaknessIds: ['CWE-284']
+      sourceUrls: [this.manifest.sourceUrl], cveIds: [], weaknessIds: ['CWE-284'], frameworkRefs: frameworkReferences('CRA-I-2d', 'CRA-I-2j')
     });
     const masterMetadataReachable = identified && realm.status === 200 && cleanRealm(masterDocument['realm']) === 'master' && discovery.status === 200;
     if (masterMetadataReachable) suggestedFindings.push({
@@ -83,7 +84,7 @@ export const keycloakAdapter: ServiceAdapter = {
       severity: 'low', confidence: 100, asset: hostname, assetKey: serviceKey, relatedAssetKeys: [], relationKey: '',
       evidence: [`GET ${realm.requestedUrl} returned 200 for realm “master”.`, `GET ${discovery.requestedUrl} returned 200 with issuer ${String(document['issuer'] || 'not returned')}.`],
       remediation: 'Confirm that internet-based master-realm administration is required. Otherwise restrict the administration hostname or paths through a trusted access layer and use non-master realms for applications.',
-      sourceUrls: [this.manifest.sourceUrl], cveIds: [], weaknessIds: ['CWE-284']
+      sourceUrls: [this.manifest.sourceUrl], cveIds: [], weaknessIds: ['CWE-284'], frameworkRefs: frameworkReferences('CRA-I-2d', 'CRA-I-2j')
     });
     return {
       adapter: { id: this.manifest.id, version: this.manifest.version, name: this.manifest.name }, hostname, identified, product: 'Keycloak',

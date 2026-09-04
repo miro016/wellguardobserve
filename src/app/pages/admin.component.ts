@@ -26,7 +26,6 @@ import { SCAN_PROFILES, scanProfile, storedScanProfile } from '../scan-profiles'
             <label><span>Related exact hostnames <em>optional</em></span><textarea name="authorizedHosts" [(ngModel)]="authorizedHosts" rows="3" placeholder="project-keycloak.provider.example"></textarea><small>Explicitly authorizes only these exact external hostnames. Their parent domain and sibling tenants remain out of scope.</small></label>
             <label><span>Approval record</span><textarea name="reason" [(ngModel)]="reason" rows="3" maxlength="500" placeholder="I own and administer this domain." required></textarea></label>
             <fieldset class="form-profile"><legend>Scan contract</legend><div class="profile-tabs">@for (profile of profiles; track profile.id) { <button type="button" [class.active]="scanMode === profile.id" (click)="setScanMode(profile.id)"><span>{{ profile.signal }}</span><strong>{{ profile.name }}</strong><small>{{ profile.maxActions }} tools</small></button> }</div><p>{{ selectedProfile().description }}</p><dl><div><dt>Methods</dt><dd>{{ selectedProfile().methods }}</dd></div><div><dt>Capabilities</dt><dd>{{ selectedProfile().capabilities.join(' · ') }}</dd></div></dl></fieldset>
-            @if (selectedProfile().requiresConsent) { <label class="authorization-check extended-check"><input name="extendedConfirmed" type="checkbox" [(ngModel)]="extendedConfirmed"><span><strong>Extended lab profile is approved.</strong><small>This target is non-production or the customer explicitly approved the wider bounded evidence collection.</small></span></label> }
             <label class="authorization-check"><input name="confirmed" type="checkbox" [(ngModel)]="confirmed"><span><strong>I own this infrastructure or have explicit permission to assess it.</strong><small>Wellguard will make bounded DNS, TLS, TCP, and safe HTTP requests to this root and its discovered subdomains.</small></span></label>
             <div class="form-actions"><button class="button primary" type="submit" [disabled]="busy() || !db.isAdmin()">{{ busy() ? 'Creating…' : 'Add target & run scan' }} <span>→</span></button><button class="button secondary" type="button" (click)="create(false)" [disabled]="busy() || !db.isAdmin()">Add without scan</button></div>
           </div>
@@ -47,16 +46,15 @@ export class AdminComponent implements OnInit {
   private readonly router = inject(Router);
   protected readonly targets = signal<Target[]>([]); protected readonly busy = signal(false); protected readonly queued = signal<Record<string, boolean>>({}); protected readonly error = signal(''); protected readonly notice = signal('');
   protected name = ''; protected hostname = ''; protected hostHints = ''; protected authorizedHosts = ''; protected reason = 'I own and administer this infrastructure.'; protected confirmed = false;
-  protected readonly profiles = SCAN_PROFILES; protected scanMode: ScanMode = storedScanProfile(); protected extendedConfirmed = false;
+  protected readonly profiles = SCAN_PROFILES; protected scanMode: ScanMode = storedScanProfile();
   protected selectedProfile() { return scanProfile(this.scanMode); }
-  protected setScanMode(mode: ScanMode): void { this.scanMode = mode; this.extendedConfirmed = false; }
+  protected setScanMode(mode: ScanMode): void { this.scanMode = mode; }
   protected scopeTargetId = ''; protected scopeHostname = ''; protected scopeReason = 'I own or administer this related service hostname.'; protected scopeConfirmed = false; protected readonly scopeBusy = signal(false);
   ngOnInit(): void { void this.load(); }
   private async load(): Promise<void> { try { const targets = await this.db.targets(); this.targets.set(targets); if (!targets.some((target) => target.id === this.scopeTargetId)) this.scopeTargetId = targets[0]?.id || ''; } catch (error) { this.error.set(error instanceof Error ? error.message : 'Targets could not be loaded.'); } }
   protected async create(runScan: boolean): Promise<void> {
     this.error.set(''); this.notice.set('');
     if (!this.confirmed) { this.error.set('Confirm that you own the target or have explicit permission to assess it.'); return; }
-    if (runScan && this.selectedProfile().requiresConsent && !this.extendedConfirmed) { this.error.set('Confirm that the extended lab profile is explicitly approved for this target.'); return; }
     if (!this.name.trim() || !this.reason.trim()) { this.error.set('Enter a display name and a clear approval record.'); return; }
     let hostname: string; let hints: string[]; let authorizedHosts: string[];
     try { hostname = this.normalizeRoot(this.hostname); hints = this.normalizeHints(hostname, this.hostHints); authorizedHosts = this.normalizeExactHosts(hostname, this.authorizedHosts); }
@@ -65,7 +63,7 @@ export class AdminComponent implements OnInit {
     try {
       const target = await this.db.createTarget({ name: this.name.trim(), hostname, hostHints: hints, authorizedHosts, authorizationReason: this.reason.trim() });
       if (runScan) {
-        const requestId = await this.db.requestScan(target.id, this.scanMode, this.extendedConfirmed);
+        const requestId = await this.db.requestScan(target.id, this.scanMode);
         this.queued.update((state) => ({ ...state, [target.id]: true }));
         await this.router.navigate(['/app/investigations', requestId]);
         return;
@@ -78,8 +76,7 @@ export class AdminComponent implements OnInit {
   }
   protected async run(target: Target): Promise<void> {
     this.error.set(''); this.notice.set(''); this.queued.update((state) => ({ ...state, [target.id]: true }));
-    if (this.selectedProfile().requiresConsent && !this.extendedConfirmed) { this.queued.update((state) => ({ ...state, [target.id]: false })); this.error.set('Confirm the extended lab profile in the authorization form before starting it.'); return; }
-    try { const requestId = await this.db.requestScan(target.id, this.scanMode, this.extendedConfirmed); await this.router.navigate(['/app/investigations', requestId]); }
+    try { const requestId = await this.db.requestScan(target.id, this.scanMode); await this.router.navigate(['/app/investigations', requestId]); }
     catch (error) { this.queued.update((state) => ({ ...state, [target.id]: false })); this.error.set(error instanceof Error ? error.message : 'The scan could not be queued.'); }
   }
   protected scanState(target: Target): string { return this.queued()[target.id] ? 'Queued' : target.status === 'scanning' ? 'Scanning' : 'Ready'; }

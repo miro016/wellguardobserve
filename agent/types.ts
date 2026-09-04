@@ -38,6 +38,15 @@ export interface AgentMessage {
 
 export type FindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
+export interface FrameworkReference {
+  framework: 'OWASP WSTG' | 'OWASP ASVS' | 'EU CRA';
+  control: string;
+  title: string;
+  url: string;
+  relationship: 'test-method' | 'verification-requirement' | 'regulatory-relevance';
+  note: string;
+}
+
 export interface AgentFinding {
   title: string;
   summary: string;
@@ -49,6 +58,7 @@ export interface AgentFinding {
   sourceUrls: string[];
   cveIds: string[];
   weaknessIds: string[];
+  frameworkRefs?: FrameworkReference[];
   assetKey?: string;
   relatedAssetKeys?: string[];
   relationKey?: string;

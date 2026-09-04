@@ -1,4 +1,5 @@
 import type { ScopeGuard } from '../security/scope-guard';
+import type { FrameworkReference } from '../types';
 
 export interface AdapterManifest {
   id: string;
@@ -17,6 +18,7 @@ export interface AdapterFindingSuggestion {
   title: string; summary: string; severity: 'critical' | 'high' | 'medium' | 'low' | 'info'; confidence: number;
   asset: string; assetKey: string; relatedAssetKeys: string[]; relationKey: string;
   evidence: string[]; remediation: string; sourceUrls: string[]; cveIds: string[]; weaknessIds: string[];
+  frameworkRefs?: FrameworkReference[];
 }
 
 export interface AdapterResult {

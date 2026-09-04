@@ -15,6 +15,7 @@ import { inspectFrontendApi } from './tools/frontend-api';
 import { inspectSafeWebAudit } from './tools/safe-audit';
 import { runNucleiAudit } from './tools/nuclei';
 import { inspectUnknownWebService } from './tools/unknown-web';
+import { inspectBrowserSessionControls, inspectInputErrorHandling, inspectRateLimitControls } from './tools/active-validation';
 import { discoverServiceHosts } from './tools/service-hosts';
 import { queryCisaKev, queryCwe, queryGitHubAdvisory, queryGitHubReleases, queryNvdCves, queryOsv, readPublicSource } from './tools/sources';
 import { adapterCatalog, inspectWithAdapter } from './adapters/registry';
@@ -24,16 +25,21 @@ import type { AdapterResult } from './adapters/types';
 import type { AgentAction, AgentFinding, AgentMessage, AuthorizedTarget, InvestigationReport, TlsEvidence } from './types';
 import { buildAssetGraph } from './asset-graph';
 import { AGENT_SCAN_PROFILES, type AgentScanProfile } from './profiles';
+import { complianceCatalog, frameworkReferenceSchema } from './compliance';
 
 const SYSTEM_PROMPT = `You are Wellguard Observe, a defensive external-exposure investigator working only on infrastructure its owner authorized.
 
-Your job is to identify forgotten services, public management interfaces, accidental information disclosure, stale software signals, certificate problems and evidence of risky configuration. You perform reconnaissance only: never attempt credentials, state-changing requests, evasion, payloads or exploitation.
+Your job is to identify forgotten services, public management interfaces, accidental information disclosure, stale software signals, certificate problems and evidence of risky configuration. You perform defensive external observation and only the bounded validation implemented by the available tools. Never attempt credentials, state-changing methods, arbitrary payloads, access-control bypasses, broad fuzzing, load testing or exploitation. A fixed tool may compare a synthetic Origin, a quoted inert value, or reserved forwarding-header identities within its own hard request ceiling; this does not authorize any variation beyond that tool.
 
 Drive the investigation adaptively. Begin with DNS, DNS posture, authoritative domain RDAP, public network registration, certificate transparency, TLS and the root HTTP response. Always use discover_service_hosts once: it combines stored hints, passive host data and bounded HTTPS verification while excluding wildcard/CDN missing routes. Use a bounded port check, then choose deeper service checks from actual evidence. A CDN edge can make ports look open; do not mistake CDN ports for origin services. IP registration describes the public network holder, not a physical server location. Use public sources when they materially improve identification or remediation.
 
-Review every verified service host returned by discover_service_hosts and prioritize public administration, monitoring, storage, development, identity and API surfaces. Inspect DNS and public network registration for each separately approved exact hostname and for a distinct service host when its address attribution is relevant. Compare the retained technology markers and confidence scores so pages with similar titles are still distinguished by their observed stack. Treat every hostname independently: never transfer a framework, product, or version marker from one host to another just because their titles or redirects look similar. The discovery result already contains each host's root response; use inspect_http, inspect_http_configuration and inspect_public_metadata for meaningful deeper evidence instead of repeating the root path. When a public page is a JavaScript application or appears to call a backend, use inspect_frontend_api once to inspect its shipped same-origin bundles and identify API routes/client technology without invoking discovered business operations. When the active profile provides inspect_safe_web_audit, use it on higher-value public application and administration surfaces. When Extended provides inspect_reviewed_nuclei, use it once on meaningful public web surfaces; its strict matches record themselves. Use inspect_unknown_web_service only when an important web surface remains unidentified after normal response fingerprinting. Use list_service_adapters to see the versioned deeper-inspection capabilities. If direct response evidence identifies Keycloak, call inspect_service_adapter with adapterId keycloak; it automatically records evidence-backed hostname and administration-surface review findings. If direct evidence identifies WordPress, always call inspect_wordpress for that hostname. Public REST users, email-like display names, login surfaces, version disclosures and metadata routes must be described precisely; never infer administrator roles from a public author record. The WordPress tool automatically records an evidence finding when anonymous users are returned and automatically runs up to three NVD correlations for directly observed generator/component versions; do not duplicate those calls or the automatic finding. For a reachable non-HTTP port that may emit a passive banner, use inspect_service_banner once. For other products, choose only documented unauthenticated metadata paths supported by evidence.
+Review every verified service host returned by discover_service_hosts and prioritize public administration, monitoring, storage, development, identity and API surfaces. Inspect DNS and public network registration for each separately approved exact hostname and for a distinct service host when its address attribution is relevant. Compare retained technology markers and confidence scores so pages with similar titles remain distinct by observed stack. Treat every hostname independently: never transfer a product or version marker between hosts because titles, infrastructure or redirects look similar. The discovery result already contains each host's root response; use deeper tools only when they add evidence. For a JavaScript application or page that appears to call a backend, use inspect_frontend_api once to inspect its shipped same-origin bundles without invoking discovered business operations. Use list_service_adapters to discover installed product inspectors. When direct response evidence matches an inspector's declared products, invoke that inspector exactly once and accept its declared request policy; never select an inspector from a hostname or prompt example. For other identified products, choose only documented unauthenticated metadata paths supported by evidence. For a reachable non-HTTP port that may emit a passive banner, use inspect_service_banner once.
+
+Use profile-gated checks selectively. inspect_safe_web_audit and inspect_reviewed_nuclei use reviewed fixed GET templates and record strict matches themselves. inspect_unknown_web_service is for a meaningful unidentified web surface after normal fingerprinting. inspect_browser_session_controls may review an important application response. inspect_input_error_handling is permitted only on a previously observed anonymous read-only path and parameter; it cannot prove SQL injection. inspect_rate_limit_controls is permitted once per important host on a previously observed anonymous read-only path; absence of HTTP 429 under ten requests is not a defect by itself. Do not run active validation indiscriminately across every host.
 
 Map observed configuration weaknesses to specific mappable CWE weakness IDs and verify their names with query_cwe when useful. A CWE classifies the underlying weakness; it is not proof of exploitability. Only search vulnerability databases after an exact product version has been directly observed. Treat NVD/OSV results as candidates until edition and version ranges match. Record only confirmed matching CVE identifiers; do not attach CVEs based on a product name alone.
+
+Use list_security_framework_references before adding frameworkRefs. OWASP WSTG entries describe a test method, OWASP ASVS entries describe verification requirements, and EU CRA entries are regulatory relevance only. Use only catalogued controls and never describe an external scan as an OWASP certification, CRA conformity assessment, or legal conclusion. A finding may have no framework mapping when none fits precisely.
 
 Describe DNS mail posture narrowly. Missing SPF or a monitoring-only DMARC policy reduces recipient-side policy or enforcement, but it is not proof that spoofing succeeds. Do not map SPF, DKIM or DMARC posture to CWE-290; use a CWE only when its documented weakness actually matches the observed configuration.
 
@@ -54,6 +60,7 @@ const findingSchema = z.object({
   sourceUrls: z.array(z.string().url()).max(8).default([]),
   cveIds: z.array(z.string().regex(/^CVE-\d{4}-\d{4,}$/i)).max(20).default([]),
   weaknessIds: z.array(z.string().regex(/^CWE-\d+$/i)).max(20).default([]),
+  frameworkRefs: z.array(frameworkReferenceSchema).max(8).default([]),
   assetKey: z.string().max(500).default(''),
   relatedAssetKeys: z.array(z.string().max(500)).max(30).default([]),
   relationKey: z.string().max(500).default('')
@@ -113,7 +120,7 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
     const duplicate = findings.find((item) => (item.asset === normalized.asset && item.title.toLowerCase() === normalized.title.toLowerCase()) || sameWordPressUserExposure(item));
     if (duplicate) return duplicate;
     findings.push(normalized);
-    const action: AgentAction = { tool: 'record_finding', input: { title: normalized.title, severity: normalized.severity, assetKey: normalized.assetKey, relatedAssetKeys: normalized.relatedAssetKeys, relationKey: normalized.relationKey, cveIds: normalized.cveIds, weaknessIds: normalized.weaknessIds }, summary: normalized.summary, at: new Date().toISOString() };
+    const action: AgentAction = { tool: 'record_finding', input: { title: normalized.title, severity: normalized.severity, assetKey: normalized.assetKey, relatedAssetKeys: normalized.relatedAssetKeys, relationKey: normalized.relationKey, cveIds: normalized.cveIds, weaknessIds: normalized.weaknessIds, frameworkRefs: normalized.frameworkRefs?.map((reference) => reference.control) || [] }, summary: normalized.summary, at: new Date().toISOString() };
     actions.push(action); await options.onAction?.(action);
     return normalized;
   }
@@ -184,6 +191,27 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       description: 'Assess directly returned browser security, framing, CORS, transport and server identity headers on one authorized page. Missing optional headers are review signals, not automatic vulnerabilities.',
       schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), path: z.string().max(512).default('/') })
     }),
+    tool(async ({ hostname, port, tls, path }) => tracked('inspect_browser_session_controls', { hostname, port, tls, path }, () => inspectBrowserSessionControls(scope, { hostname, port, tls, path }), async (result) => {
+      for (const finding of result.suggestedFindings) await recordFinding(finding);
+    }), {
+      name: 'inspect_browser_session_controls',
+      description: 'Standard and Active profiles. Make two sequential anonymous GETs to one previously observed read-only path: a baseline and a fixed synthetic Origin comparison. Report cookie names/attributes without values or replay, and automatically record strict session-cookie or credentialed CORS findings. No authentication or session lifecycle is attempted.',
+      schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), path: z.string().max(300).default('/') })
+    }),
+    tool(async ({ hostname, port, tls, path, parameter }) => tracked('inspect_input_error_handling', { hostname, port, tls, path, parameter }, () => inspectInputErrorHandling(scope, { hostname, port, tls, path, parameter }), async (result) => {
+      for (const finding of result.suggestedFindings) await recordFinding(finding);
+    }), {
+      name: 'inspect_input_error_handling',
+      description: 'Active profile only. On one previously observed anonymous read-only GET parameter, compare neutral control, inert text containing one quote, and the same control again. SQL keywords, operators, comments, delays and extraction are impossible in this tool. A strict database error is recorded as error disclosure, never proof of executable SQL injection.',
+      schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), path: z.string().max(300).default('/'), parameter: z.string().regex(/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/).default('q') })
+    }),
+    tool(async ({ hostname, port, tls, path }) => tracked('inspect_rate_limit_controls', { hostname, port, tls, path }, () => inspectRateLimitControls(scope, { hostname, port, tls, path }), async (result) => {
+      for (const finding of result.suggestedFindings) await recordFinding(finding);
+    }), {
+      name: 'inspect_rate_limit_controls',
+      description: 'Active profile only. Send at most ten sequential anonymous GETs to one previously observed read-only path. Only after HTTP 429, compare at most three reserved-documentation X-Forwarded-For values and stop. No concurrency, cookies, credentials, bodies, proxy rotation or load testing. No 429 is not automatically a finding.',
+      schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), path: z.string().max(300).default('/') })
+    }),
     tool(async ({ hostname, port, tls, path }) => tracked('inspect_frontend_api', { hostname, port, tls, path }, () => inspectFrontendApi(scope, { hostname, port, tls, path })), {
       name: 'inspect_frontend_api',
       description: 'Inspect public HTML and at most twelve size-bounded same-origin JavaScript bundles to find API-shaped routes, frontend technology and backend client markers. It never invokes discovered business endpoints; a fixed /api/health GET is used only after a PocketBase client marker is observed.',
@@ -200,12 +228,12 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       for (const finding of result.suggestedFindings) await recordFinding(finding);
     }), {
       name: 'inspect_reviewed_nuclei',
-      description: 'Extended profile only. Run five repository-reviewed, strict-match HTTP GET templates for public Go expvar, Prometheus metrics, OpenAPI schema, Spring Actuator metadata, and application diagnostics. Fixed at 2 requests/second and concurrency 1; redirects, OOB, code, headless, fuzzing, DAST, and downloaded templates are disabled.',
+      description: 'Active validation profile only. Run five repository-reviewed, strict-match HTTP GET templates for public Go expvar, Prometheus metrics, OpenAPI schema, Spring Actuator metadata, and application diagnostics. Fixed at 2 requests/second and concurrency 1; redirects, OOB, code, headless, fuzzing, DAST, and downloaded templates are disabled.',
       schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true) })
     }),
     tool(async ({ hostname, port, tls }) => tracked('inspect_unknown_web_service', { hostname, port, tls }, () => inspectUnknownWebService(scope, { hostname, port, tls })), {
       name: 'inspect_unknown_web_service',
-      description: 'Extended profile only. Investigate an unidentified authorized web service using one root GET, one fixed favicon GET, selected headers, existing web markers, and pinned Rapid7 Recog server/auth/favicon fingerprints. Treat any single fingerprint as a hypothesis until corroborated.',
+      description: 'Active validation profile only. Investigate an unidentified authorized web service using one root GET, one fixed favicon GET, selected headers, existing web markers, and pinned Rapid7 Recog server/auth/favicon fingerprints. Treat any single fingerprint as a hypothesis until corroborated.',
       schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true) })
     }),
     tool(async ({ hostname, port, tls, basePath }) => tracked('inspect_wordpress', { hostname, port, tls, basePath }, () => inspectWordPress(scope, { hostname, port, tls, basePath }), async (observation) => {
@@ -239,7 +267,7 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
           ...publicUsers.slice(0, 8).map((user) => `Public WordPress user: id=${user.id ?? 'unknown'}, name=${user.name || 'empty'}, slug=${user.slug || 'empty'}.`)
         ],
         remediation: 'Confirm whether public author enumeration is required. Replace email-like display names, avoid login names that match public slugs, restrict the users endpoint when it has no public purpose, and keep strong authentication controls on wp-login.php.',
-        sourceUrls: ['https://developer.wordpress.org/rest-api/reference/users/'], cveIds: [], weaknessIds: ['CWE-200'],
+        sourceUrls: ['https://developer.wordpress.org/rest-api/reference/users/'], cveIds: [], weaknessIds: ['CWE-200'], frameworkRefs: [{ control: 'CRA-I-2j' }],
         assetKey: `service:${observation.hostname}:${port}:wordpress`, relatedAssetKeys: [], relationKey: ''
       });
       Object.assign(observation, { findingRecordedAutomatically: { title: recorded.title, severity: recorded.severity, weaknessIds: recorded.weaknessIds } });
@@ -253,9 +281,14 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       description: 'Inspect selected fixed public metadata locations such as security.txt, robots, sitemap, OpenAPI, Swagger, GraphQL landing and health metadata using bounded GET requests. Published API paths are observations, not authorization to invoke them.',
       schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), paths: z.array(z.enum(PUBLIC_METADATA_PATHS)).max(8).optional() })
     }),
-    tool(async () => tracked('list_service_adapters', {}, async () => ({ activeProfile: { id: profile.id, name: profile.name, enabledTools: profile.enabledTools, nucleiPolicy: profile.nucleiPolicy }, adapters: adapterCatalog(), fingerprintPacks: [fingerprintCatalog(), recogCatalog()], note: 'Adapters are versioned executable capabilities. Fingerprints only identify candidates and cannot expand scan scope.' })), {
+    tool(async () => tracked('list_service_adapters', {}, async () => ({ activeProfile: { id: profile.id, name: profile.name, enabledTools: profile.enabledTools, nucleiPolicy: profile.nucleiPolicy }, adapters: adapterCatalog(), specializedInspectors: [{ id: 'wordpress-public-metadata', tool: 'inspect_wordpress', products: ['wordpress'], methods: ['HTTP GET'], requestCeiling: 6, authentication: false }], fingerprintPacks: [fingerprintCatalog(), recogCatalog()], note: 'Inspectors declare their products and bounded behavior. Fingerprints only identify candidates and cannot expand scan scope.' })), {
       name: 'list_service_adapters',
       description: 'List the installed, versioned service adapters and pinned public fingerprint packs available for deeper identification.',
+      schema: z.object({})
+    }),
+    tool(async () => tracked('list_security_framework_references', {}, async () => ({ references: complianceCatalog(), interpretation: { owaspWstg: 'test method', owaspAsvs: 'verification requirement', euCra: 'regulatory relevance only' }, disclaimer: 'External observations support risk review. They are not certification, a CRA conformity assessment, or legal advice.' })), {
+      name: 'list_security_framework_references',
+      description: 'List the curated OWASP WSTG, OWASP ASVS 5.0.0, and EU Cyber Resilience Act references allowed on findings, including their evidence limitations. Use only these canonical control IDs.',
       schema: z.object({})
     }),
     tool(async ({ adapterId, hostname, port, tls, basePath }) => tracked('inspect_service_adapter', { adapterId, hostname, port, tls, basePath }, () => inspectWithAdapter(scope, adapterId, { hostname, port, tls, basePath }), async (result: AdapterResult) => {
@@ -319,7 +352,10 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
   const profileGates: Record<string, boolean> = {
     inspect_safe_web_audit: profile.allowSafeWebAudit,
     inspect_reviewed_nuclei: profile.allowNucleiAudit,
-    inspect_unknown_web_service: profile.allowUnknownWebInspection
+    inspect_unknown_web_service: profile.allowUnknownWebInspection,
+    inspect_browser_session_controls: profile.allowBrowserSessionReview,
+    inspect_input_error_handling: profile.allowActiveValidation,
+    inspect_rate_limit_controls: profile.allowActiveValidation
   };
   const availableTools = tools.filter((item) => profileGates[(item as { name?: string }).name || ''] !== false);
   const effectiveSystemPrompt = `${SYSTEM_PROMPT}\n\nACTIVE SCAN CONTRACT: ${profile.name} (${profile.version}). Maximum ${profile.maxActions} tool calls; permitted methods: ${profile.methods.join(', ')}; reviewed Nuclei rate ceiling: ${profile.nucleiRequestsPerSecond ? `${profile.nucleiRequestsPerSecond}/second` : 'disabled'}. ${profile.agentInstructions}`;
