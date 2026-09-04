@@ -6,12 +6,12 @@
   "scripts": {
     "start": "ng serve --host 0.0.0.0",
     "build": "ng build",
-    "test": "bun test agent/**/*.test.ts",
+    "test": "bun test agent",
     "agent": "bun run agent/index.ts",
     "agent:once": "bun run agent/cli.ts",
     "seed": "bun run scripts/seed.ts",
     "typecheck:agent": "tsc -p tsconfig.agent.json",
-    "check": "ng build && npm run typecheck:agent && bun test agent/**/*.test.ts"
+    "check": "ng build && npm run typecheck:agent && bun test agent"
   },
   "dependencies": {
     "@angular/common": "22.1.5",

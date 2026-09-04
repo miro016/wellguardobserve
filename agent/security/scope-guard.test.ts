@@ -13,6 +13,13 @@ describe('ScopeGuard', () => {
     expect(() => new ScopeGuard({ id: '1', hostname: 'example.com', authorizationStatus: 'pending' } as never)).toThrow(ScopeError);
   });
 
+  test('allows only explicitly approved related hostnames, never their siblings', () => {
+    const scope = new ScopeGuard({ id: '1', hostname: 'example.com', authorizedHosts: ['identity.shared-provider.test'], authorizationStatus: 'admin_override' });
+    expect(scope.assertHostname('identity.shared-provider.test')).toBe('identity.shared-provider.test');
+    expect(() => scope.assertHostname('other.shared-provider.test')).toThrow(ScopeError);
+    expect(() => scope.assertHostname('child.identity.shared-provider.test')).toThrow(ScopeError);
+  });
+
   test('classifies private, metadata and reserved destinations', () => {
     for (const address of ['127.0.0.1', '10.0.0.1', '172.16.4.2', '192.168.1.1', '169.254.169.254', '::1', 'fd00::1']) {
       expect(isPrivateAddress(address)).toBeTrue();

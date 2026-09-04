@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import PocketBase, { RecordModel } from 'pocketbase';
-import { AgentActionRecord, AgentMessageRecord, CreateTargetInput, Finding, Scan, ScanRequest, Target, TlsObservation } from '../models';
+import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, CreateTargetInput, Finding, PublicIdentity, Scan, ScanRequest, Target, TargetScope, TlsObservation } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class PocketBaseService {
@@ -24,9 +24,9 @@ export class PocketBaseService {
     throw error;
   }
 
-  private target(record: RecordModel): Target {
+  private target(record: RecordModel, authorizedHosts: string[] = []): Target {
     return {
-      id: record.id, name: record['name'], hostname: record['hostname'], hostHints: record['hostHints'] ?? [],
+      id: record.id, name: record['name'], hostname: record['hostname'], hostHints: record['hostHints'] ?? [], authorizedHosts,
       authorizationStatus: record['authorizationStatus'], status: record['status'], lastScanAt: record['lastScanAt'],
       assetCount: record['assetCount'] ?? 0, findingCount: record['findingCount'] ?? 0, posture: record['posture'] ?? 100
     } as Target;
@@ -36,9 +36,12 @@ export class PocketBaseService {
 
   async targets(): Promise<Target[]> {
     try {
-      const records = await this.client.collection('targets').getFullList({ sort: '-created' });
+      const [records, scopes] = await Promise.all([
+        this.client.collection('targets').getFullList({ sort: '-created' }),
+        this.client.collection('targetScopes').getFullList({ filter: 'enabled = true', sort: 'created' })
+      ]);
       this.connected.set(true);
-      return records.map((record) => this.target(record));
+      return records.map((record) => this.target(record, scopes.filter((scope) => scope['target'] === record.id).map((scope) => String(scope['hostname']))));
     } catch (error) { return this.failed(error); }
   }
 
@@ -51,15 +54,19 @@ export class PocketBaseService {
         authorizedAt: new Date().toISOString(), allowPrivateAddresses: false, status: 'observed',
         assetCount: 1, findingCount: 0, posture: 100
       });
-      return this.target(record);
+      for (const hostname of input.authorizedHosts) await this.addTargetScope(record.id, hostname, input.authorizationReason);
+      return this.target(record, input.authorizedHosts);
     } catch (error) { return this.failed(error); }
   }
 
-  async findings(targetId?: string): Promise<Finding[]> {
+  async findings(targetId?: string, scanId?: string): Promise<Finding[]> {
     try {
-      const filter = targetId ? this.client.filter('target = {:targetId}', { targetId }) : '';
+      const clauses: string[] = [];
+      if (targetId) clauses.push(this.client.filter('target = {:targetId}', { targetId }));
+      if (scanId) clauses.push(this.client.filter('scan = {:scanId}', { scanId }));
+      const filter = clauses.join(' && ');
       const records = await this.client.collection('findings').getFullList({ filter, sort: '-created' });
-      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], title: r['title'], summary: r['summary'], severity: r['severity'], confidence: r['confidence'], asset: r['asset'], evidence: r['evidence'] ?? [], remediation: r['remediation'] ?? '', sourceUrls: r['sourceUrls'] ?? [], cveIds: r['cveIds'] ?? [], weaknessIds: r['weaknessIds'] ?? [], created: r['created'], status: r['status'] } as Finding));
+      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], title: r['title'], summary: r['summary'], severity: r['severity'], confidence: r['confidence'], asset: r['asset'], evidence: r['evidence'] ?? [], remediation: r['remediation'] ?? '', sourceUrls: r['sourceUrls'] ?? [], cveIds: r['cveIds'] ?? [], weaknessIds: r['weaknessIds'] ?? [], assetKey: r['assetKey'] ?? '', relatedAssetKeys: r['relatedAssetKeys'] ?? [], relationKey: r['relationKey'] ?? '', created: r['created'], status: r['status'] } as Finding));
     } catch (error) { return this.failed(error); }
   }
 
@@ -134,5 +141,43 @@ export class PocketBaseService {
   async requestScan(targetId: string, mode: 'light' | 'standard' = 'standard'): Promise<string> {
     const record = await this.client.collection('scanRequests').create({ target: targetId, mode, status: 'queued' });
     return record.id;
+  }
+
+  async targetScopes(targetId?: string): Promise<TargetScope[]> {
+    const filter = targetId ? this.client.filter('target = {:target}', { target: targetId }) : '';
+    const records = await this.client.collection('targetScopes').getFullList({ filter, sort: 'created' });
+    return records.map((r) => ({ id: r.id, target: r['target'], hostname: r['hostname'], kind: r['kind'], reason: r['reason'], enabled: r['enabled'], authorizedAt: r['authorizedAt'] } as TargetScope));
+  }
+
+  async assets(targetId: string, scanId?: string): Promise<AssetRecord[]> {
+    const clauses = [this.client.filter('target = {:target}', { target: targetId })];
+    if (scanId) clauses.push(this.client.filter('scan = {:scan}', { scan: scanId }));
+    const records = await this.client.collection('assets').getFullList({ filter: clauses.join(' && '), sort: 'created' });
+    return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], key: r['key'], kind: r['kind'], label: r['label'], subtitle: r['subtitle'], state: r['state'], confidence: r['confidence'], basis: r['basis'], details: r['details'] ?? [] } as AssetRecord));
+  }
+
+  async assetRelations(targetId: string, scanId?: string): Promise<AssetRelationRecord[]> {
+    const clauses = [this.client.filter('target = {:target}', { target: targetId })];
+    if (scanId) clauses.push(this.client.filter('scan = {:scan}', { scan: scanId }));
+    const records = await this.client.collection('assetRelations').getFullList({ filter: clauses.join(' && '), sort: 'created' });
+    return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], key: r['key'], fromKey: r['fromKey'], toKey: r['toKey'], type: r['type'], label: r['label'], state: r['state'], confidence: r['confidence'], basis: r['basis'], evidence: r['evidence'] ?? [], findingTitles: r['findingTitles'] ?? [] } as AssetRelationRecord));
+  }
+
+  async publicIdentities(targetId: string): Promise<PublicIdentity[]> {
+    const records = await this.client.collection('publicIdentities').getFullList({ filter: this.client.filter('target = {:target}', { target: targetId }), sort: '-created' });
+    return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], key: r['key'], kind: r['kind'], displayName: r['displayName'], email: r['email'], publicLinks: r['publicLinks'] ?? [], sourceUrls: r['sourceUrls'] ?? [], evidence: r['evidence'] ?? [], sourceAssetKey: r['sourceAssetKey'], confidence: r['confidence'], employmentStatus: r['employmentStatus'], reviewNote: r['reviewNote'] ?? '', confirmedBy: r['confirmedBy'] ?? '', confirmedAt: r['confirmedAt'] ?? '', created: r['created'] } as PublicIdentity));
+  }
+
+  async reviewPublicIdentity(identity: PublicIdentity, employmentStatus: PublicIdentity['employmentStatus'], reviewNote: string): Promise<void> {
+    if (!this.isAdmin() || !this.user()?.id) throw new Error('Only a workspace administrator can confirm identity status.');
+    await this.client.collection('publicIdentities').update(identity.id, { employmentStatus, reviewNote, confirmedBy: this.user()!.id, confirmedAt: new Date().toISOString() });
+  }
+
+  async addTargetScope(targetId: string, hostname: string, reason: string): Promise<TargetScope> {
+    if (!this.isAdmin()) throw new Error('Only a workspace administrator can authorize a related hostname.');
+    const r = await this.client.collection('targetScopes').create({
+      target: targetId, hostname, kind: 'exact_host', reason, enabled: true, authorizedAt: new Date().toISOString()
+    });
+    return { id: r.id, target: r['target'], hostname: r['hostname'], kind: r['kind'], reason: r['reason'], enabled: r['enabled'], authorizedAt: r['authorizedAt'] } as TargetScope;
   }
 }

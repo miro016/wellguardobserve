@@ -7,6 +7,7 @@ import { classifyServiceObservation } from './service-hosts';
 import { assessHttpConfiguration } from './configuration';
 import { inspectWordPress, normalizeWordPressUsers } from './wordpress';
 import { summarizeRdap } from './domain';
+import { inspectWithAdapter } from '../adapters/registry';
 
 let server: Server;
 let port: number;
@@ -16,6 +17,12 @@ beforeAll(async () => {
   server = createServer((request, response) => {
     response.setHeader('server', 'Example-Control/2.0');
     response.setHeader('x-powered-by', 'Bun');
+    if (request.url?.includes('/realms/master/.well-known/openid-configuration')) {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ issuer: 'https://stale-origin.example.test/realms/master', authorization_endpoint: 'https://stale-origin.example.test/realms/master/protocol/openid-connect/auth' })); return;
+    }
+    if (request.url?.includes('/realms/master')) { response.end('{"realm":"master","public_key":"example"}'); return; }
+    if (request.url?.includes('/admin/master/console')) { response.end('<title>Keycloak Administration Console</title><script>window.kcFormOptions={}</script>'); return; }
     if (request.url?.startsWith('/wp-json/wp/v2/users')) {
       response.setHeader('content-type', 'application/json'); response.setHeader('x-wp-total', '1');
       response.end(JSON.stringify([{ id: 1, name: 'owner@example.test', slug: 'ownerexample-test', link: 'https://example.test/author/owner/' }])); return;
@@ -92,6 +99,14 @@ describe('bounded network tools', () => {
     expect(result.emailLikePublicNames[0]?.name).toBe('owner@example.test');
     expect(result.evidence.login.status).toBe(200);
     expect(result.version).toBe('6.8.2');
+  });
+
+  test('uses the versioned Keycloak adapter to attribute a cross-asset disclosure', async () => {
+    const result = await inspectWithAdapter(scope, 'keycloak', { hostname: '127.0.0.1', port, tls: false });
+    expect(result.identified).toBeTrue();
+    expect(result.relations[0]?.toKey).toBe('hostname:stale-origin.example.test');
+    expect(result.suggestedFindings.some((finding) => finding.relationKey === result.relations[0]?.key)).toBeTrue();
+    expect(result.suggestedFindings.some((finding) => /administration surface/i.test(finding.title))).toBeTrue();
   });
 
   test('normalizes only bounded public WordPress user fields', () => {

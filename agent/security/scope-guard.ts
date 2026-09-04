@@ -39,7 +39,8 @@ export class ScopeGuard {
 
   assertHostname(candidate?: string): string {
     const hostname = normalizeHostname(candidate || this.rootHostname);
-    const inScope = hostname === this.rootHostname || hostname.endsWith(`.${this.rootHostname}`);
+    const exactHosts = (this.target.authorizedHosts || []).map(normalizeHostname);
+    const inScope = hostname === this.rootHostname || hostname.endsWith(`.${this.rootHostname}`) || exactHosts.includes(hostname);
     if (!inScope) throw new ScopeError(`Host ${hostname} is outside the authorized root ${this.rootHostname}.`);
     return hostname;
   }

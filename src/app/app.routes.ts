@@ -1,6 +1,6 @@
 import { Type } from '@angular/core';
 import { Route, Routes } from '@angular/router';
-import { authGuard } from './auth.guard';
+import { adminGuard, authGuard } from './auth.guard';
 
 const guarded = (path: string, loader: () => Promise<Type<unknown>>, title: string): Route => ({ path, canActivate: [authGuard], loadComponent: loader, title });
 
@@ -13,10 +13,11 @@ export const routes: Routes = [
   guarded('app/investigations/:requestId', () => import('./pages/live-investigation.component').then((m) => m.LiveInvestigationComponent), 'Live investigation — Wellguard Observe'),
   guarded('app/surface', () => import('./pages/surface.component').then((m) => m.SurfaceComponent), 'Surface map — Wellguard Observe'),
   guarded('app/findings', () => import('./pages/findings.component').then((m) => m.FindingsComponent), 'Findings — Wellguard Observe'),
+  guarded('app/identities', () => import('./pages/identities.component').then((m) => m.IdentitiesComponent), 'Identity exposure — Wellguard Observe'),
   guarded('app/reports', () => import('./pages/reports.component').then((m) => m.ReportsComponent), 'Reports — Wellguard Observe'),
   guarded('app/traces', () => import('./pages/traces.component').then((m) => m.TracesComponent), 'Agent traces — Wellguard Observe'),
   guarded('app/sources', () => import('./pages/sources.component').then((m) => m.SourcesComponent), 'Evidence sources — Wellguard Observe'),
-  guarded('app/admin', () => import('./pages/admin.component').then((m) => m.AdminComponent), 'Administration — Wellguard Observe'),
+  { path: 'app/admin', canActivate: [adminGuard], loadComponent: () => import('./pages/admin.component').then((m) => m.AdminComponent), title: 'Administration — Wellguard Observe' },
   guarded('app/settings', () => import('./pages/settings.component').then((m) => m.SettingsComponent), 'Settings — Wellguard Observe'),
   { path: '**', redirectTo: '' }
 ];

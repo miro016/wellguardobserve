@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { AgentActionRecord, Finding, NodeState, Target, TlsObservation, TopologyEdge, TopologyNode } from '../models';
+import { AgentActionRecord, AssetRecord, AssetRelationRecord, Finding, NodeKind, NodeState, Target, TlsObservation, TopologyEdge, TopologyNode } from '../models';
 
 export interface Topology { nodes: TopologyNode[]; edges: TopologyEdge[]; }
 
@@ -8,7 +8,8 @@ const clean = (value: unknown) => String(value ?? '').trim();
 
 @Injectable({ providedIn: 'root' })
 export class TopologyService {
-  build(target: Target, findings: Finding[], tls: TlsObservation | null, actions: AgentActionRecord[]): Topology {
+  build(target: Target, findings: Finding[], tls: TlsObservation | null, actions: AgentActionRecord[], explicitAssets: AssetRecord[] = [], explicitRelations: AssetRelationRecord[] = []): Topology {
+    if (explicitAssets.length) return this.buildExplicit(findings, explicitAssets, explicitRelations);
     const corpus = [target.hostname, ...findings.flatMap((f) => [f.title, f.summary, f.asset, ...f.evidence]), ...actions.flatMap((a) => [a.tool, a.summary])].join('\n');
     const lower = corpus.toLowerCase();
     const nodes: TopologyNode[] = [];
@@ -220,6 +221,37 @@ export class TopologyService {
       ], findingIds: serviceFindings.map((f) => f.id) });
       edges.push({ from: `port-${ports.includes(service.port) ? service.port : ports[0]}`, to: id });
     });
+    return { nodes, edges };
+  }
+
+  private buildExplicit(findings: Finding[], assets: AssetRecord[], relations: AssetRelationRecord[]): Topology {
+    const columns: Record<NodeKind, number> = { domain: 9, hostname: 23, edge: 36, network: 50, server: 64, port: 78, service: 91 };
+    const groups = new Map<NodeKind, AssetRecord[]>();
+    for (const asset of assets) groups.set(asset.kind, [...(groups.get(asset.kind) || []), asset]);
+    const nodes: TopologyNode[] = [];
+    for (const kind of ['domain', 'hostname', 'edge', 'network', 'server', 'port', 'service'] as NodeKind[]) {
+      const items = (groups.get(kind) || []).sort((a, b) => a.label.localeCompare(b.label));
+      items.forEach((asset, index) => {
+        const linked = findings.filter((finding) => finding.assetKey === asset.key || finding.relatedAssetKeys.includes(asset.key));
+        const primary = linked.filter((finding) => finding.assetKey === asset.key);
+        const strongestFinding = primary.sort((a, b) => ['info','low','medium','high','critical'].indexOf(b.severity) - ['info','low','medium','high','critical'].indexOf(a.severity))[0];
+        nodes.push({
+          id: asset.key, kind, label: asset.label, subtitle: asset.subtitle,
+          state: strongestFinding ? severityState(strongestFinding.severity) : asset.state,
+          x: columns[kind], y: items.length === 1 ? 50 : 12 + index * (76 / Math.max(1, items.length - 1)),
+          details: [
+            { label: 'Evidence grade', value: `${asset.basis.replace('_', ' ')} · ${asset.confidence}%`, evidence: 'Persisted with the asset when the investigation completed.', confidence: asset.confidence, basis: asset.basis },
+            ...asset.details
+          ], findingIds: linked.map((finding) => finding.id)
+        });
+      });
+    }
+    const nodeKeys = new Set(nodes.map((node) => node.id));
+    const edges = relations.filter((relation) => nodeKeys.has(relation.fromKey) && nodeKeys.has(relation.toKey)).map((relation) => ({
+      id: relation.key, from: relation.fromKey, to: relation.toKey, label: relation.label, type: relation.type,
+      state: relation.state, confidence: relation.confidence, basis: relation.basis, evidence: relation.evidence,
+      findingIds: findings.filter((finding) => finding.relationKey === relation.key || relation.findingTitles.includes(finding.title)).map((finding) => finding.id)
+    }));
     return { nodes, edges };
   }
 

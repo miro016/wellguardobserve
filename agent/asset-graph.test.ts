@@ -1,0 +1,62 @@
+import { describe, expect, test } from 'bun:test';
+import { buildAssetGraph } from './asset-graph';
+import type { AgentAction, AgentFinding, AuthorizedTarget } from './types';
+
+const target: AuthorizedTarget = {
+  id: 'target', hostname: 'example.com', authorizedHosts: ['identity.shared-provider.test'], authorizationStatus: 'admin_override'
+};
+
+function action(tool: string, input: Record<string, unknown>, output: unknown): AgentAction {
+  return { tool, input, summary: JSON.stringify(output), at: '2026-09-04T12:00:00.000Z' };
+}
+
+describe('explicit asset graph', () => {
+  test('turns every distinct discovered host into a technology-aware service node', () => {
+    const graph = buildAssetGraph(target, [action('discover_service_hosts', {}, {
+      root: { status: 200, title: 'Example', serviceWords: [], technologies: [{ name: 'Cloudflare' }] },
+      serviceHosts: [
+        { hostname: 'login.example.com', status: 302, title: '', productHints: ['keycloak'], technologies: [{ name: 'Cloudflare' }], evidence: 'HTTPS GET / returned 302 to /admin/.' },
+        { hostname: 'client.example.com', status: 200, title: 'Client', productHints: [], technologies: [{ name: 'Angular' }, { name: 'Cloudflare' }], evidence: 'HTML contained an Angular app-root marker.' },
+        { hostname: 'links.example.com', status: 200, title: 'Linkwarden', productHints: ['linkwarden'], technologies: [{ name: 'Next.js' }], evidence: 'HTTPS GET / returned the Linkwarden page.' }
+      ]
+    })], [], []);
+
+    expect(graph.assets.find((asset) => asset.key === 'service:login.example.com:443:keycloak')?.label).toBe('Keycloak');
+    expect(graph.assets.find((asset) => asset.key === 'service:client.example.com:443:angular')?.details.some((detail) => detail.value.includes('Angular'))).toBeTrue();
+    expect(graph.assets.find((asset) => asset.key === 'service:links.example.com:443:linkwarden')?.details.some((detail) => detail.value.includes('Next.js'))).toBeTrue();
+  });
+
+  test('attaches a service disclosure to the relationship and both participating assets', () => {
+    const serviceKey = 'service:identity.shared-provider.test:443:keycloak';
+    const relatedKey = 'server:203.0.113.42';
+    const relationKey = `advertises:${serviceKey}:${relatedKey}`;
+    const actions = [action('inspect_service_adapter', { hostname: 'identity.shared-provider.test', port: 443 }, {
+      hostname: 'identity.shared-provider.test', product: 'Keycloak', adapter: { id: 'keycloak', version: '1.0.0', name: 'Keycloak public configuration' },
+      relations: [{ key: relationKey, fromKey: serviceKey, toKey: relatedKey, type: 'advertises', label: 'advertises endpoint', state: 'warning', confidence: 100, basis: 'observed', evidence: ['OIDC discovery returned https://203.0.113.42/realms/master.'] }]
+    })];
+    const findings: AgentFinding[] = [{
+      title: 'Keycloak advertises a different public origin', summary: 'The OIDC document explicitly returned another origin address.', severity: 'medium', confidence: 100,
+      asset: 'identity.shared-provider.test', assetKey: serviceKey, relatedAssetKeys: [relatedKey], relationKey,
+      evidence: ['OIDC discovery returned https://203.0.113.42/realms/master.'], remediation: 'Correct the canonical hostname configuration.', sourceUrls: [], cveIds: [], weaknessIds: ['CWE-200']
+    }];
+    const graph = buildAssetGraph(target, actions, findings, []);
+    expect(graph.assets.find((asset) => asset.key === serviceKey)?.state).toBe('warning');
+    expect(graph.assets.find((asset) => asset.key === relatedKey)?.label).toBe('203.0.113.42');
+    expect(graph.relations.find((relation) => relation.key === relationKey)?.findingTitles).toContain(findings[0]!.title);
+  });
+
+  test('retains only directly published identity evidence', () => {
+    const actions = [
+      action('inspect_wordpress', { hostname: 'blog.example.com', port: 443 }, {
+        hostname: 'blog.example.com', evidence: { publicUsers: { url: 'https://blog.example.com/wp-json/wp/v2/users', users: [{ id: 7, name: 'Jane Doe', slug: 'jane', link: 'https://blog.example.com/author/jane/' }] } }
+      }),
+      action('inspect_public_metadata', { hostname: 'example.com', port: 443 }, {
+        hostname: 'example.com', observations: [{ requestedUrl: 'https://example.com/.well-known/security.txt', contacts: ['Contact: mailto:security@example.com'] }]
+      })
+    ];
+    const graph = buildAssetGraph(target, actions, [], []);
+    expect(graph.identities.find((identity) => identity.displayName === 'Jane Doe')?.publicLinks).toEqual(['https://blog.example.com/author/jane/']);
+    expect(graph.identities.find((identity) => identity.email === 'security@example.com')?.employmentStatus).toBe('not_applicable');
+    expect(graph.identities.some((identity) => identity.publicLinks.some((link) => link.includes('linkedin.com')))).toBeFalse();
+  });
+});

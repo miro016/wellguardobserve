@@ -10,10 +10,10 @@ export class InvestigationStore {
   }
 
   async connect(): Promise<void> {
-    const email = process.env['POCKETBASE_SUPERUSER_EMAIL'];
-    const password = process.env['POCKETBASE_SUPERUSER_PASSWORD'];
-    if (!email || !password) throw new Error('PocketBase worker credentials are not configured.');
-    await this.client.collection('_superusers').authWithPassword(email, password, { autoRefreshThreshold: 30 * 60 });
+    const email = process.env['POCKETBASE_WORKER_EMAIL'];
+    const password = process.env['POCKETBASE_WORKER_PASSWORD'];
+    if (!email || !password) throw new Error('POCKETBASE_WORKER_EMAIL and POCKETBASE_WORKER_PASSWORD are required.');
+    await this.client.collection('workers').authWithPassword(email, password, { autoRefreshThreshold: 30 * 60 });
   }
 
   async nextRequest(): Promise<RecordModel | null> {
@@ -32,7 +32,14 @@ export class InvestigationStore {
   async loadTarget(id: string): Promise<AuthorizedTarget> {
     const record = await this.client.collection('targets').getOne(id);
     if (!['verified', 'admin_override'].includes(record['authorizationStatus'])) throw new Error('Target is not authorized.');
-    return { id: record.id, hostname: record['hostname'], hostHints: record['hostHints'] ?? [], authorizationStatus: record['authorizationStatus'], allowPrivateAddresses: record['allowPrivateAddresses'] };
+    const scopes = await this.client.collection('targetScopes').getFullList({
+      filter: this.client.filter('target = {:target} && enabled = true', { target: record.id }), sort: 'created'
+    });
+    return {
+      id: record.id, hostname: record['hostname'], hostHints: record['hostHints'] ?? [],
+      authorizedHosts: scopes.map((scope) => String(scope['hostname'] || '')).filter(Boolean),
+      authorizationStatus: record['authorizationStatus'], allowPrivateAddresses: record['allowPrivateAddresses']
+    };
   }
 
   async createScan(targetId: string, requestId: string): Promise<RecordModel> {
@@ -60,22 +67,41 @@ export class InvestigationStore {
   }
 
   async complete(request: RecordModel, scan: RecordModel, report: InvestigationReport): Promise<void> {
+    for (const asset of report.assets) {
+      await this.client.collection('assets').create({ target: report.target.id, scan: scan.id, ...asset });
+    }
+    for (const relation of report.relations) {
+      await this.client.collection('assetRelations').create({ target: report.target.id, scan: scan.id, ...relation });
+    }
+    for (const identity of report.identities) {
+      let ownerReview: Record<string, unknown> = {};
+      if (identity.employmentStatus === 'unknown') {
+        try {
+          const previous = await this.client.collection('publicIdentities').getFirstListItem(
+            this.client.filter('target = {:target} && key = {:key}', { target: report.target.id, key: identity.key }), { sort: '-created' }
+          );
+          if (['current', 'former'].includes(previous['employmentStatus'])) ownerReview = {
+            employmentStatus: previous['employmentStatus'], reviewNote: previous['reviewNote'] || '',
+            confirmedBy: previous['confirmedBy'] || '', confirmedAt: previous['confirmedAt'] || ''
+          };
+        } catch { /* First observation has no owner review to carry forward. */ }
+      }
+      await this.client.collection('publicIdentities').create({ target: report.target.id, scan: scan.id, ...identity, ...ownerReview });
+    }
     for (const finding of report.findings) {
       await this.client.collection('findings').create({
         target: report.target.id, scan: scan.id, title: finding.title, summary: finding.summary,
         severity: finding.severity, confidence: finding.confidence, asset: finding.asset,
         evidence: finding.evidence, remediation: finding.remediation, sourceUrls: finding.sourceUrls,
-        cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, status: 'open'
+        cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, assetKey: finding.assetKey || '',
+        relatedAssetKeys: finding.relatedAssetKeys || [], relationKey: finding.relationKey || '', status: 'open'
       });
     }
     for (const tls of report.tls) {
       await this.client.collection('tlsObservations').create({ target: report.target.id, scan: scan.id, hostname: tls.hostname, valid: tls.valid, expiresAt: tls.validTo, details: tls });
     }
     const posture = Math.max(0, 100 - report.findings.reduce((sum, finding) => sum + ({ critical: 35, high: 22, medium: 11, low: 4, info: 0 })[finding.severity], 0));
-    const serviceAction = [...report.actions].reverse().find((action) => action.tool === 'discover_service_hosts');
-    let discoveredServices = 0;
-    try { discoveredServices = (JSON.parse(serviceAction?.summary || '{}')['serviceHosts'] || []).length; } catch { /* Keep the conservative root-only count. */ }
-    await this.client.collection('targets').update(report.target.id, { lastScanAt: report.completedAt, findingCount: report.findings.filter((item) => item.severity !== 'info').length, assetCount: Math.max(1, discoveredServices + 1), posture, status: 'observed' });
+    await this.client.collection('targets').update(report.target.id, { lastScanAt: report.completedAt, findingCount: report.findings.filter((item) => item.severity !== 'info').length, assetCount: Math.max(1, report.assets.length), posture, status: 'observed' });
     await this.client.collection('scans').update(scan.id, { status: 'completed', completedAt: report.completedAt, summary: report.summary });
     await this.client.collection('scanRequests').update(request.id, { status: 'completed', completedAt: report.completedAt });
   }

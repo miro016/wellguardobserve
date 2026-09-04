@@ -16,6 +16,7 @@ import { ThemeService } from '../services/theme.service';
         <a routerLink="/app/targets" routerLinkActive="active"><i>◎</i>Targets</a>
         <a routerLink="/app/surface" routerLinkActive="active"><i>⌘</i>Surface map</a>
         <a routerLink="/app/findings" routerLinkActive="active"><i>△</i>Findings</a>
+        <a routerLink="/app/identities" routerLinkActive="active"><i>@</i>Identity exposure</a>
         <a routerLink="/app/reports" routerLinkActive="active"><i>▤</i>Reports</a>
         <span>Transparency</span>
         <a routerLink="/app/traces" routerLinkActive="active"><i>›_</i>Agent traces</a>
@@ -27,7 +28,7 @@ import { ThemeService } from '../services/theme.service';
       <div class="sidebar-status"><span><i></i>Observer ready</span><small>Recon only · scope locked</small></div>
       <div class="sidebar-footer">
         <button class="theme-toggle" type="button" (click)="theme.toggle()" [attr.aria-label]="'Switch to ' + (theme.theme() === 'dark' ? 'light' : 'dark') + ' theme'"><span>{{ theme.theme() === 'dark' ? '☼' : '☾' }}</span>{{ theme.theme() === 'dark' ? 'Light theme' : 'Dark theme' }}</button>
-        <div class="sidebar-user"><span class="user-avatar">{{ initials() }}</span><div><strong>{{ pocketbase.user()?.['name'] || pocketbase.user()?.['email'] || 'Administrator' }}</strong><small>Administrator</small></div><button type="button" aria-label="Sign out" (click)="signOut()">↗</button></div>
+        <div class="sidebar-user"><span class="user-avatar">{{ initials() }}</span><div><strong>{{ pocketbase.user()?.['name'] || pocketbase.user()?.['email'] || 'Workspace user' }}</strong><small>{{ pocketbase.isAdmin() ? 'Administrator' : 'Member' }}</small></div><button type="button" aria-label="Sign out" (click)="signOut()">↗</button></div>
       </div>
     </aside>
   `,

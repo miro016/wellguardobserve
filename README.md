@@ -8,21 +8,22 @@ It is intentionally reconnaissance-only: no credential guessing, payload deliver
 
 - Direct Angular-to-PocketBase authentication and data access, with a one-second live investigation view for the private-preview MVP.
 - Administrator-created accounts and administrator-approved target creation; there is no public registration.
-- Verified or explicitly administrator-authorized target scope.
+- Verified root/subdomain scope plus administrator-approved exact related hostnames. Approving `service.provider.example` never authorizes its parent or sibling tenants.
 - LangChain investigation driven by an Ollama model.
-- Safe DNS, RDAP registration, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, HTTP, TLS, public metadata, WordPress configuration, NVD, MITRE CWE, GitHub Advisory, OSV, CISA KEV, and bounded public-document tools.
+- Safe DNS, RDAP registration, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, passive service banners, HTTP, TLS, public metadata, versioned WordPress/Keycloak inspection, NVD, MITRE CWE, GitHub Advisory, OSV, CISA KEV, and bounded public-document tools.
 - Findings with separate severity and confidence, preserved evidence, remediation, source URLs, CWE weakness mappings, and version-matched CVE identifiers.
 - TLS hostname, trust, issuer, validity window, protocol, cipher, expiry, and explicitly published certificate-email monitoring, plus a browsable certificate-transparency record inventory.
 - DNS control-plane visibility for registrar lifecycle, public registration contacts, nameservers, DNSSEC, CAA, MX, SPF, DMARC, MTA-STS, and SMTP TLS reporting.
 - Read-only service configuration audits for HTTP security headers, CORS, fixed public API/metadata paths, and WordPress REST/login/readme/XML-RPC surfaces; directly observed WordPress generator/component versions trigger up to three transparent NVD correlations.
-- Evidence-backed web technology detection for common frameworks, CMS products, generators, runtimes, and server headers so same-title applications remain distinguishable.
+- Evidence-backed technology detection using local markers and pinned, size-bounded ProjectDiscovery WappalyzerGo and Rapid7 Recog catalogues. Unknown services remain unknown rather than inheriting a product from a hostname.
 - Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase.
-- A pannable, zoomable evidence-linked topology connecting domains, edge providers, hidden origins, ports, and every identified service without collapsing nodes behind a “more” counter.
+- A pannable, zoomable evidence-linked topology connecting domains, exact hostnames, registered networks, observed public addresses, ports, and services. Findings can attach to a node or to a risky relationship such as “service advertises stale origin.”
+- A target-scoped public identity ledger for names and mailboxes directly disclosed by owned services, RDAP, or `security.txt`. It supports owner-confirmed current/former status, shows only explicitly returned public links, and never guesses or scrapes social profiles.
 - A live scan console with model messages, tool inputs/results, progress, and safe user cancellation; evidence already retained remains auditable after a stop.
 - Working target administration and scan queue controls, target-scoped surface and finding views, all-target portfolio overview, scan reports, transparent agent traces, source catalog, and workspace settings.
 - A custom responsive light/dark security-operations interface and public product landing page.
 
-The first authorized acceptance target is `miroslav-petro.com`. The agent independently identified eleven distinct service hosts, including its public Easypanel management surface, a public Keycloak master realm and administration console, Keycloak canonical-host disclosure, a Beszel monitoring hub, Cloudflare edge behavior, and healthy TLS state.
+The seeded acceptance target is `miroslav-petro.com`, with `electric-keycloak.qtgksk.easypanel.host` stored as a separately approved exact hostname. Live observations can change; the UI distinguishes current evidence, inference, registry data, and owner confirmation.
 
 ## Architecture
 
@@ -66,6 +67,7 @@ Start PocketBase with the committed migrations:
 Create a PocketBase superuser, set the variables from `.env.example`, then seed the authorized development target:
 
 ```bash
+bun run scripts/seed-worker.ts
 bun run scripts/seed.ts
 ```
 
@@ -107,8 +109,10 @@ For a production deployment, set long random PocketBase credentials, a precise `
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `POCKETBASE_SUPERUSER_EMAIL` | Internal worker identity | required |
-| `POCKETBASE_SUPERUSER_PASSWORD` | Internal worker credential | required |
+| `POCKETBASE_SUPERUSER_EMAIL` | Startup provisioning identity; removed from the observer process environment | required |
+| `POCKETBASE_SUPERUSER_PASSWORD` | Startup provisioning credential; removed from the observer process environment | required |
+| `POCKETBASE_WORKER_EMAIL` | Least-privilege `workers` collection identity used by the observer | required |
+| `POCKETBASE_WORKER_PASSWORD` | Separate observer credential, at least 16 characters | required |
 | `POCKETBASE_URL` | Internal PocketBase API | `http://127.0.0.1:8090` |
 | `POCKETBASE_DATA_DIR` | Persistent data path | `/data` |
 | `WELLGUARD_ADMIN_EMAIL` | Optional first invited administrator | unset |
@@ -123,19 +127,21 @@ For a production deployment, set long random PocketBase credentials, a precise `
 - Certificate Transparency through `crt.sh`
 - IANA's RDAP bootstrap registry and the TLD's authoritative RDAP service
 - Passive hostname candidates through the free HackerTarget Host Search API; candidates are never trusted until an in-scope HTTPS response is verified
+- ProjectDiscovery WappalyzerGo web fingerprints, pinned to a reviewed MIT-licensed revision
+- Rapid7 Recog banner fingerprints, pinned to a reviewed BSD-2-Clause revision and limited to passive SSH/FTP/SMTP greetings
 - NIST NVD CVE API 2.0 and the MITRE CWE REST API
 - GitHub reviewed Security Advisories and Releases APIs
 - CISA Known Exploited Vulnerabilities feed
 - OSV.dev package vulnerability API
 - DNS records, mail-security policies, and public TLS handshakes
-- Public application metadata and documented unauthenticated WordPress REST view endpoints
+- Public application metadata and versioned, bounded WordPress and Keycloak adapters
 - Vendor documentation selected by the investigator
 
 External responses are untrusted evidence and are never treated as agent instructions.
 
 ## Transparency
 
-New investigations persist each application-visible LangChain message as it is emitted alongside every completed bounded tool input and result. Product identity requires a direct response fingerprint; hostnames and generic tool policy text are not product evidence. The UI intentionally does not infer hidden infrastructure facts: for example, a Cloudflare edge location is never presented as an origin-server location, and service versions remain “Not observed” until direct or corroborated evidence supports them.
+New investigations persist each application-visible LangChain message as it is emitted alongside every completed bounded tool input and result. Product identity requires a direct response fingerprint; hostnames and generic tool policy text are not product evidence. Adapters are registered through a small manifest-driven registry, so another service can be added without changing the agent's safety boundary. The UI intentionally does not infer hidden infrastructure facts: for example, a Cloudflare edge location is never presented as an origin-server location, and service versions remain “Not observed” until direct or corroborated evidence supports them.
 
 ## Current MVP limitations
 

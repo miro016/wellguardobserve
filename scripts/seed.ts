@@ -31,4 +31,15 @@ catch {
   });
 }
 
+const relatedHostname = 'electric-keycloak.qtgksk.easypanel.host';
+try {
+  await pb.collection('targetScopes').getFirstListItem(pb.filter('target = {:target} && hostname = {:hostname}', { target: target.id, hostname: relatedHostname }));
+} catch {
+  await pb.collection('targetScopes').create({
+    target: target.id, hostname: relatedHostname, kind: 'exact_host', enabled: true,
+    reason: 'Infrastructure owner explicitly supplied this Keycloak service hostname for authorized reconnaissance.',
+    authorizedAt: new Date().toISOString()
+  });
+}
+
 console.log(JSON.stringify({ user: user.email, target: target.hostname, targetId: target.id }, null, 2));

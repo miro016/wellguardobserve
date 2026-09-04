@@ -98,7 +98,7 @@ async function passiveHosts(scope: ScopeGuard): Promise<{ hosts: string[]; statu
 
 export async function discoverServiceHosts(scope: ScopeGuard, input: { candidates?: string[] } = {}) {
   const passive = await passiveHosts(scope);
-  const requested = [...(scope.target.hostHints || []), ...(input.candidates || [])]
+  const requested = [...(scope.target.authorizedHosts || []), ...(scope.target.hostHints || []), ...(input.candidates || [])]
     .flatMap((hostname) => { try { return [scope.assertHostname(hostname)]; } catch { return []; } });
   const defaults = DEFAULT_LABELS.map((label) => `${label}.${scope.rootHostname}`);
   const limit = 80;
