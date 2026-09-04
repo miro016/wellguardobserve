@@ -136,3 +136,14 @@ button:disabled { cursor: wait; opacity: .55; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto!important; animation:none!important; transition:none!important; } }
 @media print { .app-sidebar,.app-header>.header-actions,.report-list,.button,.app-header p{display:none!important}.app-layout{display:block}.app-main{padding:0}.reports-layout{display:block}.report-document{border:0}.app-header{margin:0}.report-document{color:#111;background:#fff}.report-document *{border-color:#ddd!important}.report-document p,.report-document small,.report-document span{color:#444!important} }
+
+/* Fixed graph viewport: inspector content scrolls without distorting node coordinates. */
+.topology-shell { height: 490px; min-height: 0; }
+.topology-canvas { min-height: 0; }
+.topology-panel.expanded .topology-shell { height: 630px; min-height: 0; }
+.topology-node > b { background: var(--cyan); color: #061116; }
+.topology-node[data-state='risk'] > b { background: var(--red); color: white; }
+.topology-node[data-state='warning'] > b { background: var(--amber); color: #181106; }
+@media (max-width: 640px) {
+  .topology-shell, .topology-panel.expanded .topology-shell { height: auto; }
+}

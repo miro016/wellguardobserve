@@ -23,7 +23,7 @@ export class TopologyService {
         { label: 'Registration', value: 'Not observed', evidence: 'The latest scan did not retain RDAP registration evidence.' },
         { label: 'TLS identity', value: tls?.valid ? `Valid · ${tls.daysRemaining} days left` : tls ? 'Needs attention' : 'Not observed', evidence: tls ? `${tls.issuer}; ${tls.protocol}; valid until ${tls.validTo}.` : 'No TLS observation is available.' },
         { label: 'Certificate names', value: tls?.subjectAltNames?.join(', ') || 'Not observed', evidence: tls ? 'Certificate Subject Alternative Name extension.' : 'No certificate evidence is available.' }
-      ], findingIds: findings.filter((f) => /dns|certificate|tls|domain/i.test([f.title, f.summary].join(' '))).map((f) => f.id)
+      ], findingIds: findings.filter((f) => /dns|certificate|tls/i.test(f.title)).map((f) => f.id)
     });
 
     const cloudflare = lower.includes('cloudflare');
