@@ -66,16 +66,21 @@ export class TopologyService {
         try { collectPorts(JSON.parse(action.summary)); } catch { /* Retain only structured port evidence. */ }
       }
     }
+    const findingPorts = new Map<string, Set<number>>();
     for (const finding of findings) {
-      for (const match of finding.asset.matchAll(/:(\d{1,5})\b/g)) addPort(match[1]);
+      const observed = new Set<number>();
+      const retain = (value: unknown) => { const port = Number(value); if (Number.isInteger(port) && port > 0 && port <= 65535) { observed.add(port); addPort(port); } };
+      for (const match of finding.asset.matchAll(/:(\d{1,5})\b/g)) retain(match[1]);
       const text = [finding.title, finding.summary, ...finding.evidence].join(' ');
-      for (const match of text.matchAll(/\bports?\s+(\d{1,5})(?:\s*(?:,|and)\s*(\d{1,5}))?/gi)) { addPort(match[1]); if (match[2]) addPort(match[2]); }
+      for (const match of text.matchAll(/\bports?\s+(\d{1,5})(?:\s*(?:,|and)\s*(\d{1,5}))?/gi)) { retain(match[1]); if (match[2]) retain(match[2]); }
+      if (/tls|certificate/i.test(finding.title)) observed.add(443);
+      findingPorts.set(finding.id, observed);
     }
     if (tls?.port) portSet.add(tls.port); else if (tls) portSet.add(443);
     if (!portSet.size) { portSet.add(80); portSet.add(443); }
     const ports = [...portSet].sort((a, b) => a - b).slice(0, 7);
     ports.forEach((port, index) => {
-      const portFindings = findings.filter((f) => f.asset.includes(`:${port}`) || [f.title, f.summary, ...f.evidence].join(' ').includes(String(port)));
+      const portFindings = findings.filter((f) => findingPorts.get(f.id)?.has(port));
       const strongestFinding = strongest(portFindings);
       const portId = `port-${port}`;
       const isTls = port === 443 || port === 8443;

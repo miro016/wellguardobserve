@@ -15,7 +15,7 @@ import { PocketBaseService } from '../services/pocketbase.service';
 export class FindingsComponent implements OnInit {
   private readonly db = inject(PocketBaseService); protected readonly findings = signal<Finding[]>([]); protected readonly selected = signal<Finding | null>(null); protected readonly error = signal(''); protected readonly search = signal(''); protected readonly severity = signal<Severity | 'all'>('all');
   protected readonly filtered = computed(() => { const query = this.search().toLowerCase(); return this.findings().filter((f) => (this.severity() === 'all' || f.severity === this.severity()) && (!query || [f.title, f.asset, f.summary, ...f.evidence].join(' ').toLowerCase().includes(query))); });
-  protected readonly active = computed(() => this.filtered().find((finding) => finding.id === this.selected()?.id) || this.filtered()[0] || null);
+  protected readonly active = computed<Finding | null>(() => this.filtered().find((finding) => finding.id === this.selected()?.id) || this.filtered()[0] || null);
   ngOnInit(): void { void this.db.findings().then((v) => { this.findings.set(v); this.selected.set(v[0] || null); }).catch((e) => this.error.set(e instanceof Error ? e.message : 'Could not load findings.')); }
   protected host(url: string): string { try { return new URL(url).hostname; } catch { return url; } }
 }
