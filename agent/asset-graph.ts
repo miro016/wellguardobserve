@@ -4,6 +4,8 @@ const clean = (value: unknown) => String(value ?? '').trim();
 const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9_.:@-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 180) || 'unknown';
 const parse = (action: AgentAction): Record<string, unknown> | null => { try { return JSON.parse(action.summary) as Record<string, unknown>; } catch { return null; } };
 const severityState = (severity: string): AssetState => ['critical', 'high'].includes(severity) ? 'risk' : ['medium', 'low'].includes(severity) ? 'warning' : 'observed';
+const stateRank: Record<AssetState, number> = { risk: 4, warning: 3, unknown: 2, healthy: 1, observed: 0 };
+const strongerState = (current: AssetState, candidate: AssetState): AssetState => stateRank[candidate] > stateRank[current] ? candidate : current;
 const safeLinks = (values: unknown[]): string[] => [...new Set(values.map(clean).flatMap((value) => { try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? [url.toString()] : []; } catch { return []; } }))].slice(0, 20);
 const displayProduct = (value: string): string => /^[a-z0-9 -]+$/.test(value) ? value.replace(/\b\w/g, (letter) => letter.toUpperCase()) : value;
 
@@ -216,9 +218,9 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
       && `${finding.title} ${finding.summary}`.toLowerCase().includes(suggestedAsset.label.toLowerCase());
     if (!requestedAsset || ((requestedAsset.kind === 'domain' || requestedAsset.kind === 'hostname') && namesObservedService)) finding.assetKey = suggestedAssetKey;
     finding.relatedAssetKeys ||= []; finding.relationKey ||= '';
-    const asset = finding.assetKey ? assets.get(finding.assetKey) : undefined; if (asset) asset.state = severityState(finding.severity);
+    const asset = finding.assetKey ? assets.get(finding.assetKey) : undefined; if (asset) asset.state = strongerState(asset.state, severityState(finding.severity));
     const relation = finding.relationKey ? relations.get(finding.relationKey) : null;
-    if (relation) { relation.state = severityState(finding.severity); relation.findingTitles.push(finding.title); }
+    if (relation) { relation.state = strongerState(relation.state, severityState(finding.severity)); relation.findingTitles.push(finding.title); }
     for (const key of finding.relatedAssetKeys) { const related = assets.get(key); if (related && related.state === 'unknown') related.state = 'warning'; }
   }
 

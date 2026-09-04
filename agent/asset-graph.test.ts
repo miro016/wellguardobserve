@@ -36,6 +36,7 @@ describe('explicit asset graph', () => {
     expect(graph.assets.find((asset) => asset.key === 'service:links.example.com:443:linkwarden')?.details.some((detail) => detail.value.includes('Next.js'))).toBeTrue();
     expect(findings[0]?.assetKey).toBe('service:login.example.com:443:keycloak');
     expect(findings[1]?.assetKey).toBe('domain:example.com');
+    expect(graph.assets.find((asset) => asset.key === 'domain:example.com')?.state).toBe('warning');
   });
 
   test('attaches a service disclosure to the relationship and both participating assets', () => {
