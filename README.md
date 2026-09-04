@@ -19,7 +19,7 @@ It is intentionally reconnaissance-only: no credential guessing, payload deliver
 - Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase.
 - A pannable, zoomable evidence-linked topology with service, network-context, and full-evidence lenses. The default domain → hostname → application view collapses repeated port/address transit records without discarding them. Findings can attach to a node or to a risky relationship such as “service advertises stale origin.”
 - A target-scoped public identity ledger for names and mailboxes directly disclosed by owned services, RDAP, or `security.txt`. It supports owner-confirmed current/former status, shows only explicitly returned public links, and never guesses or scrapes social profiles.
-- A live job console with a five-second worker heartbeat, current phase, model messages, tool inputs/results, delayed/stalled indicators, and safe user cancellation; evidence already retained remains auditable after a stop.
+- A live job console with a five-second worker heartbeat, current phase, model messages, tool inputs/results, delayed/stalled indicators, safe user cancellation, and explicit recovery of jobs interrupted by a single-instance worker restart; evidence already retained remains auditable after a stop.
 - Working target administration and scan queue controls, target-scoped surface and finding views, all-target portfolio overview, scan reports, transparent agent traces, source catalog, and workspace settings.
 - A custom responsive light/dark security-operations interface and public product landing page.
 

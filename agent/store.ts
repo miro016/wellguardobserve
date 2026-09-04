@@ -14,6 +14,26 @@ export class InvestigationStore {
     const password = process.env['POCKETBASE_WORKER_PASSWORD'];
     if (!email || !password) throw new Error('POCKETBASE_WORKER_EMAIL and POCKETBASE_WORKER_PASSWORD are required.');
     await this.client.collection('workers').authWithPassword(email, password, { autoRefreshThreshold: 30 * 60 });
+    await this.recoverInterruptedRequests();
+  }
+
+  private async recoverInterruptedRequests(): Promise<void> {
+    const interrupted = await this.client.collection('scanRequests').getFullList({ filter: 'status = "processing" || status = "cancelling"', sort: 'created' });
+    const recoveredAt = new Date().toISOString();
+    for (const request of interrupted) {
+      const lastSignal = Date.parse(String(request['heartbeatAt'] || request['startedAt'] || request['created'] || ''));
+      if (Number.isFinite(lastSignal) && Date.now() - lastSignal < 30_000) continue;
+      const cancelled = request['status'] === 'cancelling';
+      const status = cancelled ? 'cancelled' : 'failed';
+      const phase = cancelled ? 'Cancellation completed after observer restart' : 'Interrupted by observer restart';
+      const error = cancelled ? '' : 'The observer process restarted before this investigation completed. Start a new scan to continue.';
+      await this.client.collection('scanRequests').update(request.id, { status, completedAt: recoveredAt, heartbeatAt: recoveredAt, phase, error });
+      await this.client.collection('targets').update(request['target'], { status: 'observed' });
+      try {
+        const scan = await this.client.collection('scans').getFirstListItem(this.client.filter('request = {:request} && status = "running"', { request: request.id }));
+        await this.client.collection('scans').update(scan.id, { status, completedAt: recoveredAt, ...(error ? { error } : { summary: 'Investigation cancellation completed after the observer restarted.' }) });
+      } catch { /* A claimed request can be interrupted before its scan record is created. */ }
+    }
   }
 
   async nextRequest(): Promise<RecordModel | null> {
