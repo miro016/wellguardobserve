@@ -44,11 +44,12 @@ export class TopologyService {
 
     const cloudflare = lower.includes('cloudflare');
     const network = networkRegistration?.networks?.find((item) => item.name || item.handle);
-    const edgeId = cloudflare ? 'edge-cloudflare' : 'edge-unknown';
+    const providerLabel = cloudflare ? 'Cloudflare' : network?.name || network?.handle || 'Public edge';
+    const edgeId = cloudflare ? 'edge-cloudflare' : network ? 'edge-registered' : 'edge-unknown';
     nodes.push({
-      id: edgeId, kind: 'edge', label: cloudflare ? 'Cloudflare' : 'Public edge', subtitle: cloudflare ? 'Proxy / tunnel provider' : 'Provider unresolved', state: cloudflare ? 'healthy' : 'unknown', x: 27, y: 48,
+      id: edgeId, kind: 'edge', label: providerLabel, subtitle: cloudflare ? 'Proxy / tunnel provider' : network ? 'Registered public network' : 'Provider unresolved', state: cloudflare ? 'healthy' : network ? 'observed' : 'unknown', x: 27, y: 48,
       details: [
-        { label: 'Provider', value: cloudflare ? 'Cloudflare' : 'Not identified', evidence: cloudflare ? 'DNS and HTTP observations contain Cloudflare network indicators.' : 'No provider fingerprint was retained.' },
+        { label: 'Provider', value: providerLabel, evidence: cloudflare ? 'DNS and HTTP observations contain Cloudflare network indicators.' : network ? 'Public IP registration returned by RDAP.' : 'No provider fingerprint was retained.' },
         { label: 'Registered network', value: network?.name || network?.handle || 'Not observed', evidence: network ? `IP RDAP for ${network.address || 'the resolved address'}; source ${network.source || 'registry service'}.` : 'No IP-registration evidence is available.' },
         { label: 'Public range', value: network?.startAddress && network?.endAddress ? `${network.startAddress} – ${network.endAddress}` : 'Not observed', evidence: network ? 'Range returned by the public IP RDAP registry.' : 'No network range was retained.' },
         { label: 'Registration country', value: network?.country || 'Not published', evidence: network ? 'Registry country metadata; this is not treated as physical server geolocation.' : 'No network registration was retained.' },
@@ -181,6 +182,10 @@ export class TopologyService {
         const distinctPort = port !== 80 && port !== 443;
         if (!product && !distinctPort) continue;
         const label = product ? this.productName(product) : clean(result.signals?.title) || `${url.protocol.replace(':', '').toUpperCase()} service`;
+        if (product) {
+          const genericIndex = services.findIndex((service) => service.hostname === url.hostname && service.port === port && !(service.productHints || []).length);
+          if (genericIndex >= 0) services.splice(genericIndex, 1);
+        }
         const duplicate = services.some((service) => service.hostname === url.hostname && service.port === port && (service.label.toLowerCase() === label.toLowerCase() || Boolean(product && service.productHints?.includes(product))));
         if (duplicate) continue;
         services.push({
@@ -198,9 +203,10 @@ export class TopologyService {
       const strongestFinding = strongest(serviceFindings);
       const id = `service-${index}`;
       const stack = service.technologies || [];
-      nodes.push({ id, kind: 'service', label: service.label, subtitle: stack.length ? `${service.hostname} · ${stack.map((technology) => technology.name).join(' + ')}` : service.hostname, state: strongestFinding ? severityState(strongestFinding.severity) : 'observed', x: 88, y: services.length === 1 ? 48 : 5 + index * (90 / Math.max(1, services.length - 1)), details: [
+      const endpoint = `${service.hostname}${service.port === 443 ? '' : `:${service.port}`}`;
+      nodes.push({ id, kind: 'service', label: service.label, subtitle: stack.length ? `${endpoint} · ${stack.map((technology) => technology.name).join(' + ')}` : endpoint, state: strongestFinding ? severityState(strongestFinding.severity) : 'observed', x: 88, y: services.length === 1 ? 48 : 5 + index * (90 / Math.max(1, services.length - 1)), details: [
         { label: 'Product', value: service.label, evidence: service.evidence },
-        { label: 'Endpoint', value: service.hostname, evidence: `Verified as distinct from the ${target.hostname} root response.` },
+        { label: 'Endpoint', value: endpoint, evidence: `Verified as distinct from the ${target.hostname} root response or its default listener.` },
         { label: 'Technology stack', value: stack.length ? stack.map((technology) => technology.name).join(' · ') : 'Not observed', evidence: stack.length ? stack.map((technology) => technology.evidence).join(' ') : 'No reliable framework, generator, or server marker was retained.' },
         { label: 'HTTP observation', value: service.status ? `Status ${service.status}` : 'Observed', evidence: service.evidence },
         { label: 'Canonical location', value: service.location || 'No redirect observed', evidence: service.location ? 'Location header returned by the service.' : 'No canonical redirect was retained.' },
