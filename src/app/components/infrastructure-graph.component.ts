@@ -181,7 +181,8 @@ export class InfrastructureGraphComponent {
       services: ['domain', 'hostname', 'service'],
       infrastructure: ['domain', 'hostname', 'edge', 'network', 'server']
     };
-    const visibleNodes = topology.nodes.filter((node) => kinds[view].includes(node.kind));
+    const domainLabels = new Set(topology.nodes.filter((node) => node.kind === 'domain').map((node) => node.label.toLowerCase().replace(/\.$/, '')));
+    const visibleNodes = topology.nodes.filter((node) => kinds[view].includes(node.kind) && !(node.kind === 'hostname' && domainLabels.has(node.label.toLowerCase().replace(/\.$/, ''))));
     const visible = new Set(visibleNodes.map((node) => node.id));
     const outgoing = new Map<string, TopologyEdge[]>();
     for (const edge of topology.edges) outgoing.set(edge.from, [...(outgoing.get(edge.from) || []), edge]);
