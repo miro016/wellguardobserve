@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { COMPLIANCE_REFERENCES, complianceCatalog, frameworkReferenceSchema, frameworkReferences } from './compliance';
+import { z } from 'zod';
+import { COMPLIANCE_REFERENCES, complianceCatalog, frameworkReferenceInputs, frameworkReferenceInputSchema, frameworkReferenceSchema, frameworkReferences } from './compliance';
 
 describe('security framework reference catalog', () => {
   test('keeps references canonical, versioned, and directly linkable', () => {
@@ -16,5 +17,14 @@ describe('security framework reference catalog', () => {
     expect(parsed.title).toBe('Testing for Cookies Attributes');
     expect(() => frameworkReferenceSchema.parse({ control: 'CRA-passed' })).toThrow();
     expect(frameworkReferences('CRA-II-3')[0]?.relationship).toBe('regulatory-relevance');
+  });
+
+  test('keeps the model tool input representable as JSON Schema', () => {
+    expect(() => z.toJSONSchema(frameworkReferenceInputSchema)).not.toThrow();
+  });
+
+  test('maps internal canonical references back to model input ids', () => {
+    expect(frameworkReferenceInputs(frameworkReferences('CRA-I-2j'))).toEqual([{ control: 'CRA-I-2j' }]);
+    expect(frameworkReferenceInputs([{ control: 'WSTG-SESS-02' }])).toEqual([{ control: 'WSTG-SESS-02' }]);
   });
 });

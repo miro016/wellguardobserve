@@ -26,7 +26,7 @@ import type { AdapterResult } from './adapters/types';
 import type { AgentAction, AgentFinding, AgentMessage, AuthorizedTarget, InvestigationReport, TlsEvidence } from './types';
 import { buildAssetGraph } from './asset-graph';
 import { AGENT_SCAN_PROFILES, type AgentScanProfile } from './profiles';
-import { complianceCatalog, frameworkReferenceSchema } from './compliance';
+import { complianceCatalog, frameworkReferenceInputs, frameworkReferenceInputSchema, frameworkReferences } from './compliance';
 import { customerNarrativeFor } from './customer-narrative';
 
 const SYSTEM_PROMPT = `You are Wellguard Observe, a defensive external-exposure investigator working only on infrastructure its owner authorized.
@@ -37,7 +37,9 @@ Drive the investigation adaptively. Begin with DNS, DNS posture, authoritative d
 
 Review every verified service host returned by discover_service_hosts and prioritize public administration, monitoring, storage, development, identity and API surfaces. Inspect DNS and public network registration for each separately approved exact hostname and for a distinct service host when its address attribution is relevant. Compare retained technology markers and confidence scores so pages with similar titles remain distinct by observed stack. Treat every hostname independently: never transfer a product or version marker between hosts because titles, infrastructure or redirects look similar. The discovery result already contains each host's root response; use deeper tools only when they add evidence. For a JavaScript application or page that appears to call a backend, use inspect_frontend_api once to inspect its shipped same-origin bundles without invoking discovered business operations. Use list_service_adapters to discover installed product inspectors. When direct response evidence matches an inspector's declared products, invoke that inspector exactly once and accept its declared request policy; never select an inspector from a hostname or prompt example. For other identified products, choose only documented unauthenticated metadata paths supported by evidence. For a reachable non-HTTP port that may emit a passive banner, use inspect_service_banner once.
 
-Use inspect_public_directory_index only when robots.txt, a sitemap, or direct page evidence has already exposed a directory-shaped path. It records a generated index and filenames but never downloads a listed file. Use profile-gated checks selectively. inspect_safe_web_audit and inspect_reviewed_nuclei use reviewed fixed GET templates and record strict matches themselves. inspect_unknown_web_service is for a meaningful unidentified web surface after normal fingerprinting. inspect_browser_session_controls may review an important application response. inspect_input_error_handling is permitted only on a previously observed anonymous read-only path and parameter; it cannot prove SQL injection. inspect_rate_limit_controls is permitted once per important host on a previously observed anonymous read-only path; absence of HTTP 429 under ten requests is not a defect by itself. Do not run active validation indiscriminately across every host.
+Use inspect_public_directory_index only when robots.txt, a sitemap, or direct page evidence has already exposed a directory-shaped path. It records a generated index and filenames but never downloads a listed file. After a listing is confirmed, do not request a nested entry or any listed file with another tool; filenames are sufficient evidence. Use profile-gated checks selectively. inspect_safe_web_audit and inspect_reviewed_nuclei use reviewed fixed GET templates and record strict matches themselves. inspect_unknown_web_service is for a meaningful unidentified web surface after normal fingerprinting. inspect_browser_session_controls may review an important application response. inspect_input_error_handling is permitted only on a previously observed anonymous read-only path and parameter; it cannot prove SQL injection. inspect_rate_limit_controls is permitted once per important host on a previously observed anonymous read-only path; absence of HTTP 429 under ten requests is not a defect by itself. Do not run active validation indiscriminately across every host.
+
+Automatic suggestedFindings from a fixed tool are the authoritative threshold for that tool's strict condition. When suggestedFindings is empty, do not promote the same observation into a weakness without materially different independent evidence. In particular, Access-Control-Allow-Origin: * without Access-Control-Allow-Credentials does not establish a credentialed cross-origin vulnerability and must not be mapped to CWE-942.
 
 Map observed configuration weaknesses to specific mappable CWE weakness IDs and verify their names with query_cwe when useful. A CWE classifies the underlying weakness; it is not proof of exploitability. Only search vulnerability databases after an exact product version has been directly observed. Treat NVD/OSV results as candidates until edition and version ranges match. Record only confirmed matching CVE identifiers; do not attach CVEs based on a product name alone.
 
@@ -62,7 +64,7 @@ const findingSchema = z.object({
   sourceUrls: z.array(z.string().url()).max(8).default([]),
   cveIds: z.array(z.string().regex(/^CVE-\d{4}-\d{4,}$/i)).max(20).default([]),
   weaknessIds: z.array(z.string().regex(/^CWE-\d+$/i)).max(20).default([]),
-  frameworkRefs: z.array(frameworkReferenceSchema).max(8).default([]),
+  frameworkRefs: z.array(frameworkReferenceInputSchema).max(8).default([]),
   assetKey: z.string().max(500).default(''),
   relatedAssetKeys: z.array(z.string().max(500)).max(30).default([]),
   relationKey: z.string().max(500).default('')
@@ -113,14 +115,22 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
   const actions: AgentAction[] = [];
   const findings: AgentFinding[] = [];
   const tlsEvidence: TlsEvidence[] = [];
+  const completedToolResults = new Map<string, string>();
+  const protectedDirectoryPrefixes: Array<{ hostname: string; port: number; path: string }> = [];
   const profile = options.profile ?? AGENT_SCAN_PROFILES.standard;
   const maxActions = options.maxActions ?? profile.maxActions;
 
   async function recordFinding(value: unknown): Promise<AgentFinding> {
-    const normalized = findingSchema.parse(value) as AgentFinding;
+    const candidate = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+    const parsed = findingSchema.parse({ ...candidate, frameworkRefs: frameworkReferenceInputs(candidate['frameworkRefs']) });
+    const normalized = { ...parsed, frameworkRefs: frameworkReferences(...parsed.frameworkRefs.map((reference) => reference.control)) } as AgentFinding;
     normalized.customerNarrative = customerNarrativeFor(normalized);
     const sameWordPressUserExposure = (item: AgentFinding) => item.asset === normalized.asset && /wordpress rest api/i.test(item.title) && /(?:user|account) identifier|enumerat(?:es|ion)/i.test(item.title) && /wordpress rest api/i.test(normalized.title) && /(?:user|account) identifier|enumerat(?:es|ion)/i.test(normalized.title);
-    const duplicate = findings.find((item) => (item.asset === normalized.asset && item.title.toLowerCase() === normalized.title.toLowerCase()) || sameWordPressUserExposure(item));
+    const sameDirectoryExposure = (item: AgentFinding) => item.weaknessIds.includes('CWE-548')
+      && normalized.weaknessIds.includes('CWE-548')
+      && findingHostname(item.asset) === findingHostname(normalized.asset)
+      && findingEvidencePath(item) === findingEvidencePath(normalized);
+    const duplicate = findings.find((item) => (item.asset === normalized.asset && item.title.toLowerCase() === normalized.title.toLowerCase()) || sameWordPressUserExposure(item) || sameDirectoryExposure(item));
     if (duplicate) return duplicate;
     findings.push(normalized);
     const action: AgentAction = { tool: 'record_finding', input: { title: normalized.title, severity: normalized.severity, assetKey: normalized.assetKey, relatedAssetKeys: normalized.relatedAssetKeys, relationKey: normalized.relationKey, cveIds: normalized.cveIds, weaknessIds: normalized.weaknessIds, frameworkRefs: normalized.frameworkRefs?.map((reference) => reference.control) || [] }, summary: normalized.summary, at: new Date().toISOString() };
@@ -131,14 +141,33 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
   async function tracked<T>(toolName: string, input: Record<string, unknown>, operation: () => Promise<T>, after?: (output: T) => void | Promise<void>): Promise<string> {
     options.signal?.throwIfAborted();
     if (actions.length >= maxActions) throw new Error(`Investigation action budget of ${maxActions} was exhausted.`);
+    const resultKey = `${toolName}:${stableStringify(input)}`;
+    const cached = completedToolResults.get(resultKey);
+    if (cached !== undefined) {
+      const action: AgentAction = { tool: toolName, input, summary: 'Duplicate network or source call skipped; the previous bounded result was returned from this investigation cache.', at: new Date().toISOString() };
+      actions.push(action); await options.onAction?.(action); await options.onProgress?.(`Skipped duplicate ${toolName}`);
+      return cached;
+    }
+    const path = typeof input['path'] === 'string' ? input['path'] : '';
+    const hostname = scope.assertHostname(typeof input['hostname'] === 'string' ? input['hostname'] : undefined);
+    const port = Number(input['port'] || (input['tls'] === false ? 80 : 443));
+    const protectedDirectory = path ? protectedDirectoryPrefixes.find((item) => item.hostname === hostname && item.port === port && path !== item.path && path.startsWith(`${item.path}/`)) : undefined;
+    if (protectedDirectory) {
+      const skipped = stringify({ skipped: true, reason: `The path is beneath confirmed public directory index ${protectedDirectory.path}; listed entries are evidence only and may not be requested.` });
+      const action: AgentAction = { tool: toolName, input, summary: skipped, at: new Date().toISOString() };
+      actions.push(action); await options.onAction?.(action); await options.onProgress?.(`Blocked listed-entry request by ${toolName}`);
+      return skipped;
+    }
     await options.onProgress?.(`Running ${toolName}`);
     const output = await operation();
     options.signal?.throwIfAborted();
-    const action: AgentAction = { tool: toolName, input, summary: stringify(output).slice(0, 28_000), at: new Date().toISOString() };
+    const serialized = stringify(output);
+    const action: AgentAction = { tool: toolName, input, summary: serialized.slice(0, 28_000), at: new Date().toISOString() };
     actions.push(action); await options.onAction?.(action);
     await after?.(output);
+    completedToolResults.set(resultKey, serialized);
     await options.onProgress?.(`Reviewing ${toolName} evidence`);
-    return stringify(output);
+    return serialized;
   }
 
   const tools = [
@@ -285,6 +314,10 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), paths: z.array(z.enum(PUBLIC_METADATA_PATHS)).max(8).optional() })
     }),
     tool(async ({ hostname, port, tls, path }) => tracked('inspect_public_directory_index', { hostname, port, tls, path }, () => inspectPublicDirectoryIndex(scope, { hostname, port, tls, path }), async (result) => {
+      if (result.identified) {
+        const observedPath = new URL(result.requestedUrl).pathname.replace(/\/$/, '') || '/';
+        protectedDirectoryPrefixes.push({ hostname: result.hostname, port, path: observedPath });
+      }
       for (const finding of result.suggestedFindings) await recordFinding(finding);
     }), {
       name: 'inspect_public_directory_index',
@@ -410,4 +443,24 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
 
   const graph = buildAssetGraph(target, actions, findings, tlsEvidence);
   return { target, summary: messageText(result), findings, actions, conversation, tls: tlsEvidence, ...graph, startedAt, completedAt: new Date().toISOString() };
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`).join(',')}}`;
+  return JSON.stringify(value);
+}
+
+function findingHostname(asset: string): string {
+  try { return new URL(asset.includes('://') ? asset : `https://${asset}`).hostname.toLowerCase(); }
+  catch { return asset.toLowerCase().split(':')[0] || asset.toLowerCase(); }
+}
+
+function findingEvidencePath(finding: AgentFinding): string {
+  for (const line of finding.evidence) {
+    const raw = line.match(/https?:\/\/[^\s“”"']+/i)?.[0]?.replace(/[.,;)]+$/, '');
+    if (!raw) continue;
+    try { return new URL(raw).pathname.replace(/\/$/, '') || '/'; } catch { /* Try the next evidence line. */ }
+  }
+  return '';
 }

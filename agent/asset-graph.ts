@@ -254,8 +254,11 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
   }
 
   const serviceForFinding = (finding: AgentFinding) => {
-    const hostname = clean(finding.asset).replace(/^https?:\/\//, '').replace(/[/:].*$/, '').toLowerCase();
-    const candidates = [...assets.values()].filter((asset) => asset.kind === 'service' && asset.subtitle.toLowerCase().startsWith(hostname));
+    const endpoint = findingEndpoint(finding.asset);
+    const hostname = endpoint.hostname;
+    const candidates = [...assets.values()].filter((asset) => asset.kind === 'service'
+      && asset.subtitle.toLowerCase().startsWith(hostname)
+      && (endpoint.port == null || asset.key.startsWith(`service:${hostname}:${endpoint.port}:`)));
     const product = candidates.find((asset) => finding.title.toLowerCase().includes(asset.label.toLowerCase()));
     return (product || candidates[0])?.key || (assets.has(hostKey(hostname)) ? hostKey(hostname) : domainKey);
   };
@@ -264,11 +267,15 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
     const suggestedAssetKey = serviceForFinding(finding);
     const requestedAsset = finding.assetKey ? assets.get(finding.assetKey) : undefined;
     const suggestedAsset = assets.get(suggestedAssetKey);
+    const endpoint = findingEndpoint(finding.asset);
+    const requestedServicePort = finding.assetKey?.match(/^service:.+:(\d+):/)?.[1];
+    const endpointMismatch = endpoint.port != null && requestedServicePort != null && Number(requestedServicePort) !== endpoint.port;
     const namesObservedService = suggestedAsset?.kind === 'service'
       && !['Web application', 'Website'].includes(suggestedAsset.label)
       && `${finding.title} ${finding.summary}`.toLowerCase().includes(suggestedAsset.label.toLowerCase());
-    if (!requestedAsset || ((requestedAsset.kind === 'domain' || requestedAsset.kind === 'hostname') && namesObservedService)) finding.assetKey = suggestedAssetKey;
-    finding.relatedAssetKeys ||= []; finding.relationKey ||= '';
+    if (!requestedAsset || endpointMismatch || ((requestedAsset.kind === 'domain' || requestedAsset.kind === 'hostname') && namesObservedService)) finding.assetKey = suggestedAssetKey;
+    finding.relatedAssetKeys = [...new Set((finding.relatedAssetKeys || []).filter((key) => assets.has(key) && key !== finding.assetKey))];
+    if (!finding.relationKey || !relations.has(finding.relationKey)) finding.relationKey = '';
     const asset = finding.assetKey ? assets.get(finding.assetKey) : undefined; if (asset) asset.state = strongerState(asset.state, severityState(finding.severity));
     const relation = finding.relationKey ? relations.get(finding.relationKey) : null;
     if (relation) { relation.state = strongerState(relation.state, severityState(finding.severity)); relation.findingTitles.push(finding.title); }
@@ -276,4 +283,13 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
   }
 
   return { assets: [...assets.values()], relations: [...relations.values()], identities: [...identities.values()] };
+}
+
+function findingEndpoint(value: string): { hostname: string; port: number | null } {
+  try {
+    const url = new URL(value.includes('://') ? value : `https://${value}`);
+    return { hostname: url.hostname.toLowerCase(), port: url.port ? Number(url.port) : null };
+  } catch {
+    return { hostname: clean(value).replace(/^https?:\/\//, '').replace(/[/:].*$/, '').toLowerCase(), port: null };
+  }
 }

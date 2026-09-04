@@ -102,4 +102,21 @@ describe('explicit asset graph', () => {
     expect(service?.label).toBe('Metabase');
     expect(service?.details.some((detail) => detail.label === 'Favicon SHA-256')).toBeTrue();
   });
+
+  test('corrects a model-supplied service key when the finding names another observed port', () => {
+    const actions = [
+      action('discover_service_hosts', {}, { root: { hostname: 'example.com', status: 200, title: 'App', serviceWords: [], technologies: [{ name: 'Angular' }] }, serviceHosts: [] }),
+      action('inspect_service_banner', { hostname: 'example.com', port: 22 }, { hostname: 'example.com', port: 22, protocolHint: 'ssh', note: 'Only a passive banner was retained.', fingerprinting: { matches: [] } })
+    ];
+    const findings: AgentFinding[] = [{
+      title: 'SSH service publicly reachable', summary: 'The passive SSH banner was visible.', severity: 'info', confidence: 100,
+      asset: 'example.com:22', assetKey: 'service:example.com:443:angular', relatedAssetKeys: ['service:example.com:443:not-real'], relationKey: 'not-real',
+      evidence: ['SSH banner on port 22.'], remediation: 'Review whether SSH must be public.', sourceUrls: [], cveIds: [], weaknessIds: ['CWE-200']
+    }];
+    const graph = buildAssetGraph(target, actions, findings, []);
+    expect(findings[0]?.assetKey).toBe('service:example.com:22:unknown-ssh-service');
+    expect(findings[0]?.relatedAssetKeys).toEqual([]);
+    expect(findings[0]?.relationKey).toBe('');
+    expect(graph.assets.find((asset) => asset.key === findings[0]?.assetKey)?.state).toBe('observed');
+  });
 });

@@ -87,12 +87,25 @@ export const COMPLIANCE_REFERENCES = {
 export type ComplianceReferenceId = keyof typeof COMPLIANCE_REFERENCES;
 const referenceIds = Object.keys(COMPLIANCE_REFERENCES) as [ComplianceReferenceId, ...ComplianceReferenceId[]];
 
-export const frameworkReferenceSchema = z.object({
+export const frameworkReferenceInputSchema = z.object({
   control: z.enum(referenceIds).describe('Use only a control identifier returned by list_security_framework_references.')
-}).transform(({ control }) => ({ ...COMPLIANCE_REFERENCES[control] }));
+});
+
+export const frameworkReferenceSchema = frameworkReferenceInputSchema.transform(({ control }) => ({ ...COMPLIANCE_REFERENCES[control] }));
 
 export function frameworkReferences(...ids: ComplianceReferenceId[]): FrameworkReference[] {
   return ids.map((id) => ({ ...COMPLIANCE_REFERENCES[id] }));
+}
+
+export function frameworkReferenceInputs(value: unknown): Array<{ control: ComplianceReferenceId }> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const control = String((item as Record<string, unknown>)['control'] || '');
+    if (control in COMPLIANCE_REFERENCES) return [{ control: control as ComplianceReferenceId }];
+    const match = (Object.entries(COMPLIANCE_REFERENCES) as Array<[ComplianceReferenceId, FrameworkReference]>).find(([, reference]) => reference.control === control);
+    return match ? [{ control: match[0] }] : [];
+  }).slice(0, 8);
 }
 
 export function complianceCatalog() {

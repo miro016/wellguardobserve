@@ -20,7 +20,9 @@ export function customerNarrativeFor(finding: NarrativeInput): CustomerNarrative
 }
 
 function simpleObservation(text: string, fallback: string): string {
-  if (/administration|admin(?:istrative)? surface|management (?:interface|surface)|login page|sign-in/.test(text)) return 'A management or sign-in surface is reachable from the public internet.';
+  if (/file browser|file manager/.test(text)) return 'A file-management service is reachable from the public internet.';
+  if (/directory (?:index|listing)/.test(text)) return 'Anyone can browse a public file list, including names that may reveal backups or operational material.';
+  if (/administration|admin(?:istrative)? surface|management (?:interface|surface|ui)|control panel|login page|sign-in/.test(text)) return 'A management or sign-in surface is reachable from the public internet.';
   if (/credential|secret|\.env|git metadata|terminal history|environment data/.test(text)) return 'An anonymous visitor can reach information that may contain operational or access details.';
   if (/user identifier|author enumeration|public user|email-like/.test(text)) return 'The service publishes names or account identifiers to anonymous visitors.';
   if (/cookie|session/.test(text)) return 'The application issued a browser session marker with a protection that needs review.';
@@ -33,7 +35,9 @@ function simpleObservation(text: string, fallback: string): string {
 }
 
 function possibleStep(text: string): string {
-  if (/administration|admin(?:istrative)? surface|management (?:interface|surface)|login page|sign-in/.test(text)) return 'Someone could identify it as a high-value entry point and try stolen, reused, or unchanged credentials. If access existed, what they could do next would depend on that account’s permissions.';
+  if (/file browser|file manager/.test(text)) return 'Someone could try stolen, reused, or unchanged credentials. If accepted, they could view or replace files within that account’s configured access.';
+  if (/directory (?:index|listing)/.test(text)) return 'Someone could select promising backup or credential-store names and attempt to retrieve them; any still-valid detail could then be tried against a connected service.';
+  if (/administration|admin(?:istrative)? surface|management (?:interface|surface|ui)|control panel|login page|sign-in/.test(text)) return 'Someone could identify it as a high-value entry point and try stolen, reused, or unchanged credentials. If access existed, what they could do next would depend on that account’s permissions.';
   if (/credential|secret|\.env|git metadata|terminal history|environment data/.test(text)) return 'Someone could use any still-valid detail to enter this service or another connected service, then look for broader access.';
   if (/user identifier|author enumeration|public user|email-like/.test(text)) return 'Someone could use the published identities for convincing phishing, password reuse attempts, or more focused login targeting.';
   if (/cookie|session|cross-origin|\bcors\b/.test(text)) return 'Under additional conditions, a malicious site or an unsafe connection could interfere with a user’s authenticated browser session.';
@@ -45,6 +49,8 @@ function possibleStep(text: string): string {
 }
 
 function impact(severity: AgentFinding['severity'], text: string): string {
+  if (/file browser|file manager/.test(text)) return 'If the account or file scope were over-privileged, files used by other applications or the host could be exposed or changed.';
+  if (/directory (?:index|listing)/.test(text)) return 'If a listed file were retrievable and contained live secrets, the consequence could spread from this website to accounts, data, or connected systems.';
   if (/credential|secret|\.env|git metadata|terminal history/.test(text)) return 'If the exposed details remained valid, the consequence could extend beyond this service to data loss or access to connected systems.';
   if (/administration|management (?:interface|surface)/.test(text)) return 'If a valid account were obtained, the consequence could include configuration changes, data access, or control of functions available to that account.';
   if (severity === 'critical' || severity === 'high') return 'If the full path succeeded, it could lead to unauthorized control, sensitive-data exposure, or disruption of the service.';
