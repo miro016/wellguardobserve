@@ -9,7 +9,7 @@ const clean = (value: unknown) => String(value ?? '').trim();
 @Injectable({ providedIn: 'root' })
 export class TopologyService {
   build(target: Target, findings: Finding[], tls: TlsObservation | null, actions: AgentActionRecord[], explicitAssets: AssetRecord[] = [], explicitRelations: AssetRelationRecord[] = []): Topology {
-    if (explicitAssets.length) return this.buildExplicit(findings, explicitAssets, explicitRelations);
+    if (explicitAssets.length) return this.buildExplicit(target, findings, explicitAssets, explicitRelations);
     const corpus = [target.hostname, ...findings.flatMap((f) => [f.title, f.summary, f.asset, ...f.evidence]), ...actions.flatMap((a) => [a.tool, a.summary])].join('\n');
     const lower = corpus.toLowerCase();
     const nodes: TopologyNode[] = [];
@@ -224,7 +224,7 @@ export class TopologyService {
     return { nodes, edges };
   }
 
-  private buildExplicit(findings: Finding[], assets: AssetRecord[], relations: AssetRelationRecord[]): Topology {
+  private buildExplicit(target: Target, findings: Finding[], assets: AssetRecord[], relations: AssetRelationRecord[]): Topology {
     const columns: Record<NodeKind, number> = { domain: 9, hostname: 23, edge: 36, network: 50, server: 64, port: 78, service: 91 };
     const groups = new Map<NodeKind, AssetRecord[]>();
     for (const asset of assets) groups.set(asset.kind, [...(groups.get(asset.kind) || []), asset]);
@@ -247,11 +247,19 @@ export class TopologyService {
       });
     }
     const nodeKeys = new Set(nodes.map((node) => node.id));
-    const edges = relations.filter((relation) => nodeKeys.has(relation.fromKey) && nodeKeys.has(relation.toKey)).map((relation) => ({
+    const edges: TopologyEdge[] = relations.filter((relation) => nodeKeys.has(relation.fromKey) && nodeKeys.has(relation.toKey)).map((relation) => ({
       id: relation.key, from: relation.fromKey, to: relation.toKey, label: relation.label, type: relation.type,
       state: relation.state, confidence: relation.confidence, basis: relation.basis, evidence: relation.evidence,
       findingIds: findings.filter((finding) => finding.relationKey === relation.key || relation.findingTitles.includes(finding.title)).map((finding) => finding.id)
     }));
+    const root = nodes.find((node) => node.kind === 'domain' && node.label.toLowerCase() === target.hostname.toLowerCase()) || nodes.find((node) => node.kind === 'domain');
+    if (root) for (const hostname of nodes.filter((node) => node.kind === 'hostname')) {
+      if (edges.some((edge) => edge.to === hostname.id)) continue;
+      const isSubdomain = hostname.label.toLowerCase().endsWith(`.${target.hostname.toLowerCase()}`);
+      const exactApproved = target.authorizedHosts.some((value) => value.toLowerCase() === hostname.label.toLowerCase());
+      if (!isSubdomain && !exactApproved) continue;
+      edges.push({ id: `scope:${root.id}:${hostname.id}`, from: root.id, to: hostname.id, label: isSubdomain ? 'within root scope' : 'authorized exact host', type: isSubdomain ? 'within_authorized_root' : 'authorizes', state: 'observed', confidence: 100, basis: 'owner_confirmed', evidence: [isSubdomain ? `${hostname.label} is an observed subdomain of the authorized root ${target.hostname}.` : `${hostname.label} is separately approved exact-host scope.`], findingIds: [] });
+    }
     return { nodes, edges };
   }
 

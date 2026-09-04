@@ -42,7 +42,11 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
     ensureRelation({ key: `authorizes:${domainKey}:${key}`, fromKey: domainKey, toKey: key, type: 'authorizes', label: 'authorized related asset', state: 'observed', confidence: 100, basis: 'owner_confirmed', evidence: ['Administrator approval record links this exact related hostname to the target.'], findingTitles: [] });
   }
   const hostKey = (hostname: string) => hostname === target.hostname ? domainKey : `hostname:${hostname}`;
-  const ensureHost = (hostname: string, evidence = 'Hostname observed during the investigation.') => ensureAsset({ key: hostKey(hostname), kind: hostname === target.hostname ? 'domain' : 'hostname', label: hostname, subtitle: hostname === target.hostname ? 'Authorized root' : 'Observed hostname', state: 'observed', confidence: 100, basis: 'observed', details: [fact('Hostname', hostname, evidence)] });
+  const ensureHost = (hostname: string, evidence = 'Hostname observed during the investigation.') => {
+    const asset = ensureAsset({ key: hostKey(hostname), kind: hostname === target.hostname ? 'domain' : 'hostname', label: hostname, subtitle: hostname === target.hostname ? 'Authorized root' : 'Observed hostname', state: 'observed', confidence: 100, basis: 'observed', details: [fact('Hostname', hostname, evidence)] });
+    if (hostname !== target.hostname && hostname.endsWith(`.${target.hostname}`)) ensureRelation({ key: `scope-member:${domainKey}:${asset.key}`, fromKey: domainKey, toKey: asset.key, type: 'within_authorized_root', label: 'within root scope', state: 'observed', confidence: 100, basis: 'owner_confirmed', evidence: [`${hostname} is a directly observed subdomain of the administrator-authorized root ${target.hostname}.`], findingTitles: [] });
+    return asset;
+  };
   const rememberAddress = (hostname: string, address: string, evidence: string) => {
     const set = hostnameAddresses.get(hostname) || new Set<string>(); set.add(address); hostnameAddresses.set(hostname, set);
     ensureHost(hostname); const serverKey = `server:${address}`;

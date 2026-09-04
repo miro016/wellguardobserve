@@ -37,6 +37,7 @@ describe('explicit asset graph', () => {
     expect(findings[0]?.assetKey).toBe('service:login.example.com:443:keycloak');
     expect(findings[1]?.assetKey).toBe('domain:example.com');
     expect(graph.assets.find((asset) => asset.key === 'domain:example.com')?.state).toBe('warning');
+    expect(graph.relations.some((relation) => relation.type === 'within_authorized_root' && relation.toKey === 'hostname:login.example.com')).toBeTrue();
   });
 
   test('attaches a service disclosure to the relationship and both participating assets', () => {
