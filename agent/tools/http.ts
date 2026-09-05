@@ -165,13 +165,20 @@ export async function requestAuthorizedJsonPost(scope: ScopeGuard, input: { host
   const bodyLimit = Math.max(1, Math.min(MAX_EXTENDED_BODY_BYTES, Math.floor(input.maxBodyBytes || 32 * 1024)));
   const body = Buffer.from(JSON.stringify(payload));
   if (body.byteLength > 2048) throw new Error('JSON POST payloads are bounded to 2048 bytes.');
-  const [{ address }] = await scope.resolve(hostname);
+  const [{ address, family }] = await scope.resolve(hostname);
   const transport = useTls ? https : http;
   return await new Promise<AuthorizedHttpResponse>((resolve, reject) => {
     const request = transport.request({
       hostname, port, path, method: 'POST', servername: useTls ? hostname : undefined,
       headers: { host: hostname, 'user-agent': 'WellguardObserve/0.1 (+authorized reconnaissance)', 'content-type': 'application/json', 'content-length': String(body.byteLength), accept: 'application/json,text/plain;q=0.8,*/*;q=0.2' },
-      lookup: (_name, _options, callback) => callback(null, address, 4),
+      lookup: (_name, options, callback) => {
+        if (typeof options === 'object' && options.all) {
+          const allCallback = callback as unknown as (error: null, addresses: Array<{ address: string; family: 4 | 6 }>) => void;
+          allCallback(null, [{ address, family }]);
+        } else {
+          callback(null, address, family);
+        }
+      },
       timeout: 8_000, rejectUnauthorized: true
     }, (response) => {
       const chunks: Buffer[] = []; let size = 0; let truncated = false;
@@ -203,13 +210,20 @@ export async function requestAuthorizedFormPost(scope: ScopeGuard, input: { host
   const bodyLimit = Math.max(1, Math.min(MAX_EXTENDED_BODY_BYTES, Math.floor(input.maxBodyBytes || 32 * 1024)));
   const body = Buffer.from(new URLSearchParams(fields).toString());
   if (body.byteLength > 2048) throw new Error('Form POST bodies are bounded to 2048 bytes.');
-  const [{ address }] = await scope.resolve(hostname);
+  const [{ address, family }] = await scope.resolve(hostname);
   const transport = useTls ? https : http;
   return await new Promise<AuthorizedHttpResponse>((resolve, reject) => {
     const request = transport.request({
       hostname, port, path, method: 'POST', servername: useTls ? hostname : undefined,
       headers: { host: hostname, 'user-agent': 'WellguardObserve/0.1 (+authorized reconnaissance)', 'content-type': 'application/x-www-form-urlencoded', 'content-length': String(body.byteLength), accept: 'text/html,application/json,*/*;q=0.8' },
-      lookup: (_name, _options, callback) => callback(null, address, 4),
+      lookup: (_name, options, callback) => {
+        if (typeof options === 'object' && options.all) {
+          const allCallback = callback as unknown as (error: null, addresses: Array<{ address: string; family: 4 | 6 }>) => void;
+          allCallback(null, [{ address, family }]);
+        } else {
+          callback(null, address, family);
+        }
+      },
       timeout: 8_000, rejectUnauthorized: true
     }, (response) => {
       const chunks: Buffer[] = []; let size = 0; let truncated = false;
@@ -238,13 +252,20 @@ export async function requestAuthorizedMethod(scope: ScopeGuard, input: { hostna
   const useTls = input.tls ?? true;
   const port = input.port ?? (useTls ? 443 : 80);
   const path = scope.assertPath(input.path || '/');
-  const [{ address }] = await scope.resolve(hostname);
+  const [{ address, family }] = await scope.resolve(hostname);
   const transport = useTls ? https : http;
   return await new Promise<AuthorizedHttpResponse>((resolve, reject) => {
     const request = transport.request({
       hostname, port, path, method, servername: useTls ? hostname : undefined,
       headers: { host: hostname, 'user-agent': 'WellguardObserve/0.1 (+authorized reconnaissance)', accept: '*/*' },
-      lookup: (_name, _options, callback) => callback(null, address, 4),
+      lookup: (_name, options, callback) => {
+        if (typeof options === 'object' && options.all) {
+          const allCallback = callback as unknown as (error: null, addresses: Array<{ address: string; family: 4 | 6 }>) => void;
+          allCallback(null, [{ address, family }]);
+        } else {
+          callback(null, address, family);
+        }
+      },
       timeout: 8_000, rejectUnauthorized: true
     }, (response) => {
       const chunks: Buffer[] = []; let size = 0; let truncated = false;
