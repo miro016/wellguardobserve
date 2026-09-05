@@ -68,7 +68,7 @@ export class InvestigationStore {
   }
 
   async saveAction(targetId: string, scanId: string, action: AgentAction): Promise<void> {
-    await this.client.collection('agentActions').create({ target: targetId, scan: scanId, tool: action.tool, input: action.input, summary: action.summary, occurredAt: action.at });
+    await this.client.collection('agentActions').create({ target: targetId, scan: scanId, tool: action.tool, input: action.input, summary: action.summary.slice(0, 5000), occurredAt: action.at });
   }
 
   async saveMessage(targetId: string, scanId: string, message: AgentMessage): Promise<void> {
@@ -130,7 +130,7 @@ export class InvestigationStore {
     }
     const posture = Math.max(0, 100 - report.findings.reduce((sum, finding) => sum + ({ critical: 35, high: 22, medium: 11, low: 4, info: 0 })[finding.severity], 0));
     await this.client.collection('targets').update(report.target.id, { lastScanAt: report.completedAt, findingCount: report.findings.filter((item) => item.severity !== 'info').length, assetCount: Math.max(1, report.assets.length), posture, status: 'observed' });
-    await this.client.collection('scans').update(scan.id, { status: 'completed', completedAt: report.completedAt, summary: report.summary });
+    await this.client.collection('scans').update(scan.id, { status: 'completed', completedAt: report.completedAt, summary: report.summary.slice(0, 4000) });
     await this.client.collection('scanRequests').update(request.id, { status: 'completed', completedAt: report.completedAt, heartbeatAt: report.completedAt, phase: 'Evidence retained' });
   }
 
