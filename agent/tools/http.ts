@@ -157,6 +157,44 @@ export function extractSignals(raw: string, headers: Record<string, string> = {}
   return { title, generator, urls, ipv4, serviceWords, assets, technologies, textSample };
 }
 
+export async function requestAuthorizedJsonPost(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; path?: string; maxBodyBytes?: number }, payload: Record<string, string>): Promise<AuthorizedHttpResponse> {
+  const hostname = scope.assertHostname(input.hostname);
+  const useTls = input.tls ?? true;
+  const port = input.port ?? (useTls ? 443 : 80);
+  const path = scope.assertPath(input.path || '/');
+  const bodyLimit = Math.max(1, Math.min(MAX_EXTENDED_BODY_BYTES, Math.floor(input.maxBodyBytes || 32 * 1024)));
+  const body = Buffer.from(JSON.stringify(payload));
+  if (body.byteLength > 2048) throw new Error('JSON POST payloads are bounded to 2048 bytes.');
+  const [{ address }] = await scope.resolve(hostname);
+  const transport = useTls ? https : http;
+  return await new Promise<AuthorizedHttpResponse>((resolve, reject) => {
+    const request = transport.request({
+      hostname, port, path, method: 'POST', servername: useTls ? hostname : undefined,
+      headers: { host: hostname, 'user-agent': 'WellguardObserve/0.1 (+authorized reconnaissance)', 'content-type': 'application/json', 'content-length': String(body.byteLength), accept: 'application/json,text/plain;q=0.8,*/*;q=0.2' },
+      lookup: (_name, _options, callback) => callback(null, address, 4),
+      timeout: 8_000, rejectUnauthorized: true
+    }, (response) => {
+      const chunks: Buffer[] = []; let size = 0; let truncated = false;
+      response.on('data', (chunk: Buffer) => {
+        if (size >= bodyLimit) { truncated = true; return; }
+        const remaining = bodyLimit - size;
+        chunks.push(chunk.subarray(0, remaining)); size += Math.min(chunk.length, remaining);
+        if (chunk.length > remaining) truncated = true;
+      });
+      response.on('end', () => resolve({
+        requestedUrl: `POST ${useTls ? 'https' : 'http'}://${hostname}${port === (useTls ? 443 : 80) ? '' : `:${port}`}${path}`,
+        status: response.statusCode || 0, headers: safeHeaders(response.headers), truncated,
+        cookies: cookieMetadata(response.headers), raw: Buffer.concat(chunks).toString('utf8')
+      }));
+      response.on('error', reject);
+    });
+    request.on('timeout', () => request.destroy(new Error('Request timed out.')));
+    request.on('error', reject);
+    request.write(body);
+    request.end();
+  });
+}
+
 export async function requestAuthorizedHttp(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; path?: string; maxBodyBytes?: number }, controls: AuthorizedRequestControls = {}): Promise<AuthorizedHttpResponse> {
   const response = await requestAuthorizedBytes(scope, input, controls);
   return { ...response, raw: response.body.toString('utf8') };

@@ -17,6 +17,7 @@ import { runNucleiAudit } from './tools/nuclei';
 import { inspectUnknownWebService } from './tools/unknown-web';
 import { inspectBrowserSessionControls, inspectInputErrorHandling, inspectRateLimitControls } from './tools/active-validation';
 import { inspectPublicDirectoryIndex } from './tools/directory-index';
+import { detectJuiceShop, sweepJuiceChallenges } from './tools/juice-shop';
 import { discoverServiceHosts } from './tools/service-hosts';
 import { queryCisaKev, queryCwe, queryGitHubAdvisory, queryGitHubReleases, queryNvdCves, queryOsv, readPublicSource } from './tools/sources';
 import { adapterCatalog, inspectWithAdapter } from './adapters/registry';
@@ -324,6 +325,18 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       description: 'Inspect one directory-shaped path already observed in robots.txt, a sitemap, or direct page evidence. Makes one GET plus at most one same-path slash redirect, confirms a generated directory index, and retains filenames only. It never requests a listed file.',
       schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), path: z.string().min(1).max(300) })
     }),
+    tool(async ({ hostname, port, tls }) => tracked('detect_juice_shop', { hostname, port, tls }, () => detectJuiceShop(scope, { hostname: hostname!, port, tls })), {
+      name: 'detect_juice_shop',
+      description: 'Identify whether an authorized web service is an OWASP Juice Shop training instance and read its public, unauthenticated challenge catalog with solved/unsolved status. GET-only.',
+      schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true) })
+    }),
+    ...(profile.allowJuiceChallengeSweep ? [tool(async ({ hostname, port, tls, includeTrainingCredentials }) => tracked('sweep_juice_challenges', { hostname, port, tls, includeTrainingCredentials }, () => sweepJuiceChallenges(scope, { hostname: hostname!, port, tls }, { includeTrainingCredentials }), async (result) => {
+      for (const finding of ('suggestedFindings' in result ? result.suggestedFindings : [])) await recordFinding(finding);
+    }), {
+      name: 'sweep_juice_challenges',
+      description: 'Active profile only, and only after detect_juice_shop confirms an operator-owned Juice Shop instance. Runs a fixed, bounded list of challenge triggers: read-only GET probes plus login attempts using only the SQL tautology and vendor-shipped training credentials. Solved state is verified solely from the instance own challenge API. Arbitrary payloads, exfiltration, and state-changing app actions are impossible in this tool.',
+      schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), includeTrainingCredentials: z.boolean().default(false).describe('Also try the vendor-shipped training credentials. Defaults to the SQL-tautology probe only.') })
+    })] : []),
     tool(async () => tracked('list_service_adapters', {}, async () => ({ activeProfile: { id: profile.id, name: profile.name, enabledTools: profile.enabledTools, nucleiPolicy: profile.nucleiPolicy }, adapters: adapterCatalog(), specializedInspectors: [{ id: 'wordpress-public-metadata', tool: 'inspect_wordpress', products: ['wordpress'], methods: ['HTTP GET'], requestCeiling: 6, authentication: false }], fingerprintPacks: [fingerprintCatalog(), recogCatalog()], note: 'Inspectors declare their products and bounded behavior. Fingerprints only identify candidates and cannot expand scan scope.' })), {
       name: 'list_service_adapters',
       description: 'List the installed, versioned service adapters and pinned public fingerprint packs available for deeper identification.',

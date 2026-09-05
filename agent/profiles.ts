@@ -6,6 +6,7 @@ export interface AgentScanProfile extends ScanPolicySnapshot {
   allowUnknownWebInspection: boolean;
   allowBrowserSessionReview: boolean;
   allowActiveValidation: boolean;
+  allowJuiceChallengeSweep: boolean;
   agentInstructions: string;
 }
 
@@ -20,21 +21,21 @@ export const AGENT_SCAN_PROFILES: Record<ScanMode, AgentScanProfile> = {
   light: {
     id: 'light', name: 'Baseline', version: VERSION, maxActions: 22, nucleiRequestsPerSecond: 0,
     methods: ['DNS', 'TLS handshake', 'TCP connect', 'HTTP GET'], enabledTools: CORE_TOOLS,
-    nucleiPolicy: 'disabled', consentRequired: false, allowSafeWebAudit: false, allowNucleiAudit: false, allowUnknownWebInspection: false, allowBrowserSessionReview: false, allowActiveValidation: false,
+    nucleiPolicy: 'disabled', consentRequired: false, allowSafeWebAudit: false, allowNucleiAudit: false, allowUnknownWebInspection: false, allowBrowserSessionReview: false, allowActiveValidation: false, allowJuiceChallengeSweep: false,
     agentInstructions: 'Prioritize an essential perimeter inventory. Do not attempt exhaustive follow-up; retain limitations when the budget is insufficient.'
   },
   standard: {
     id: 'standard', name: 'Standard', version: VERSION, maxActions: 68, nucleiRequestsPerSecond: 0,
     methods: ['DNS', 'TLS handshake', 'TCP connect', 'HTTP GET'], enabledTools: [...CORE_TOOLS, 'safe-web-audit-v1', 'browser-session-controls-v1'],
-    nucleiPolicy: 'disabled', consentRequired: false, allowSafeWebAudit: true, allowNucleiAudit: false, allowUnknownWebInspection: false, allowBrowserSessionReview: true, allowActiveValidation: false,
+    nucleiPolicy: 'disabled', consentRequired: false, allowSafeWebAudit: true, allowNucleiAudit: false, allowUnknownWebInspection: false, allowBrowserSessionReview: true, allowActiveValidation: false, allowJuiceChallengeSweep: false,
     agentInstructions: 'Perform adaptive service discovery, use the reviewed safe web audit on higher-value surfaces, and inspect observable cookie and CORS controls on meaningful web applications.'
   },
   extended: {
     id: 'extended', name: 'Active validation', version: VERSION, maxActions: 104, nucleiRequestsPerSecond: 2,
-    methods: ['DNS', 'TLS handshake', 'TCP connect', 'HTTP GET'], enabledTools: [...CORE_TOOLS, 'safe-web-audit-v1', 'browser-session-controls-v1', 'quoted-input-differential-v1', 'bounded-rate-controls-v1', 'reviewed-nuclei-get-v1', 'unknown-web-recognition-v1'],
+    methods: ['DNS', 'TLS handshake', 'TCP connect', 'HTTP GET', 'HTTP POST (training-target JSON login only)'], enabledTools: [...CORE_TOOLS, 'safe-web-audit-v1', 'browser-session-controls-v1', 'quoted-input-differential-v1', 'bounded-rate-controls-v1', 'reviewed-nuclei-get-v1', 'unknown-web-recognition-v1', 'juice-shop-detection-v1', 'juice-challenge-sweep-v1'],
     nucleiPolicy: 'reviewed local templates only; HTTP GET only; no redirects, OOB, code, headless, unsigned downloads, fuzzing or DAST',
-    consentRequired: false, allowSafeWebAudit: true, allowNucleiAudit: true, allowUnknownWebInspection: true, allowBrowserSessionReview: true, allowActiveValidation: true,
-    agentInstructions: 'Use active validation selectively on previously observed anonymous read-only paths: cookie/CORS posture, a fixed three-request quoted-input differential, and a capped sequential throttling/header-trust comparison. Use the reviewed local Nuclei audit and unknown-web recognition where evidence warrants them. Credential attempts remain prohibited.'
+    consentRequired: false, allowSafeWebAudit: true, allowNucleiAudit: true, allowUnknownWebInspection: true, allowBrowserSessionReview: true, allowActiveValidation: true, allowJuiceChallengeSweep: true,
+    agentInstructions: 'Use active validation selectively on previously observed anonymous read-only paths: cookie/CORS posture, a fixed three-request quoted-input differential, and a capped sequential throttling/header-trust comparison. Use the reviewed local Nuclei audit and unknown-web recognition where evidence warrants them. When detect_juice_shop confirms an operator-owned Juice Shop instance, run sweep_juice_challenges to exercise its fixed training challenge list; otherwise credential attempts remain prohibited.'
   }
 };
 
@@ -43,6 +44,6 @@ export function resolveScanProfile(value: unknown): AgentScanProfile {
 }
 
 export function policySnapshot(profile: AgentScanProfile): ScanPolicySnapshot {
-  const { allowSafeWebAudit: _safe, allowNucleiAudit: _nuclei, allowUnknownWebInspection: _unknown, allowBrowserSessionReview: _browser, allowActiveValidation: _active, agentInstructions: _instructions, ...snapshot } = profile;
+  const { allowSafeWebAudit: _safe, allowNucleiAudit: _nuclei, allowUnknownWebInspection: _unknown, allowBrowserSessionReview: _browser, allowActiveValidation: _active, allowJuiceChallengeSweep: _juice, agentInstructions: _instructions, ...snapshot } = profile;
   return structuredClone(snapshot);
 }
