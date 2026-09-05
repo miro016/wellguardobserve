@@ -41,12 +41,12 @@ export const AGENT_SCAN_PROFILES: Record<ScanMode, AgentScanProfile> = {
   },
   advanced: {
     id: 'advanced', name: 'Advanced interactive', version: VERSION, maxActions: 160, nucleiRequestsPerSecond: 2,
-    methods: ['DNS', 'TLS handshake', 'TCP connect', 'HTTP GET', 'HTTP POST (bounded form/JSON probes)', 'Headless browser (bounded, same-origin)'],
+    methods: ['DNS', 'TLS handshake', 'TCP connect', 'HTTP GET', 'HTTP POST (bounded form/JSON probes)', 'Emulated DOM (bounded, same-origin)'],
     enabledTools: [...CORE_TOOLS, 'safe-web-audit-v1', 'browser-session-controls-v1', 'quoted-input-differential-v1', 'bounded-rate-controls-v1', 'reviewed-nuclei-get-v1', 'unknown-web-recognition-v1', 'authentication-probe-v1', 'encoding-filter-bypass-v1', 'headless-browser-review-v1'],
     nucleiPolicy: 'reviewed local templates only; HTTP GET only; no redirects, OOB, code, headless, unsigned downloads, fuzzing or DAST',
     consentRequired: true, allowSafeWebAudit: true, allowNucleiAudit: true, allowUnknownWebInspection: true, allowBrowserSessionReview: true, allowActiveValidation: true,
     allowAuthenticationProbe: true, allowEncodingBypass: true, allowHeadlessBrowser: true,
-    agentInstructions: 'This profile performs interactive validation, not just GET observation. Use inspect_authentication_controls on login endpoints the evidence already surfaced: it sends a fixed list of up to 12 bounded credential/injection attempts and nothing else. Use probe_encoding_filter_bypass on directory listings or file paths already discovered, with fixed encoding variants only. Use inspect_headless_page for pages where dynamic DOM behavior matters; it stays on the authorized origin and executes a fixed inert marker payload. Never invent payloads beyond these fixed tools.'
+    agentInstructions: 'This profile performs interactive validation, not just GET observation. Use inspect_authentication_controls on login endpoints the evidence already surfaced: it sends a fixed list of up to 12 bounded credential/injection attempts and nothing else. Use probe_encoding_filter_bypass on directory listings or file paths already discovered, with fixed encoding variants only. Use inspect_emulated_page for pages where dynamic DOM behavior matters; it stays on the authorized origin and executes a fixed inert marker payload. Never invent payloads beyond these fixed tools.'
   }
 };
 

@@ -32,9 +32,9 @@ export const SCAN_PROFILES: readonly ScanProfileDefinition[] = [
   },
   {
     id: 'advanced', name: 'Advanced interactive', signal: 'INTERACTIVE / EXPLICIT CONSENT',
-    description: 'Headless browser review plus bounded authentication, injection and encoding probes. Interactive traffic, not just GET observation.',
-    maxActions: 160, requestRate: 'Max 12 fixed auth attempts per endpoint', methods: 'DNS · TLS · TCP · GET · bounded POST · headless browser',
-    capabilities: ['Fixed login injection/default-credential review', 'Encoding filter-bypass comparison', 'Headless DOM marker execution test']
+    description: 'Emulated-browser DOM review plus bounded authentication, injection and encoding probes. Interactive traffic, not just GET observation.',
+    maxActions: 160, requestRate: 'Max 12 fixed auth attempts per endpoint', methods: 'DNS · TLS · TCP · GET · bounded POST · emulated DOM',
+    capabilities: ['Fixed login injection/default-credential review', 'Encoding filter-bypass comparison', 'Emulated DOM marker execution test']
   }
 ] as const;
 
