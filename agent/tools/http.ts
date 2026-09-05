@@ -233,6 +233,40 @@ export async function requestAuthorizedFormPost(scope: ScopeGuard, input: { host
   });
 }
 
+export async function requestAuthorizedMethod(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; path?: string }, method: string): Promise<AuthorizedHttpResponse> {
+  const hostname = scope.assertHostname(input.hostname);
+  const useTls = input.tls ?? true;
+  const port = input.port ?? (useTls ? 443 : 80);
+  const path = scope.assertPath(input.path || '/');
+  const [{ address }] = await scope.resolve(hostname);
+  const transport = useTls ? https : http;
+  return await new Promise<AuthorizedHttpResponse>((resolve, reject) => {
+    const request = transport.request({
+      hostname, port, path, method, servername: useTls ? hostname : undefined,
+      headers: { host: hostname, 'user-agent': 'WellguardObserve/0.1 (+authorized reconnaissance)', accept: '*/*' },
+      lookup: (_name, _options, callback) => callback(null, address, 4),
+      timeout: 8_000, rejectUnauthorized: true
+    }, (response) => {
+      const chunks: Buffer[] = []; let size = 0; let truncated = false;
+      response.on('data', (chunk: Buffer) => {
+        if (size >= 32 * 1024) { truncated = true; return; }
+        const remaining = 32 * 1024 - size;
+        chunks.push(chunk.subarray(0, remaining)); size += Math.min(chunk.length, remaining);
+        if (chunk.length > remaining) truncated = true;
+      });
+      response.on('end', () => resolve({
+        requestedUrl: `${method} ${useTls ? 'https' : 'http'}://${hostname}${port === (useTls ? 443 : 80) ? '' : `:${port}`}${path}`,
+        status: response.statusCode || 0, headers: safeHeaders(response.headers), truncated,
+        cookies: cookieMetadata(response.headers), raw: Buffer.concat(chunks).toString('utf8')
+      }));
+      response.on('error', reject);
+    });
+    request.on('timeout', () => request.destroy(new Error('Request timed out.')));
+    request.on('error', reject);
+    request.end();
+  });
+}
+
 export async function requestAuthorizedHttp(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; path?: string; maxBodyBytes?: number }, controls: AuthorizedRequestControls = {}): Promise<AuthorizedHttpResponse> {
   const response = await requestAuthorizedBytes(scope, input, controls);
   return { ...response, raw: response.body.toString('utf8') };

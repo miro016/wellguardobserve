@@ -7,7 +7,7 @@ export interface AuthorizedTarget {
   allowPrivateAddresses?: boolean;
 }
 
-export type ScanMode = 'light' | 'standard' | 'extended' | 'advanced';
+export type ScanMode = 'light' | 'standard' | 'extended' | 'advanced' | 'unbounded';
 
 export interface ScanPolicySnapshot {
   id: ScanMode;

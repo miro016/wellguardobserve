@@ -47,6 +47,15 @@ export const AGENT_SCAN_PROFILES: Record<ScanMode, AgentScanProfile> = {
     consentRequired: true, allowSafeWebAudit: true, allowNucleiAudit: true, allowUnknownWebInspection: true, allowBrowserSessionReview: true, allowActiveValidation: true,
     allowAuthenticationProbe: true, allowEncodingBypass: true, allowHeadlessBrowser: true,
     agentInstructions: 'This profile performs interactive validation, not just GET observation. Use inspect_authentication_controls on login endpoints the evidence already surfaced: it sends a fixed list of up to 12 bounded credential/injection attempts and nothing else. Use probe_encoding_filter_bypass on directory listings or file paths already discovered, with fixed encoding variants only. Use inspect_emulated_page for pages where dynamic DOM behavior matters; it stays on the authorized origin and executes a fixed inert marker payload. Never invent payloads beyond these fixed tools.'
+  },
+  unbounded: {
+    id: 'unbounded', name: 'Unbounded (admin decision)', version: VERSION, maxActions: 320, nucleiRequestsPerSecond: 4,
+    methods: ['DNS', 'TLS handshake', 'TCP connect (full range)', 'HTTP GET', 'HTTP POST (bounded form/JSON probes)', 'HTTP introspection methods', 'Emulated DOM (bounded, same-origin)'],
+    enabledTools: [...CORE_TOOLS, 'safe-web-audit-v1', 'browser-session-controls-v1', 'quoted-input-differential-v1', 'bounded-rate-controls-v1', 'reviewed-nuclei-get-v1', 'unknown-web-recognition-v1', 'authentication-probe-v1', 'encoding-filter-bypass-v1', 'emulated-dom-review-v1', 'full-port-sweep-v1', 'frontend-bundle-mining-v1', 'http-method-surface-v1', 'common-path-sweep-v1', 'offline-token-analysis-v1'],
+    nucleiPolicy: 'reviewed local templates only; HTTP GET only; no redirects, OOB, code, headless, unsigned downloads, fuzzing or DAST',
+    consentRequired: true, allowSafeWebAudit: true, allowNucleiAudit: true, allowUnknownWebInspection: true, allowBrowserSessionReview: true, allowActiveValidation: true,
+    allowAuthenticationProbe: true, allowEncodingBypass: true, allowHeadlessBrowser: true,
+    agentInstructions: 'Reserved for non-production or challenge environments and selected explicitly by an administrator. In addition to the Advanced toolset, you may run sweep_full_port_range for a complete TCP connect sweep, mine_frontend_bundles to extract endpoints and secrets from same-origin JavaScript, probe_http_method_surface for TRACE/OPTIONS style introspection, sweep_common_paths against the fixed in-module wordlist, and analyze_token_structure for offline JWT review. There is no traffic ceiling for these tools, but payloads remain the fixed module lists.'
   }
 };
 

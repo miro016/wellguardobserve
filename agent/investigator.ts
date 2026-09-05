@@ -20,6 +20,10 @@ import { inspectPublicDirectoryIndex } from './tools/directory-index';
 import { inspectAuthenticationControls } from './tools/authentication';
 import { probeEncodingFilterBypass } from './tools/filter-bypass';
 import { runHeadlessBrowserReview } from './tools/browser';
+import { sweepFullPortRange } from './tools/full-sweep';
+import { mineFrontendBundles } from './tools/endpoint-mining';
+import { probeHttpMethodSurface, analyzeTokenStructure } from './tools/unbounded';
+import { sweepCommonPaths } from './tools/dir-sweep';
 import { discoverServiceHosts } from './tools/service-hosts';
 import { queryCisaKev, queryCwe, queryGitHubAdvisory, queryGitHubReleases, queryNvdCves, queryOsv, readPublicSource } from './tools/sources';
 import { adapterCatalog, inspectWithAdapter } from './adapters/registry';
@@ -348,6 +352,35 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       description: 'Advanced profile only, when client-side behavior matters. Replays up to 6 same-origin pages and their non-destructive forms with one fixed inert DOM marker, then emulates page execution with a pure-JS DOM runtime (no native browser). Reports only if the marker handler actually executes. No credentials, no arbitrary payloads.',
       schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), startPath: z.string().max(300).default('/'), maxPages: z.number().int().min(1).max(6).default(3) })
     })] : []),
+    ...(profile.id === 'unbounded' ? [
+      tool(async ({ hostname, from, to, concurrency, timeoutMs }) => tracked('sweep_full_port_range', { hostname, from, to, concurrency, timeoutMs }, () => sweepFullPortRange(scope, { hostname, from, to, concurrency, timeoutMs })), {
+        name: 'sweep_full_port_range',
+        description: 'Unbounded profile only (non-production/challenge targets). Full-range TCP connect sweep on one authorized host, 1-65535 by default, 128-way concurrency. Returns open ports only.',
+        schema: z.object({ hostname: z.string().optional(), from: z.number().int().min(1).max(65535).default(1), to: z.number().int().min(1).max(65535).default(65535), concurrency: z.number().int().min(8).max(256).default(128), timeoutMs: z.number().int().min(250).max(2000).default(800) })
+      }),
+      tool(async ({ hostname, port, tls, path }) => tracked('mine_frontend_bundles', { hostname, port, tls, path }, () => mineFrontendBundles(scope, { hostname, port, tls, path })), {
+        name: 'mine_frontend_bundles',
+        description: 'Unbounded profile only. Fetches up to 10 same-origin JavaScript bundles of a page and extracts reachable API endpoints, client routes, embedded secret-shaped values and contact addresses. Treat the output as leads for other tools.',
+        schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), path: z.string().max(300).default('/') })
+      }),
+      tool(async ({ hostname, port, tls, path }) => tracked('probe_http_method_surface', { hostname, port, tls, path }, () => probeHttpMethodSurface(scope, { hostname, port, tls, path }), async (result) => {
+        for (const finding of result.suggestedFindings) await recordFinding(finding);
+      }), {
+        name: 'probe_http_method_surface',
+        description: 'Unbounded profile only. Sends empty OPTIONS, HEAD, TRACE and PATCH requests to one in-scope path and reports the accepted method surface; TRACE echo is recorded as a finding.',
+        schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), path: z.string().max(300).default('/') })
+      }),
+      tool(async ({ hostname, port, tls, concurrency }) => tracked('sweep_common_paths', { hostname, port, tls, concurrency }, () => sweepCommonPaths(scope, { hostname, port, tls, concurrency })), {
+        name: 'sweep_common_paths',
+        description: 'Unbounded profile only. GET-requests a fixed in-module wordlist of historically sensitive paths (~110 entries) and reports non-404 responses.',
+        schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), concurrency: z.number().int().min(2).max(16).default(8) })
+      }),
+      tool(async ({ token }) => tracked('analyze_token_structure', { tokenPresent: Boolean(token) }, async () => analyzeTokenStructure({ token: token! })), {
+        name: 'analyze_token_structure',
+        description: 'Unbounded profile only, offline. Decodes a JWT-shaped token (header and payload only), flags alg=none and missing exp. The token is never sent anywhere; use for tokens already present in evidence.',
+        schema: z.object({ token: z.string().max(4000).describe('A token string copied from earlier evidence in this investigation.') })
+      })
+    ] : []),
     tool(async () => tracked('list_service_adapters', {}, async () => ({ activeProfile: { id: profile.id, name: profile.name, enabledTools: profile.enabledTools, nucleiPolicy: profile.nucleiPolicy }, adapters: adapterCatalog(), specializedInspectors: [{ id: 'wordpress-public-metadata', tool: 'inspect_wordpress', products: ['wordpress'], methods: ['HTTP GET'], requestCeiling: 6, authentication: false }], fingerprintPacks: [fingerprintCatalog(), recogCatalog()], note: 'Inspectors declare their products and bounded behavior. Fingerprints only identify candidates and cannot expand scan scope.' })), {
       name: 'list_service_adapters',
       description: 'List the installed, versioned service adapters and pinned public fingerprint packs available for deeper identification.',

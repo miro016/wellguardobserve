@@ -1,7 +1,7 @@
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type NodeState = 'risk' | 'warning' | 'healthy' | 'observed' | 'unknown';
 export type NodeKind = 'domain' | 'hostname' | 'network' | 'edge' | 'server' | 'port' | 'service';
-export type ScanMode = 'light' | 'standard' | 'extended' | 'advanced';
+export type ScanMode = 'light' | 'standard' | 'extended' | 'advanced' | 'unbounded';
 
 export interface ScanPolicySnapshot {
   id: ScanMode; name: string; version: string; maxActions: number; nucleiRequestsPerSecond: number;

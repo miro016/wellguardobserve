@@ -35,6 +35,12 @@ export const SCAN_PROFILES: readonly ScanProfileDefinition[] = [
     description: 'Emulated-browser DOM review plus bounded authentication, injection and encoding probes. Interactive traffic, not just GET observation.',
     maxActions: 160, requestRate: 'Max 12 fixed auth attempts per endpoint', methods: 'DNS · TLS · TCP · GET · bounded POST · emulated DOM',
     capabilities: ['Fixed login injection/default-credential review', 'Encoding filter-bypass comparison', 'Emulated DOM marker execution test']
+  },
+  {
+    id: 'unbounded', name: 'Unbounded', signal: 'NON-PROD ONLY / ADMIN DECISION',
+    description: 'No traffic ceiling: full-range port sweep, frontend bundle mining, method-surface probing, fixed-path sweep and offline token analysis. Reserved for non-production or challenge environments.',
+    maxActions: 320, requestRate: 'No fixed ceiling', methods: 'DNS · TLS · full-range TCP · GET · bounded POST · introspection methods · emulated DOM',
+    capabilities: ['Full 1-65535 port sweep', 'Bundle endpoint/secret mining', 'Fixed wordlist path sweep', 'Offline JWT analysis']
   }
 ] as const;
 
