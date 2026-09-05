@@ -156,7 +156,7 @@ export class PocketBaseService {
   }
 
   async requestScan(targetId: string, mode: ScanMode = 'standard'): Promise<string> {
-    const record = await this.client.collection('scanRequests').create({ target: targetId, mode, status: 'queued' });
+    const record = await this.client.collection('scanRequests').create({ target: targetId, mode, status: 'queued', extendedConsent: mode === 'extended' || mode === 'advanced' });
     return record.id;
   }
 

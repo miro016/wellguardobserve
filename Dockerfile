@@ -38,8 +38,18 @@ RUN arch="$TARGETARCH" \
   && unzip "${archive}" nuclei -d /out \
   && chmod +x /out/nuclei
 
+FROM node:26-bookworm-slim AS browser-download
+ARG PLAYWRIGHT_VERSION=1.58.2
+WORKDIR /pw
+RUN npm install playwright@${PLAYWRIGHT_VERSION} --no-save --no-audit --no-fund \
+  && PLAYWRIGHT_BROWSERS_PATH=/ms-playwright node node_modules/playwright/cli.js install chromium --only-shell \
+  && rm -rf /root/.npm
+
 FROM oven/bun:1.4.0-debian AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gosu nginx tini \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 \
+    libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 libpango-1.0-0 \
+    libcairo2 libatspi2.0-0 libx11-6 libxcb1 libxext6 libxi6 libxtst6 \
   && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default
 WORKDIR /app
 ENV NODE_ENV=production \
@@ -47,9 +57,11 @@ ENV NODE_ENV=production \
     POCKETBASE_DATA_DIR=/data \
     OLLAMA_MODEL=glm-5.3:cloud \
     WELLGUARD_NUCLEI_TEMPLATES=/app/nuclei/templates \
-    SCAN_POLL_MS=4000
+    SCAN_POLL_MS=4000 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 COPY --from=pocketbase-download /out/pocketbase /usr/local/bin/pocketbase
 COPY --from=nuclei-download /out/nuclei /usr/local/bin/nuclei
+COPY --from=browser-download /ms-playwright /ms-playwright
 COPY --from=web-build /build/dist/wellguard-observe/browser /usr/share/nginx/html
 COPY --from=web-build /build/node_modules ./node_modules
 COPY package.json ./
@@ -59,7 +71,7 @@ COPY scripts ./scripts
 COPY pocketbase/pb_migrations ./pb_migrations
 COPY deploy/nginx.conf /etc/nginx/nginx.conf
 COPY --chmod=755 deploy/start.sh /usr/local/bin/wellguard-start
-RUN mkdir -p /data && chown bun:bun /data
+RUN mkdir -p /data && chown bun:bun /data && chmod -R a+rX /ms-playwright
 EXPOSE 8080
 VOLUME ["/data"]
 ENTRYPOINT ["/usr/bin/tini", "--"]
