@@ -21,6 +21,7 @@ import { scanProfile } from '../scan-profiles';
           <div class="scan-progress"><span [style.width.%]="progress()"></span></div>
           <div class="policy-receipt"><span><i>CONTRACT</i><strong>{{ policyName() }}</strong><small>{{ request()?.profileSnapshot?.version || 'pending worker signature' }}</small></span><span><i>BUDGET</i><strong>{{ actions().length }} / {{ actionBudget() }}</strong><small>tool calls</small></span><span><i>NUCLEI CEILING</i><strong>{{ nucleiRateLabel() }}</strong><small>reviewed templates only</small></span><span><i>METHODS</i><strong>{{ methodLabel() }}</strong><small>{{ request()?.profileSnapshot ? 'worker enforced' : 'awaiting claim' }}</small></span></div>
           <div class="live-phase"><span [attr.data-health]="heartbeatHealth()"><i></i>{{ heartbeatLabel() }}</span><div><small>CURRENT WORKER PHASE</small><strong>{{ job.phase || (job.status === 'queued' ? 'Waiting for observer worker' : 'Preparing investigation') }}</strong></div></div>
+          @if (job.status === 'failed') { <div class="failure-diagnostic" role="alert"><span>!</span><div><small>RECORDED FAILURE</small><strong>{{ failureHeading() }}</strong><p>{{ failureMessage() }}</p></div><a class="button secondary compact" [routerLink]="['/app/targets', job.target]">Return to target →</a></div> }
           <div class="scan-vitals"><div><small>STARTED</small><strong>{{ job.startedAt ? (job.startedAt | date:'mediumTime') : 'Waiting for worker' }}</strong></div><div><small>TOOL CALLS</small><strong>{{ actions().length }}</strong></div><div><small>MESSAGES</small><strong>{{ messages().length }}</strong></div><div><small>LAST EVENT</small><strong>{{ lastEvent() | date:'mediumTime' }}</strong></div></div>
           @if (job.status === 'cancelling') { <p class="stop-note">The agent will stop after the active bounded network request returns. No new tool call will begin.</p> }
           @if (job.status === 'cancelled') { <p class="stop-note">Investigation stopped. Evidence collected before cancellation remains available below.</p> }
@@ -76,6 +77,15 @@ export class LiveInvestigationComponent implements OnInit, OnDestroy {
   protected actionBudget(): number { return this.request()?.profileSnapshot?.maxActions || this.fallbackProfile().maxActions; }
   protected nucleiRateLabel(): string { const rate = this.request()?.profileSnapshot?.nucleiRequestsPerSecond; return rate ? `${rate} requests / sec` : this.fallbackProfile().requestRate; }
   protected methodLabel(): string { return this.request()?.profileSnapshot?.methods.join(' · ') || this.fallbackProfile().methods; }
+  protected failureMessage(): string { return this.scan()?.error || this.request()?.error || 'The observer stopped without retaining a diagnostic message.'; }
+  protected failureHeading(): string {
+    const message = this.failureMessage().toLowerCase();
+    if (message.includes('json schema') || message.includes('tool') && message.includes('schema')) return 'The agent tool contract could not be initialized';
+    if (message.includes('ollama') || message.includes('model')) return 'The configured AI model could not complete the request';
+    if (message.includes('pocketbase') || message.includes('autocancelled') || message.includes('failed to fetch')) return 'Evidence storage became unavailable';
+    if (message.includes('action budget')) return 'The investigation reached its enforced tool limit';
+    return 'The observer returned an actionable diagnostic';
+  }
 
   protected async stop(): Promise<void> {
     const request = this.request(); if (!request || !this.isActive()) return;
