@@ -26,6 +26,7 @@ It is intentionally bounded: no credential guessing, exploit payloads, exploit e
 - A transparent Wellguard priority score that combines public reachability, owner-set asset criticality, evidence confidence, finding lifecycle, and any retained CISA KEV, FIRST EPSS, and unmodified CVSS data. Missing threat intelligence remains unknown; the score is explicitly not presented as CVSS.
 - A deterministic exposure knowledge layer that groups recurring mistakes by weakness, technology, and configuration category. Existing finding histories provide an immediate workspace view; every future run also writes immutable `knowledgeObservations` records for longer-term prevention analysis without an additional model call.
 - A governed improvement loop that scores scan completeness and tool reliability, learns from workspace-admin evidence verdicts, and raises narrowly typed proposals. Only an explicit owner/admin approval can apply a confidence guard or change the priority of an already-permitted inspector; the loop cannot edit code or prompts, enable tools, raise request budgets, or expand authorization scope.
+- An administrator-governed generated capability registry. The model can turn a directly observed coverage gap into a checksum-addressed, declarative same-origin HTTP probe; Unbounded may use a schema-valid proposal immediately, while promotion into other profiles requires review of the exact requests and assertions on the Agent tools page. Generated source code, shell access, arbitrary headers, credentials, and off-scope destinations remain impossible.
 - A persistent external-intelligence cache for public catalogue and registration sources. It coalesces identical in-flight calls, uses bounded TTLs and conditional ETag/Last-Modified revalidation, respects `no-store`/`private`, and records per-scan hit, miss, revalidation, and origin-request metrics. Live requests to customer targets are never cached.
 - A target-scoped public identity ledger for names and mailboxes directly disclosed by owned services, RDAP, or `security.txt`. It supports owner-confirmed current/former status, shows only explicitly returned public links, and never guesses or scrapes social profiles.
 - A live job console with a five-second worker heartbeat, current phase, model messages, tool inputs/results, delayed/stalled indicators, safe user cancellation, and explicit recovery of jobs interrupted by a single-instance worker restart; evidence already retained remains auditable after a stop.
@@ -49,7 +50,7 @@ Angular SPA ───────────── PocketBase API
                          policy-bounded read-only tools
 ```
 
-The Angular application does not use a Bun web API. Bun is an internal worker only. PocketBase rules enforce workspace membership even if the browser UI is bypassed. See [Architecture](docs/ARCHITECTURE.md), [Knowledge base](docs/KNOWLEDGE_BASE.md), [Product adapters](docs/ADAPTERS.md), and [Agent safety](docs/AGENT_SAFETY.md).
+The Angular application does not use a Bun web API. Bun is an internal worker only. PocketBase rules enforce workspace membership even if the browser UI is bypassed. See [Architecture](docs/ARCHITECTURE.md), [Knowledge base](docs/KNOWLEDGE_BASE.md), [Generated tools](docs/TOOLS.md), [Product adapters](docs/ADAPTERS.md), and [Agent safety](docs/AGENT_SAFETY.md).
 
 ## Local development
 

@@ -10,7 +10,7 @@ import { requestAuthorizedHttp } from './http';
 const WORDLIST: string[] = [
   '/admin', '/administrator', '/admin/login', '/admin/dashboard', '/manage', '/management', '/console', '/dashboard',
   '/api', '/api/v1', '/api/v2', '/api/docs', '/api-docs', '/swagger', '/swagger.json', '/openapi.json', '/graphql',
-  '/rest', '/rest/user/login', '/rest/admin', '/rest/products/search', '/socket.io',
+  '/rest', '/rest/v1', '/rest/docs', '/api/session', '/api/login', '/socket.io',
   '/.git/HEAD', '/.git/config', '/.env', '/.env.local', '/.aws/credentials', '/.npmrc', '/.docker/config.json',
   '/config', '/config.json', '/configuration', '/settings', '/setup', '/install', '/debug', '/trace', '/status', '/health', '/healthz', '/readyz', '/livez',
   '/metrics', '/info', '/actuator', '/actuator/health', '/actuator/env', '/actuator/heapdump',

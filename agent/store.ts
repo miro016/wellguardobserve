@@ -1,9 +1,10 @@
 import PocketBase, { type RecordModel } from 'pocketbase';
-import type { AgentAction, AgentMessage, AuthorizedTarget, InvestigationReport, ScanPolicySnapshot } from './types';
+import type { AgentAction, AgentMessage, AuthorizedTarget, InvestigationReport, ScanMode, ScanPolicySnapshot } from './types';
 import { buildKnowledgeObservation } from './knowledge';
 import { nextScheduledAt } from './observation-schedule';
 import type { CacheTelemetry } from './external-cache';
 import { evaluateScan, improvementCandidates, type LearningDirectives } from './self-improvement';
+import { GENERATED_TOOL_SCHEMA_VERSION, validateGeneratedTool, type GeneratedToolDefinition, type GeneratedToolProposal } from './generated-tools';
 
 export class InvestigationStore {
   readonly client: PocketBase;
@@ -105,6 +106,54 @@ export class InvestigationStore {
       authorizedHosts: scopes.map((scope) => String(scope['hostname'] || '')).filter(Boolean),
       authorizationStatus: record['authorizationStatus'], allowPrivateAddresses: record['allowPrivateAddresses']
     };
+  }
+
+  private generatedTool(record: RecordModel): GeneratedToolDefinition {
+    return {
+      id: record.id, workspace: String(record['workspace'] || ''), name: String(record['name'] || ''), title: String(record['title'] || ''),
+      summary: String(record['summary'] || ''), rationale: String(record['rationale'] || ''), category: record['category'],
+      evidence: Array.isArray(record['evidence']) ? record['evidence'] : [], spec: record['spec'], checksum: String(record['checksum'] || ''),
+      status: record['status'], minProfile: record['minProfile'], unboundedAutoUse: Boolean(record['unboundedAutoUse']),
+      compatibleProfiles: Array.isArray(record['compatibleProfiles']) ? record['compatibleProfiles'] : [], requestCeiling: Number(record['requestCeiling']) || 0,
+      riskLevel: record['riskLevel'], generatedByModel: String(record['generatedByModel'] || ''), sourceScan: String(record['sourceScan'] || ''),
+      sourceTarget: String(record['sourceTarget'] || ''), reviewedBy: String(record['reviewedBy'] || ''), reviewedAt: String(record['reviewedAt'] || ''),
+      reviewNote: String(record['reviewNote'] || ''), created: record['created'], updated: record['updated']
+    } as GeneratedToolDefinition;
+  }
+
+  async generatedTools(workspace: string): Promise<GeneratedToolDefinition[]> {
+    if (!workspace) return [];
+    const records = await this.client.collection('generatedTools').getFullList({
+      filter: this.client.filter('workspace = {:workspace} && status != "rejected" && status != "disabled"', { workspace }), sort: '-updated'
+    });
+    return records.map((record) => this.generatedTool(record));
+  }
+
+  async proposeGeneratedTool(input: { workspace: string; target: string; scan: string; model: string; proposal: GeneratedToolProposal }): Promise<GeneratedToolDefinition> {
+    const checked = validateGeneratedTool(input.proposal);
+    if (!checked.proposal || !checked.validation.valid) throw new Error(`Generated tool proposal was rejected: ${checked.validation.errors.join(' ')}`);
+    try {
+      const existing = await this.client.collection('generatedTools').getFirstListItem(this.client.filter('workspace = {:workspace} && checksum = {:checksum}', { workspace: input.workspace, checksum: checked.validation.checksum }));
+      return this.generatedTool(existing);
+    } catch (error: unknown) { if ((error as { status?: number })?.status !== 404) throw error; }
+
+    let name = checked.proposal.name;
+    try {
+      await this.client.collection('generatedTools').getFirstListItem(this.client.filter('workspace = {:workspace} && name = {:name}', { workspace: input.workspace, name }));
+      name = `${name.slice(0, 56).replace(/-+$/, '')}-${checked.validation.checksum.slice(0, 6)}`;
+    } catch (error: unknown) { if ((error as { status?: number })?.status !== 404) throw error; }
+    const record = await this.client.collection('generatedTools').create({
+      workspace: input.workspace, ...checked.proposal, name, schemaVersion: GENERATED_TOOL_SCHEMA_VERSION,
+      checksum: checked.validation.checksum, compatibleProfiles: checked.validation.compatibleProfiles,
+      requestCeiling: checked.validation.requestCeiling, riskLevel: checked.validation.riskLevel,
+      status: 'proposed', minProfile: 'unbounded', unboundedAutoUse: true, generatedByModel: input.model,
+      sourceScan: input.scan, sourceTarget: input.target
+    });
+    return this.generatedTool(record);
+  }
+
+  async recordGeneratedToolExecution(input: { workspace: string; tool: string; target: string; scan: string; profile: ScanMode; hostname: string; status: 'completed' | 'failed'; requestCount: number; matchedAssertions: number; summary: string }): Promise<void> {
+    await this.client.collection('generatedToolExecutions').create({ ...input, occurredAt: new Date().toISOString() });
   }
 
   async approvedLearning(workspace: string): Promise<LearningDirectives> {

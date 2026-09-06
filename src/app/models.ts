@@ -109,6 +109,31 @@ export interface ImprovementProposal {
   reviewedAt: string; reviewNote: string; applicationCount: number; lastAppliedAt: string; created: string; updated: string;
 }
 
+export interface GeneratedProbeAssertion {
+  type: 'status-in' | 'header-present' | 'header-contains' | 'body-contains' | 'json-key-exists';
+  values?: number[]; name?: string; value?: string; path?: string;
+}
+
+export interface GeneratedProbeStep {
+  id: string; purpose: string; method: 'GET' | 'HEAD' | 'OPTIONS' | 'POST_JSON'; path: string;
+  body?: Record<string, string>; assertions: GeneratedProbeAssertion[];
+}
+
+export interface GeneratedTool {
+  id: string; workspace: string; name: string; title: string; summary: string; rationale: string;
+  category: 'discovery' | 'configuration' | 'authentication' | 'authorization' | 'session' | 'input-validation' | 'client-side' | 'api';
+  evidence: string[]; spec: { version: 'http-probe-v1'; steps: GeneratedProbeStep[] }; schemaVersion: string; checksum: string;
+  compatibleProfiles: ScanMode[]; requestCeiling: number; riskLevel: 'passive' | 'low' | 'interactive';
+  status: 'proposed' | 'approved' | 'rejected' | 'disabled'; minProfile: ScanMode; unboundedAutoUse: boolean;
+  generatedByModel: string; sourceScan: string; sourceTarget: string; reviewedBy: string; reviewedAt: string; reviewNote: string;
+  created: string; updated: string;
+}
+
+export interface GeneratedToolExecution {
+  id: string; workspace: string; tool: string; target: string; scan: string; profile: ScanMode; hostname: string;
+  status: 'completed' | 'blocked' | 'failed'; requestCount: number; matchedAssertions: number; summary: string; occurredAt: string;
+}
+
 export interface KnowledgePattern {
   key: string; title: string; category: string; technology: string; severity: Severity; weaknessIds: string[];
   occurrences: number; affectedTargetIds: string[]; currentCount: number; newCount: number; persistentCount: number;

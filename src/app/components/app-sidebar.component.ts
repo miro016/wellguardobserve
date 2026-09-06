@@ -26,7 +26,7 @@ import { ThemeService } from '../services/theme.service';
         <a routerLink="/app/identities" routerLinkActive="active"><i>G</i>Identity governance</a>
         <a routerLink="/app/sources" routerLinkActive="active"><i>E</i>Evidence library</a>
         <span>Manage</span>
-        @if (pocketbase.isAdmin()) { <a routerLink="/app/workspaces" routerLinkActive="active"><i>W</i>Workspaces</a><a routerLink="/app/admin" routerLinkActive="active"><i>A</i>Target administration</a> }
+        @if (pocketbase.isAdmin()) { <a routerLink="/app/workspaces" routerLinkActive="active"><i>W</i>Workspaces</a><a routerLink="/app/tools" routerLinkActive="active"><i>C</i>Agent tools</a><a routerLink="/app/admin" routerLinkActive="active"><i>A</i>Target administration</a> }
         <a routerLink="/app/settings" routerLinkActive="active"><i>S</i>Settings</a>
       </nav>
       <div class="sidebar-status"><span><i></i>Evidence service online</span><small>Authorized scope · actions retained</small></div>

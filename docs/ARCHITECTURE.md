@@ -43,6 +43,8 @@ The browser computes a Wellguard priority score from technical severity, public 
 - `scanEvaluations`: deterministic post-run quality and cache receipts.
 - `findingFeedback`: attributed workspace-admin evidence verdicts, separate from immutable observations.
 - `improvementProposals`: reviewable, typed learning proposals and their application audit counters.
+- `generatedTools`: immutable, checksum-addressed declarative probe proposals plus administrator review and profile-assignment policy.
+- `generatedToolExecutions`: append-only receipts recording where, under which profile, and with what bounded outcome a generated probe ran.
 - `externalSourceCache`: worker-managed third-party intelligence representations; target observations are never stored here.
 - `publicIdentities`: tenant-private, directly published person/mailbox/organization evidence plus optional owner review.
 - `workers`: isolated internal observer identities; no browser login or collection-list access.

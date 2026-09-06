@@ -35,7 +35,7 @@ Each completed run appends immutable `knowledgeObservations` records containing 
 4. A workspace owner or administrator must approve a behavioral proposal. Approved values are parsed into typed directives; proposal prose is never inserted into the model prompt.
 5. Applied proposals retain an application counter and timestamp, so the change remains auditable and reversible by rejecting it later.
 
-No proposal can authorize another hostname, select a stronger profile, raise an action/rate limit, install a tool, alter source code, or create arbitrary prompt text.
+These behavioral proposals cannot authorize another hostname, select a stronger profile, raise an action/rate limit, install a capability, alter source code, or create arbitrary prompt text. Evidence-backed capability gaps use the separate [generated capability registry](TOOLS.md): it accepts only a constrained declarative request plan, stores an immutable checksum, and applies its own administrator/profile gate.
 
 ## External-source cache
 

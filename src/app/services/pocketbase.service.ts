@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import PocketBase, { RecordModel } from 'pocketbase';
-import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, ChangeReview, ChangeReviewStatus, CreateTargetInput, Finding, FindingFeedback, ImprovementProposal, KnowledgeObservation, ObservationCadence, ObservationSchedule, PublicIdentity, Scan, ScanEvaluation, ScanMode, ScanRequest, ScheduledScanMode, Target, TargetCriticality, TargetScope, TlsObservation, Workspace, WorkspaceMember, WorkspaceRole, WorkspaceUser } from '../models';
+import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, ChangeReview, ChangeReviewStatus, CreateTargetInput, Finding, FindingFeedback, GeneratedTool, GeneratedToolExecution, ImprovementProposal, KnowledgeObservation, ObservationCadence, ObservationSchedule, PublicIdentity, Scan, ScanEvaluation, ScanMode, ScanRequest, ScheduledScanMode, Target, TargetCriticality, TargetScope, TlsObservation, Workspace, WorkspaceMember, WorkspaceRole, WorkspaceUser } from '../models';
 import { nextScheduledAt } from './observation-schedule';
 
 @Injectable({ providedIn: 'root' })
@@ -413,6 +413,40 @@ export class PocketBaseService {
   async reviewImprovementProposal(proposal: ImprovementProposal, status: 'approved' | 'rejected'): Promise<void> {
     if (!this.user()?.id || !this.canManageWorkspace(proposal.workspace)) throw new Error('Only a workspace owner or administrator can approve learning proposals.');
     await this.client.collection('improvementProposals').update(proposal.id, { status, reviewedBy: this.user()!.id, reviewedAt: new Date().toISOString() });
+  }
+
+  async generatedTools(): Promise<GeneratedTool[]> {
+    if (!this.isAdmin()) throw new Error('Platform administrator access is required.');
+    await this.loadWorkspaceContext();
+    const workspace = this.activeWorkspaceId(); if (!workspace) return [];
+    const records = await this.client.collection('generatedTools').getFullList({ filter: this.client.filter('workspace = {:workspace}', { workspace }), sort: '-updated' });
+    return records.map((record) => ({
+      id: record.id, workspace: record['workspace'], name: record['name'], title: record['title'], summary: record['summary'], rationale: record['rationale'],
+      category: record['category'], evidence: record['evidence'] || [], spec: record['spec'], schemaVersion: record['schemaVersion'], checksum: record['checksum'],
+      compatibleProfiles: record['compatibleProfiles'] || [], requestCeiling: Number(record['requestCeiling']) || 0, riskLevel: record['riskLevel'],
+      status: record['status'], minProfile: record['minProfile'], unboundedAutoUse: Boolean(record['unboundedAutoUse']), generatedByModel: record['generatedByModel'] || '',
+      sourceScan: record['sourceScan'] || '', sourceTarget: record['sourceTarget'] || '', reviewedBy: record['reviewedBy'] || '', reviewedAt: record['reviewedAt'] || '', reviewNote: record['reviewNote'] || '',
+      created: record['created'], updated: record['updated']
+    } as GeneratedTool));
+  }
+
+  async generatedToolExecutions(toolId?: string): Promise<GeneratedToolExecution[]> {
+    if (!this.isAdmin()) throw new Error('Platform administrator access is required.');
+    await this.loadWorkspaceContext();
+    const workspace = this.activeWorkspaceId(); if (!workspace) return [];
+    const filter = toolId
+      ? this.client.filter('workspace = {:workspace} && tool = {:tool}', { workspace, tool: toolId })
+      : this.client.filter('workspace = {:workspace}', { workspace });
+    const records = await this.client.collection('generatedToolExecutions').getList(1, 100, { filter, sort: '-occurredAt' });
+    return records.items.map((record) => ({ id: record.id, workspace: record['workspace'], tool: record['tool'], target: record['target'], scan: record['scan'], profile: record['profile'], hostname: record['hostname'], status: record['status'], requestCount: Number(record['requestCount']) || 0, matchedAssertions: Number(record['matchedAssertions']) || 0, summary: record['summary'] || '', occurredAt: record['occurredAt'] } as GeneratedToolExecution));
+  }
+
+  async reviewGeneratedTool(tool: GeneratedTool, input: { status: GeneratedTool['status']; minProfile: ScanMode; unboundedAutoUse: boolean; reviewNote: string }): Promise<void> {
+    if (!this.isAdmin() || !this.user()?.id) throw new Error('Platform administrator access is required.');
+    if (input.status === 'approved' && !tool.compatibleProfiles.includes(input.minProfile)) throw new Error(`${tool.title} cannot run under the selected profile contract.`);
+    await this.client.collection('generatedTools').update(tool.id, {
+      ...input, reviewNote: input.reviewNote.trim().slice(0, 1200), reviewedBy: this.user()!.id, reviewedAt: new Date().toISOString()
+    });
   }
 
   async publicIdentities(targetId: string): Promise<PublicIdentity[]> {

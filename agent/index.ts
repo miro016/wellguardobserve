@@ -35,6 +35,7 @@ while (true) {
     const target = await store.loadTarget(request['target']);
     const learningDirectives = await store.approvedLearning(target.workspace || '');
     scan = await store.createScan(target.id, request.id);
+    const generatedTools = await store.generatedTools(target.workspace || '');
     resetCacheTelemetry();
     console.log(`Investigating ${target.hostname} for request ${request.id}.`);
     const controller = new AbortController();
@@ -52,6 +53,15 @@ while (true) {
     const report = await investigate(target, {
       profile,
       learningDirectives,
+      generatedTools,
+      proposeGeneratedTool: async (proposal) => await store.proposeGeneratedTool({
+        workspace: target.workspace || '', target: target.id, scan: scan!.id,
+        model: process.env['OLLAMA_MODEL'] || 'glm-5.3:cloud', proposal
+      }),
+      onGeneratedToolExecution: async (definition, result) => await store.recordGeneratedToolExecution({
+        workspace: target.workspace || '', tool: definition.id, target: target.id, scan: scan!.id,
+        profile: profile.id, ...result
+      }),
       signal: controller.signal,
       onAction: async (action) => { await store.saveAction(target.id, scan!.id, action); actionCount += 1; await store.heartbeat(request.id, currentPhase, actionCount, messageCount); },
       onMessage: async (message) => { await store.saveMessage(target.id, scan!.id, message); messageCount += 1; await store.heartbeat(request.id, currentPhase, actionCount, messageCount); },
