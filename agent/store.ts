@@ -1,6 +1,7 @@
 import PocketBase, { type RecordModel } from 'pocketbase';
 import type { AgentAction, AgentMessage, AuthorizedTarget, InvestigationReport, ScanPolicySnapshot } from './types';
 import { buildKnowledgeObservation } from './knowledge';
+import { nextScheduledAt } from '../src/app/services/observation-schedule';
 
 export class InvestigationStore {
   readonly client: PocketBase;
@@ -40,6 +41,46 @@ export class InvestigationStore {
   async nextRequest(): Promise<RecordModel | null> {
     try { return await this.client.collection('scanRequests').getFirstListItem('status = "queued"', { sort: 'created' }); }
     catch { return null; }
+  }
+
+  async enqueueDueObservation(): Promise<RecordModel | null> {
+    const now = new Date();
+    let schedule: RecordModel;
+    try {
+      schedule = await this.client.collection('observationSchedules').getFirstListItem(
+        this.client.filter('enabled = true && nextRunAt <= {:now}', { now: now.toISOString() }), { sort: 'nextRunAt' }
+      );
+    } catch (error: unknown) {
+      if ((error as { status?: number })?.status === 404) return null;
+      throw error;
+    }
+
+    const cadence = schedule['cadence'] === 'monthly' ? 'monthly' : schedule['cadence'] === 'weekly' ? 'weekly' : 'daily';
+    const nextRunAt = nextScheduledAt(cadence, now);
+    const target = await this.client.collection('targets').getOne(schedule['target']);
+    if (!['verified', 'admin_override'].includes(String(target['authorizationStatus'])) || target['status'] === 'paused') {
+      await this.client.collection('observationSchedules').update(schedule.id, { enabled: false, nextRunAt: '' });
+      return null;
+    }
+
+    try {
+      await this.client.collection('scanRequests').getFirstListItem(
+        this.client.filter('target = {:target} && (status = "queued" || status = "processing" || status = "cancelling")', { target: schedule['target'] })
+      );
+      await this.client.collection('observationSchedules').update(schedule.id, { nextRunAt });
+      return null;
+    } catch (error: unknown) {
+      if ((error as { status?: number })?.status !== 404) throw error;
+    }
+
+    const mode = schedule['mode'] === 'light' ? 'light' : 'standard';
+    const request = await this.client.collection('scanRequests').create({
+      target: schedule['target'], mode, status: 'queued', extendedConsent: false
+    });
+    await this.client.collection('observationSchedules').update(schedule.id, {
+      nextRunAt, lastQueuedAt: now.toISOString(), lastRequest: request.id
+    });
+    return request;
   }
 
   async claim(record: RecordModel, profileSnapshot: ScanPolicySnapshot): Promise<boolean> {

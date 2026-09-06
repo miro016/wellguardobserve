@@ -34,6 +34,7 @@ The browser computes a Wellguard priority score from technical severity, public 
 - `assets`: per-scan typed nodes and evidence facts.
 - `assetRelations`: per-scan typed edges, relationship evidence, and linked findings.
 - `changeReviews`: administrator disposition and notes keyed to a deterministic change in one scan comparison.
+- `observationSchedules`: opt-in daily, weekly, or monthly monitoring contracts. The worker can enqueue only the Baseline or Standard profiles; schedules default to absent/off and saving one never launches an immediate run.
 - `knowledgeObservations`: immutable per-run pattern facts used to measure recurring configuration and technology risks without another model call.
 - `publicIdentities`: tenant-private, directly published person/mailbox/organization evidence plus optional owner review.
 - `workers`: isolated internal observer identities; no browser login or collection-list access.

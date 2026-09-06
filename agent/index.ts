@@ -8,7 +8,14 @@ await store.connect();
 console.log('Wellguard observer connected to PocketBase.');
 
 const pollMs = Number(process.env['SCAN_POLL_MS'] || 4_000);
+const schedulePollMs = Math.max(15_000, Number(process.env['SCHEDULE_POLL_MS'] || 60_000));
+let nextScheduleCheck = 0;
 while (true) {
+  if (Date.now() >= nextScheduleCheck) {
+    try { await store.enqueueDueObservation(); }
+    catch (error) { console.error('Observation scheduler check failed:', error); }
+    nextScheduleCheck = Date.now() + schedulePollMs;
+  }
   const request = await store.nextRequest();
   if (!request) { await Bun.sleep(pollMs); continue; }
   let scan: RecordModel | null = null;

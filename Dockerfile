@@ -48,6 +48,7 @@ ENV NODE_ENV=production \
     OLLAMA_MODEL=glm-5.3:cloud \
     WELLGUARD_NUCLEI_TEMPLATES=/app/nuclei/templates \
     SCAN_POLL_MS=4000 \
+    SCHEDULE_POLL_MS=60000 \
     OBSERVER_CHROMIUM_PATH=/usr/bin/chromium
 COPY --from=pocketbase-download /out/pocketbase /usr/local/bin/pocketbase
 COPY --from=nuclei-download /out/nuclei /usr/local/bin/nuclei

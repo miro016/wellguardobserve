@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import PocketBase, { RecordModel } from 'pocketbase';
-import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, ChangeReview, ChangeReviewStatus, CreateTargetInput, Finding, KnowledgeObservation, PublicIdentity, Scan, ScanMode, ScanRequest, Target, TargetCriticality, TargetScope, TlsObservation } from '../models';
+import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, ChangeReview, ChangeReviewStatus, CreateTargetInput, Finding, KnowledgeObservation, ObservationCadence, ObservationSchedule, PublicIdentity, Scan, ScanMode, ScanRequest, ScheduledScanMode, Target, TargetCriticality, TargetScope, TlsObservation } from '../models';
+import { nextScheduledAt } from './observation-schedule';
 
 @Injectable({ providedIn: 'root' })
 export class PocketBaseService {
@@ -209,6 +210,39 @@ export class PocketBaseService {
   async updateTargetContext(targetId: string, criticality: TargetCriticality, tags: string[]): Promise<void> {
     if (!this.isAdmin()) throw new Error('Only a workspace administrator can change asset context.');
     await this.client.collection('targets').update(targetId, { criticality, tags: [...new Set(tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean))].slice(0, 20) });
+  }
+
+  async observationSchedules(targetId?: string): Promise<ObservationSchedule[]> {
+    try {
+      const filter = targetId ? this.client.filter('target = {:target}', { target: targetId }) : '';
+      const records = await this.client.collection('observationSchedules').getFullList({ filter, sort: 'created' });
+      return records.map((r) => ({
+        id: r.id, target: r['target'], enabled: Boolean(r['enabled']), cadence: r['cadence'], mode: r['mode'],
+        nextRunAt: r['nextRunAt'] ?? '', lastQueuedAt: r['lastQueuedAt'] ?? '', lastRequest: r['lastRequest'] ?? '',
+        created: r['created'], updated: r['updated']
+      } as ObservationSchedule));
+    } catch (error: unknown) {
+      if ((error as { status?: number })?.status === 404) return [];
+      return this.failed(error);
+    }
+  }
+
+  async saveObservationSchedule(targetId: string, cadence: ObservationCadence, mode: ScheduledScanMode, existingId?: string): Promise<ObservationSchedule | null> {
+    if (!this.isAdmin()) throw new Error('Only a workspace administrator can schedule observations.');
+    if (cadence === 'off' && !existingId) return null;
+    const enabled = cadence !== 'off';
+    const payload = {
+      target: targetId, enabled, cadence: cadence === 'off' ? 'daily' : cadence, mode,
+      nextRunAt: enabled ? nextScheduledAt(cadence) : ''
+    };
+    const r = existingId
+      ? await this.client.collection('observationSchedules').update(existingId, payload)
+      : await this.client.collection('observationSchedules').create(payload);
+    return {
+      id: r.id, target: r['target'], enabled: Boolean(r['enabled']), cadence: r['cadence'], mode: r['mode'],
+      nextRunAt: r['nextRunAt'] ?? '', lastQueuedAt: r['lastQueuedAt'] ?? '', lastRequest: r['lastRequest'] ?? '',
+      created: r['created'], updated: r['updated']
+    } as ObservationSchedule;
   }
 
   async knowledgeObservations(targetId?: string): Promise<KnowledgeObservation[]> {

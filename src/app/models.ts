@@ -5,6 +5,8 @@ export type ScanMode = 'light' | 'standard' | 'extended' | 'advanced' | 'unbound
 export type TargetCriticality = 'critical' | 'high' | 'standard' | 'low';
 export type SurfaceChangeState = 'added' | 'changed' | 'not_observed';
 export type ChangeReviewStatus = 'unreviewed' | 'expected' | 'investigate' | 'resolved';
+export type ObservationCadence = 'off' | 'daily' | 'weekly' | 'monthly';
+export type ScheduledScanMode = Extract<ScanMode, 'light' | 'standard'>;
 
 export interface ScanPolicySnapshot {
   id: ScanMode; name: string; version: string; maxActions: number; nucleiRequestsPerSecond: number;
@@ -125,6 +127,11 @@ export interface AssetRelationRecord {
 export interface ChangeReview {
   id: string; target: string; scan: string; changeKey: string; status: ChangeReviewStatus; note: string;
   reviewedBy: string; reviewedAt: string; created: string; updated: string;
+}
+
+export interface ObservationSchedule {
+  id: string; target: string; enabled: boolean; cadence: Exclude<ObservationCadence, 'off'>; mode: ScheduledScanMode;
+  nextRunAt: string; lastQueuedAt: string; lastRequest: string; created: string; updated: string;
 }
 
 export interface PublicIdentity {
