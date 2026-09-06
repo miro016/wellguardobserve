@@ -1,5 +1,6 @@
 import PocketBase, { type RecordModel } from 'pocketbase';
 import type { AgentAction, AgentMessage, AuthorizedTarget, InvestigationReport, ScanPolicySnapshot } from './types';
+import { buildKnowledgeObservation } from './knowledge';
 
 export class InvestigationStore {
   readonly client: PocketBase;
@@ -171,7 +172,8 @@ export class InvestigationStore {
           cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, frameworkRefs: finding.frameworkRefs || [],
           customerNarrative: finding.customerNarrative || existing['customerNarrative'] || null,
           assetKey: finding.assetKey || '', relatedAssetKeys: finding.relatedAssetKeys || [], relationKey: finding.relationKey || '',
-          observations: observations.slice(-12), runCount: (Number(existing['runCount']) || 1) + 1
+          observations: observations.slice(-12), runCount: (Number(existing['runCount']) || 1) + 1,
+          status: existing['status'] === 'resolved' ? 'open' : existing['status']
         });
       } else {
         await this.client.collection('findings').create({
@@ -182,6 +184,16 @@ export class InvestigationStore {
           relatedAssetKeys: finding.relatedAssetKeys || [], relationKey: finding.relationKey || '', status: 'open',
           observations: [observation], runCount: 1
         });
+      }
+      const knowledge = buildKnowledgeObservation(finding, report.assets);
+      try {
+        await this.client.collection('knowledgeObservations').create({
+          target: report.target.id, scan: scan.id, ...knowledge, observedAt: report.completedAt
+        });
+      } catch (error) {
+        // Knowledge is derived, secondary evidence. A duplicate or temporarily unavailable
+        // knowledge store must never turn an otherwise completed investigation into a failure.
+        console.warn(`Could not retain knowledge observation ${knowledge.patternKey}:`, error);
       }
     }
     for (const tls of report.tls) {

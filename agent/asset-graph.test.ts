@@ -119,4 +119,19 @@ describe('explicit asset graph', () => {
     expect(findings[0]?.relationKey).toBe('');
     expect(graph.assets.find((asset) => asset.key === findings[0]?.assetKey)?.state).toBe('observed');
   });
+
+  test('models one port per observed machine while retaining distinct public URLs and applications', () => {
+    const actions = [
+      action('inspect_dns', { hostname: 'app.example.com' }, { hostname: 'app.example.com', addresses: [{ address: '203.0.113.10' }] }),
+      action('inspect_dns', { hostname: 'admin.example.com' }, { hostname: 'admin.example.com', addresses: [{ address: '203.0.113.10' }] }),
+      action('discover_service_hosts', {}, { root: null, serviceHosts: [
+        { hostname: 'app.example.com', status: 200, title: 'Portal', productHints: ['angular'], technologies: [{ name: 'Angular' }], evidence: 'Direct response.' },
+        { hostname: 'admin.example.com', status: 200, title: 'Admin', productHints: ['keycloak'], technologies: [{ name: 'Keycloak' }], evidence: 'Direct response.' }
+      ] })
+    ];
+    const graph = buildAssetGraph(target, actions, [], []);
+    expect(graph.assets.filter((asset) => asset.kind === 'port' && asset.label === ':443').map((asset) => asset.key)).toEqual(['port:203.0.113.10:443']);
+    expect(graph.assets.filter((asset) => asset.kind === 'url').map((asset) => asset.label).sort()).toEqual(['https://admin.example.com', 'https://app.example.com']);
+    expect(graph.relations.filter((relation) => relation.fromKey === 'port:203.0.113.10:443' && relation.type === 'runs_service')).toHaveLength(2);
+  });
 });

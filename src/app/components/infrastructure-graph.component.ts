@@ -4,7 +4,7 @@ import { Topology, TopologyService } from '../services/topology.service';
 import { topologyEdgeId, traceTopologyPath } from '../services/topology-path';
 import { FindingStoryComponent } from './finding-story.component';
 
-type GraphView = 'services' | 'infrastructure' | 'evidence';
+type GraphView = 'architecture' | 'routing' | 'evidence';
 
 @Component({
   selector: 'wg-infrastructure-graph',
@@ -12,14 +12,14 @@ type GraphView = 'services' | 'infrastructure' | 'evidence';
   template: `
     <div class="topology-shell">
       <div class="topology-toolbar">
-        <div class="topology-lens" role="group" aria-label="Topology detail"><span>MAP LENS</span><button type="button" [class.active]="viewMode() === 'services'" (click)="setView('services')">Services</button><button type="button" [class.active]="viewMode() === 'infrastructure'" (click)="setView('infrastructure')">Network context</button><button type="button" [class.active]="viewMode() === 'evidence'" (click)="setView('evidence')">All evidence</button></div>
+        <div class="topology-lens" role="group" aria-label="Topology detail"><span>MAP LENS</span><button type="button" [class.active]="viewMode() === 'architecture'" (click)="setView('architecture')">Architecture</button><button type="button" [class.active]="viewMode() === 'routing'" (click)="setView('routing')">Network routing</button><button type="button" [class.active]="viewMode() === 'evidence'" (click)="setView('evidence')">All evidence</button></div>
         <label class="topology-search"><span>FILTER ASSETS</span><input type="search" placeholder="Hostname, service, technology…" [value]="query()" (input)="changeQuery($event)"></label>
         <button class="risk-filter" type="button" [class.active]="riskOnly()" (click)="riskOnly.set(!riskOnly())"><i></i>Needs action</button>
         <p><strong>{{ topology().nodes.length }} shown</strong><span>{{ collapsedLabel() }}</span></p>
       </div>
       <div #canvas class="topology-canvas" [class.dragging]="dragging()" role="application" aria-label="Observed infrastructure topology. Hover a node to trace its complete upstream and downstream evidence path. Drag to pan and use the controls or mouse wheel to zoom." (wheel)="zoomWheel($event)" (pointerdown)="panStart($event)" (pointermove)="panMove($event)" (pointerup)="panEnd($event)" (pointercancel)="panEnd($event)">
         <div class="map-controls" aria-label="Map controls"><button type="button" title="Zoom in" aria-label="Zoom in" (click)="zoomBy(0.15)">+</button><span>{{ zoomPercent() }}%</span><button type="button" title="Zoom out" aria-label="Zoom out" (click)="zoomBy(-0.15)">−</button><button class="fit-control" type="button" title="Fit all nodes" (click)="resetView()">Fit</button></div>
-        <div class="topology-stage" [style.height.px]="stageHeight()" [style.transform]="stageTransform()">
+        <div class="topology-stage" [attr.data-view]="viewMode()" [style.height.px]="stageHeight()" [style.transform]="stageTransform()">
           <div class="topology-grid" aria-hidden="true"></div>
           <div class="topology-lanes" aria-hidden="true" [style.grid-template-columns]="'repeat(' + laneLabels().length + ',1fr)'">@for (label of laneLabels(); track label) { <span>{{ label }}</span> }</div>
           <svg class="topology-links" [attr.viewBox]="viewBox()" preserveAspectRatio="none" aria-label="Observed asset relationships">
@@ -74,31 +74,28 @@ export class InfrastructureGraphComponent {
   readonly relations = input<AssetRelationRecord[]>([]);
   private readonly builder = inject(TopologyService);
   private readonly canvas = viewChild<ElementRef<HTMLElement>>('canvas');
-  protected readonly selectedId = signal('domain');
+  protected readonly selectedId = signal('');
   protected readonly selectedEdgeId = signal('');
   protected readonly hoveredNodeId = signal('');
-  protected readonly viewMode = signal<GraphView>('services');
-  protected readonly expandedOwnerId = signal('');
+  protected readonly viewMode = signal<GraphView>('architecture');
   protected readonly query = signal('');
   protected readonly riskOnly = signal(false);
   protected readonly fullTopology = computed(() => this.builder.build(this.target(), this.findings(), this.tls(), this.actions(), this.assets(), this.relations()));
-  protected readonly ownerServiceCounts = computed(() => {
-    const topology = this.fullTopology();
-    return new Map(topology.nodes.filter((node) => node.kind === 'domain' || node.kind === 'hostname').map((node) => [node.id, this.servicesOwnedBy(topology, node.id).size]));
-  });
   protected readonly topology = computed(() => this.layout(this.filter(this.project(this.fullTopology(), this.viewMode()))));
-  protected readonly laneLabels = computed(() => ({ services: ['Domain', 'Hostnames', 'Focused applications'], infrastructure: ['Domain', 'Hostnames', 'Edge', 'Networks', 'Addresses'], evidence: ['Domain', 'Host', 'Edge', 'Network', 'Server', 'Ports', 'Services'] } as Record<GraphView, string[]>)[this.viewMode()]);
+  protected readonly laneLabels = computed(() => {
+    const labels: Record<GraphView, Array<[NodeKind, string]>> = {
+      architecture: [['domain', 'Authorized root'], ['hostname', 'Host'], ['url', 'Public URL'], ['server', 'Observed machine'], ['port', 'Machine port'], ['service', 'Application']],
+      routing: [['domain', 'Authorized root'], ['hostname', 'Host'], ['url', 'Public URL'], ['edge', 'Provider edge'], ['network', 'Network'], ['server', 'Observed machine']],
+      evidence: [['domain', 'Root'], ['hostname', 'Host'], ['url', 'URL'], ['edge', 'Edge'], ['network', 'Network'], ['server', 'Machine'], ['port', 'Port'], ['service', 'Application']]
+    };
+    const kinds = new Set(this.topology().nodes.map((node) => node.kind));
+    return labels[this.viewMode()].filter(([kind]) => kinds.has(kind)).map(([, label]) => label);
+  });
   protected readonly collapsedLabel = computed(() => {
     const hidden = this.fullTopology().nodes.length - this.topology().nodes.length;
     if (this.query() || this.riskOnly()) return `${hidden} asset${hidden === 1 ? '' : 's'} outside the current filter`;
-    if (this.viewMode() === 'services') {
-      const applications = this.fullTopology().nodes.filter((node) => node.kind === 'service').length;
-      const visibleApplications = this.topology().nodes.filter((node) => node.kind === 'service').length;
-      const grouped = Math.max(0, applications - visibleApplications);
-      if (!this.expandedOwnerId()) return `${applications} application${applications === 1 ? '' : 's'} grouped by host · click a node to open`;
-      return `${visibleApplications} open · ${grouped} application${grouped === 1 ? '' : 's'} grouped elsewhere`;
-    }
-    return hidden ? `${hidden} application detail record${hidden === 1 ? '' : 's'} collapsed` : 'Every retained asset is visible';
+    if (this.viewMode() === 'architecture') return hidden ? `${hidden} routing record${hidden === 1 ? '' : 's'} available in other lenses` : 'Complete observed application path';
+    return hidden ? `${hidden} detail record${hidden === 1 ? '' : 's'} available in other lenses` : 'Every retained asset is visible';
   });
   protected readonly selected = computed(() => this.topology().nodes.find((node) => node.id === this.selectedId()) || this.topology().nodes[0]);
   protected readonly selectedEdge = computed(() => this.topology().edges.find((edge) => (edge.id || edge.from + edge.to) === this.selectedEdgeId()) || null);
@@ -130,8 +127,6 @@ export class InfrastructureGraphComponent {
     afterNextRender(() => this.resetView());
   }
   protected select(id: string): void {
-    const node = this.topology().nodes.find((item) => item.id === id);
-    if (this.viewMode() === 'services' && (node?.kind === 'domain' || node?.kind === 'hostname') && (this.ownerServiceCounts().get(id) || 0) > 0) this.expandedOwnerId.set(id);
     this.selectedId.set(id);
     this.selectedEdgeId.set('');
   }
@@ -140,12 +135,8 @@ export class InfrastructureGraphComponent {
   protected isHoveredEdge(edge: TopologyEdge): boolean { return this.highlightedPath().edgeIds.has(topologyEdgeId(edge)); }
   protected setView(view: GraphView): void { this.viewMode.set(view); }
   protected changeQuery(event: Event): void { this.query.set((event.target as HTMLInputElement).value); }
-  protected icon(kind: string): string { return ({ domain: '◎', hostname: '⌁', network: '◇', edge: '◇', server: '▣', port: ':', service: '◆' } as Record<string, string>)[kind] || '•'; }
-  protected nodeSubtitle(node: TopologyNode): string {
-    if (this.viewMode() !== 'services' || (node.kind !== 'domain' && node.kind !== 'hostname')) return node.subtitle;
-    const count = this.ownerServiceCounts().get(node.id) || 0;
-    return count ? `${node.subtitle} · ${count} app${count === 1 ? '' : 's'}` : node.subtitle;
-  }
+  protected icon(kind: string): string { return ({ domain: 'H', hostname: 'H', url: '/', network: 'N', edge: 'E', server: 'M', port: 'P', service: 'A' } as Record<string, string>)[kind] || '•'; }
+  protected nodeSubtitle(node: TopologyNode): string { return node.subtitle; }
   protected stateLabel(state: string): string { return ({ risk: 'Needs action', warning: 'Review', healthy: 'Healthy', observed: 'Observed', unknown: 'Unknown' } as Record<string, string>)[state] || state; }
   protected path(from: string, to: string): string {
     const a = this.topology().nodes.find((n) => n.id === from); const b = this.topology().nodes.find((n) => n.id === to);
@@ -202,8 +193,8 @@ export class InfrastructureGraphComponent {
   private project(topology: Topology, view: GraphView): Topology {
     if (view === 'evidence') return topology;
     const kinds: Record<Exclude<GraphView, 'evidence'>, NodeKind[]> = {
-      services: ['domain', 'hostname', 'service'],
-      infrastructure: ['domain', 'hostname', 'edge', 'network', 'server']
+      architecture: ['domain', 'hostname', 'url', 'server', 'port', 'service'],
+      routing: ['domain', 'hostname', 'url', 'edge', 'network', 'server']
     };
     const domainLabels = new Set(topology.nodes.filter((node) => node.kind === 'domain').map((node) => node.label.toLowerCase().replace(/\.$/, '')));
     const visibleNodes = topology.nodes.filter((node) => kinds[view].includes(node.kind) && !(node.kind === 'hostname' && domainLabels.has(node.label.toLowerCase().replace(/\.$/, ''))));
@@ -237,22 +228,16 @@ export class InfrastructureGraphComponent {
         for (const edge of outgoing.get(current.node) || []) queue.push({ node: edge.to, path: [...current.path, edge] });
       }
     }
-    let projectedNodes = visibleNodes;
     let projectedEdges = [...projected.values()];
-    if (view === 'services' && !this.query().trim() && !this.riskOnly()) {
-      const focusedServices = this.expandedOwnerId() ? this.servicesOwnedBy(topology, this.expandedOwnerId()) : new Set<string>();
-      projectedNodes = visibleNodes.filter((node) => node.kind !== 'service' || focusedServices.has(node.id));
-      const focusedIds = new Set(projectedNodes.map((node) => node.id));
-      projectedEdges = projectedEdges.filter((edge) => focusedIds.has(edge.from) && focusedIds.has(edge.to));
+    if (view === 'architecture') {
+      const urlDestinations = new Set(projectedEdges.filter((edge) => visibleNodes.find((node) => node.id === edge.from)?.kind === 'url').map((edge) => edge.to));
+      projectedEdges = projectedEdges.filter((edge) => {
+        const from = visibleNodes.find((node) => node.id === edge.from);
+        const to = visibleNodes.find((node) => node.id === edge.to);
+        return !(from && (from.kind === 'domain' || from.kind === 'hostname') && to?.kind === 'server' && urlDestinations.has(to.id));
+      });
     }
-    return { nodes: projectedNodes, edges: projectedEdges };
-  }
-
-  private servicesOwnedBy(topology: Topology, ownerId: string): Set<string> {
-    const owner = topology.nodes.find((node) => node.id === ownerId);
-    if (!owner) return new Set<string>();
-    const hostname = owner.label.toLowerCase().replace(/\.$/, '');
-    return new Set(topology.nodes.filter((node) => node.kind === 'service' && node.subtitle.toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '') === hostname).map((node) => node.id));
+    return { nodes: visibleNodes, edges: projectedEdges };
   }
 
   private filter(topology: Topology): Topology {
@@ -272,11 +257,12 @@ export class InfrastructureGraphComponent {
 
   private layout(topology: Topology): Topology {
     const kindOrder: Record<GraphView, NodeKind[]> = {
-      services: ['domain', 'hostname', 'service'],
-      infrastructure: ['domain', 'hostname', 'edge', 'network', 'server'],
-      evidence: ['domain', 'hostname', 'edge', 'network', 'server', 'port', 'service']
+      architecture: ['domain', 'hostname', 'url', 'server', 'port', 'service'],
+      routing: ['domain', 'hostname', 'url', 'edge', 'network', 'server'],
+      evidence: ['domain', 'hostname', 'url', 'edge', 'network', 'server', 'port', 'service']
     };
-    const order = kindOrder[this.viewMode()];
+    const rawOrder = kindOrder[this.viewMode()];
+    const order = rawOrder.filter((kind) => topology.nodes.some((node) => node.kind === kind));
     const positions = new Map<string, { x: number; y: number }>();
     order.forEach((kind, column) => {
       const items = topology.nodes.filter((node) => node.kind === kind).sort((a, b) => a.y - b.y || a.label.localeCompare(b.label));

@@ -15,6 +15,7 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
   const identities = new Map<string, AgentPublicIdentity>();
   const hostnameAddresses = new Map<string, Set<string>>();
   const hostnameEdges = new Map<string, string>();
+  const hostnameUrls = new Map<string, Set<string>>();
 
   const fact = (label: string, value: unknown, evidence: string, confidence = 100, basis: EvidenceBasis = 'observed'): AgentAssetFact => ({ label, value: clean(value) || 'Not observed', evidence, confidence, basis });
   const ensureAsset = (asset: AgentAsset): AgentAsset => {
@@ -47,21 +48,34 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
     if (hostname !== target.hostname && hostname.endsWith(`.${target.hostname}`)) ensureRelation({ key: `scope-member:${domainKey}:${asset.key}`, fromKey: domainKey, toKey: asset.key, type: 'within_authorized_root', label: 'within root scope', state: 'observed', confidence: 100, basis: 'owner_confirmed', evidence: [`${hostname} is a directly observed subdomain of the administrator-authorized root ${target.hostname}.`], findingTitles: [] });
     return asset;
   };
+  const ensureUrl = (hostname: string, port: number, protocol: 'http' | 'https', evidence: string) => {
+    ensureHost(hostname);
+    const key = `url:${protocol}:${hostname}:${port}`;
+    const origin = `${protocol}://${hostname}${port === (protocol === 'https' ? 443 : 80) ? '' : `:${port}`}`;
+    ensureAsset({ key, kind: 'url', label: origin, subtitle: 'Observed public URL', state: 'observed', confidence: 100, basis: 'observed', details: [fact('Public URL', origin, evidence)] });
+    const urls = hostnameUrls.get(hostname) || new Set<string>(); urls.add(key); hostnameUrls.set(hostname, urls);
+    ensureRelation({ key: `publishes:${hostKey(hostname)}:${key}`, fromKey: hostKey(hostname), toKey: key, type: 'publishes_url', label: 'publishes', state: 'observed', confidence: 100, basis: 'observed', evidence: [evidence], findingTitles: [] });
+    for (const address of hostnameAddresses.get(hostname) || []) ensureRelation({ key: `routes:${key}:server:${address}`, fromKey: key, toKey: `server:${address}`, type: 'routes_to_address', label: 'routes to', state: 'observed', confidence: 100, basis: 'observed', evidence: [`${origin} resolved to ${address} during this observation.`], findingTitles: [] });
+    return key;
+  };
+  const ensurePorts = (hostname: string, port: number, evidence: string) => {
+    const addresses = [...(hostnameAddresses.get(hostname) || [])];
+    const owners = addresses.length ? addresses.map((address) => ({ key: `server:${address}`, label: address })) : [{ key: hostKey(hostname), label: hostname }];
+    return owners.map((owner) => {
+      const key = owner.key.startsWith('server:') ? `port:${owner.key.slice('server:'.length)}:${port}` : `port:${hostname}:${port}`;
+      ensureAsset({ key, kind: 'port', label: `:${port}`, subtitle: owner.label, state: 'observed', confidence: 100, basis: 'observed', details: [fact('Reachability', 'TCP connection accepted', evidence)] });
+      ensureRelation({ key: `exposes:${owner.key}:${key}`, fromKey: owner.key, toKey: key, type: 'exposes_port', label: 'exposes', state: 'observed', confidence: addresses.length ? 100 : 90, basis: addresses.length ? 'observed' : 'inferred', evidence: [evidence], findingTitles: [] });
+      return key;
+    });
+  };
   const rememberAddress = (hostname: string, address: string, evidence: string) => {
     const set = hostnameAddresses.get(hostname) || new Set<string>(); set.add(address); hostnameAddresses.set(hostname, set);
     ensureHost(hostname); const serverKey = `server:${address}`;
-    ensureAsset({ key: serverKey, kind: 'server', label: address, subtitle: 'Observed public address', state: 'observed', confidence: 100, basis: 'observed', details: [fact('Public address', address, evidence)] });
+    ensureAsset({ key: serverKey, kind: 'server', label: address, subtitle: 'Observed network address', state: 'observed', confidence: 100, basis: 'observed', details: [fact('Public address', address, evidence)] });
     ensureRelation({ key: `resolves:${hostKey(hostname)}:${serverKey}`, fromKey: hostKey(hostname), toKey: serverKey, type: 'resolves_to', label: 'resolves to', state: 'observed', confidence: 100, basis: 'observed', evidence: [evidence], findingTitles: [] });
+    for (const urlKey of hostnameUrls.get(hostname) || []) ensureRelation({ key: `routes:${urlKey}:${serverKey}`, fromKey: urlKey, toKey: serverKey, type: 'routes_to_address', label: 'routes to', state: 'observed', confidence: 100, basis: 'observed', evidence: [`The public URL resolved to ${address} during this observation.`], findingTitles: [] });
     const edgeKey = hostnameEdges.get(hostname);
     if (edgeKey) ensureRelation({ key: `serves:${edgeKey}:${serverKey}`, fromKey: edgeKey, toKey: serverKey, type: 'serves_from_address', label: 'serves from edge address', state: 'observed', confidence: 95, basis: 'inferred', evidence: [`${hostname} returned the edge-provider marker and resolved to ${address}. This does not identify an origin address.`], findingTitles: [] });
-  };
-  const ensurePort = (hostname: string, port: number, evidence: string) => {
-    const key = `port:${hostname}:${port}`;
-    ensureAsset({ key, kind: 'port', label: `:${port}`, subtitle: hostname, state: 'observed', confidence: 100, basis: 'observed', details: [fact('Reachability', 'TCP connection accepted', evidence)] });
-    const addresses = [...(hostnameAddresses.get(hostname) || [])];
-    if (addresses.length) for (const address of addresses) ensureRelation({ key: `exposes:server:${address}:${key}`, fromKey: `server:${address}`, toKey: key, type: 'exposes_port', label: 'exposes', state: 'observed', confidence: 100, basis: 'observed', evidence: [evidence], findingTitles: [] });
-    else ensureRelation({ key: `exposes:${hostKey(hostname)}:${key}`, fromKey: hostKey(hostname), toKey: key, type: 'exposes_port', label: 'exposes', state: 'observed', confidence: 90, basis: 'inferred', evidence: [evidence], findingTitles: [] });
-    return key;
   };
   const ensureService = (hostname: string, port: number, product: string, evidence: string, technologies: string[] = []) => {
     const endpointPrefix = `service:${hostname}:${port}:`;
@@ -72,9 +86,12 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
         return identified.key;
       }
     }
-    ensureHost(hostname); const normalized = slug(product); const key = `service:${hostname}:${port}:${normalized}`; const portKey = ensurePort(hostname, port, `A direct application or protocol response was retained for ${hostname}:${port}.`);
+    ensureHost(hostname); const normalized = slug(product); const key = `service:${hostname}:${port}:${normalized}`;
+    const protocol = port === 443 || port === 8443 ? 'https' : 'http';
+    ensureUrl(hostname, port, protocol, evidence);
+    const portKeys = ensurePorts(hostname, port, `A direct application or protocol response was retained for ${hostname}:${port}.`);
     ensureAsset({ key, kind: 'service', label: product, subtitle: `${hostname}${port === 443 ? '' : `:${port}`}`, state: 'observed', confidence: product === 'Web application' || product.startsWith('Unknown ') ? 55 : 90, basis: product === 'Web application' || product.startsWith('Unknown ') ? 'inferred' : 'observed', details: [fact('Product', product, evidence, product === 'Web application' ? 55 : 90, product === 'Web application' ? 'inferred' : 'observed'), ...(technologies.length ? [fact('Technology evidence', technologies.join(' · '), evidence, 85)] : [])] });
-    ensureRelation({ key: `runs:${portKey}:${key}`, fromKey: portKey, toKey: key, type: 'runs_service', label: 'runs', state: 'observed', confidence: product === 'Web application' ? 70 : 95, basis: product === 'Web application' ? 'inferred' : 'observed', evidence: [evidence], findingTitles: [] });
+    for (const portKey of portKeys) ensureRelation({ key: `runs:${portKey}:${key}`, fromKey: portKey, toKey: key, type: 'runs_service', label: 'runs', state: 'observed', confidence: product === 'Web application' ? 70 : 95, basis: product === 'Web application' ? 'inferred' : 'observed', evidence: [evidence], findingTitles: [] });
     return key;
   };
 
@@ -115,7 +132,7 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
     }
     if (action.tool === 'discover_tcp_ports') {
       const hostname = clean(data['hostname'] || action.input['hostname'] || target.hostname); const address = clean(data['testedAddress']); if (address) rememberAddress(hostname, address, `TCP reachability test resolved ${hostname} to ${address}.`);
-      for (const value of Array.isArray(data['openPorts']) ? data['openPorts'] : []) { const port = Number(value); if (port > 0) ensurePort(hostname, port, `Bounded TCP connection to ${hostname}:${port} succeeded.`); }
+      for (const value of Array.isArray(data['openPorts']) ? data['openPorts'] : []) { const port = Number(value); if (port > 0) ensurePorts(hostname, port, `Bounded TCP connection to ${hostname}:${port} succeeded.`); }
     }
     if (action.tool === 'discover_service_hosts') {
       const retain = (raw: unknown, fallbackHostname: string) => {
@@ -248,7 +265,7 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
   }
 
   for (const item of tls) {
-    const asset = ensureHost(item.hostname, 'A hostname-validated TLS handshake completed.'); ensurePort(item.hostname, item.port, `TLS handshake on ${item.hostname}:${item.port} negotiated ${item.protocol}.`);
+    const asset = ensureHost(item.hostname, 'A hostname-validated TLS handshake completed.'); ensureUrl(item.hostname, item.port, 'https', `A hostname-validated TLS handshake completed for ${item.hostname}:${item.port}.`); ensurePorts(item.hostname, item.port, `TLS handshake on ${item.hostname}:${item.port} negotiated ${item.protocol}.`);
     asset.details.push(fact('TLS identity', item.subjectAltNames.join(', ') || item.subject, `Certificate issued by ${item.issuer}; valid until ${item.validTo}.`));
     if (item.valid) { asset.state = 'healthy'; asset.details.push(fact('Certificate state', 'Valid', `Hostname validation succeeded; ${item.daysRemaining} days remain.`)); }
   }

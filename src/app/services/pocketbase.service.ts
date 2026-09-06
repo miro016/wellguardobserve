@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import PocketBase, { RecordModel } from 'pocketbase';
-import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, CreateTargetInput, Finding, PublicIdentity, Scan, ScanMode, ScanRequest, Target, TargetScope, TlsObservation } from '../models';
+import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, CreateTargetInput, Finding, KnowledgeObservation, PublicIdentity, Scan, ScanMode, ScanRequest, Target, TargetScope, TlsObservation } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class PocketBaseService {
@@ -68,6 +68,12 @@ export class PocketBaseService {
       const records = await this.client.collection('findings').getFullList({ filter, sort: '-created' });
       return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], title: r['title'], summary: r['summary'], severity: r['severity'], confidence: r['confidence'], asset: r['asset'], evidence: r['evidence'] ?? [], remediation: r['remediation'] ?? '', sourceUrls: r['sourceUrls'] ?? [], cveIds: r['cveIds'] ?? [], weaknessIds: r['weaknessIds'] ?? [], frameworkRefs: r['frameworkRefs'] ?? [], customerNarrative: r['customerNarrative'] && typeof r['customerNarrative'] === 'object' ? r['customerNarrative'] : null, assetKey: r['assetKey'] ?? '', relatedAssetKeys: r['relatedAssetKeys'] ?? [], relationKey: r['relationKey'] ?? '', observations: Array.isArray(r['observations']) ? r['observations'] : (r['scan'] ? [{ scan: r['scan'], observedAt: r['created'] }] : []), runCount: Number(r['runCount']) || (Array.isArray(r['observations']) && r['observations'].length ? r['observations'].length : 1), created: r['created'], status: r['status'] } as Finding));
     } catch (error) { return this.failed(error); }
+  }
+
+  async reviewFinding(finding: Finding, status: Finding['status']): Promise<void> {
+    if (!this.isAdmin()) throw new Error('Only a workspace administrator can change finding disposition.');
+    try { await this.client.collection('findings').update(finding.id, { status }); }
+    catch (error) { return this.failed(error); }
   }
 
   async tls(targetId?: string, hostname?: string): Promise<TlsObservation | null> {
@@ -178,6 +184,22 @@ export class PocketBaseService {
     if (scanId) clauses.push(this.client.filter('scan = {:scan}', { scan: scanId }));
     const records = await this.client.collection('assetRelations').getFullList({ filter: clauses.join(' && '), sort: 'created' });
     return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], key: r['key'], fromKey: r['fromKey'], toKey: r['toKey'], type: r['type'], label: r['label'], state: r['state'], confidence: r['confidence'], basis: r['basis'], evidence: r['evidence'] ?? [], findingTitles: r['findingTitles'] ?? [] } as AssetRelationRecord));
+  }
+
+  async knowledgeObservations(targetId?: string): Promise<KnowledgeObservation[]> {
+    try {
+      const filter = targetId ? this.client.filter('target = {:target}', { target: targetId }) : '';
+      const records = await this.client.collection('knowledgeObservations').getFullList({ filter, sort: '-observedAt' });
+      return records.map((r) => ({
+        id: r.id, target: r['target'], scan: r['scan'], patternKey: r['patternKey'], category: r['category'], technology: r['technology'],
+        findingTitle: r['findingTitle'], severity: r['severity'], assetKey: r['assetKey'] ?? '', assetKind: r['assetKind'] || 'unknown',
+        weaknessIds: r['weaknessIds'] ?? [], frameworkControls: r['frameworkControls'] ?? [], configurationSignals: r['configurationSignals'] ?? [],
+        observedAt: r['observedAt'], created: r['created']
+      } as KnowledgeObservation));
+    } catch (error: unknown) {
+      if ((error as { status?: number })?.status === 404) return [];
+      return this.failed(error);
+    }
   }
 
   async publicIdentities(targetId: string): Promise<PublicIdentity[]> {

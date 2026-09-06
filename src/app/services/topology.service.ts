@@ -225,11 +225,11 @@ export class TopologyService {
   }
 
   private buildExplicit(target: Target, findings: Finding[], assets: AssetRecord[], relations: AssetRelationRecord[]): Topology {
-    const columns: Record<NodeKind, number> = { domain: 9, hostname: 23, edge: 36, network: 50, server: 64, port: 78, service: 91 };
+    const columns: Record<NodeKind, number> = { domain: 6, hostname: 17, url: 30, edge: 42, network: 53, server: 65, port: 79, service: 93 };
     const groups = new Map<NodeKind, AssetRecord[]>();
     for (const asset of assets) groups.set(asset.kind, [...(groups.get(asset.kind) || []), asset]);
     const nodes: TopologyNode[] = [];
-    for (const kind of ['domain', 'hostname', 'edge', 'network', 'server', 'port', 'service'] as NodeKind[]) {
+    for (const kind of ['domain', 'hostname', 'url', 'edge', 'network', 'server', 'port', 'service'] as NodeKind[]) {
       const items = (groups.get(kind) || []).sort((a, b) => a.label.localeCompare(b.label));
       items.forEach((asset, index) => {
         const linked = findings.filter((finding) => finding.assetKey === asset.key || finding.relatedAssetKeys.includes(asset.key));
@@ -259,6 +259,76 @@ export class TopologyService {
       const exactApproved = target.authorizedHosts.some((value) => value.toLowerCase() === hostname.label.toLowerCase());
       if (!isSubdomain && !exactApproved) continue;
       edges.push({ id: `scope:${root.id}:${hostname.id}`, from: root.id, to: hostname.id, label: isSubdomain ? 'within root scope' : 'authorized exact host', type: isSubdomain ? 'within_authorized_root' : 'authorizes', state: 'observed', confidence: 100, basis: 'owner_confirmed', evidence: [isSubdomain ? `${hostname.label} is an observed subdomain of the authorized root ${target.hostname}.` : `${hostname.label} is separately approved exact-host scope.`], findingIds: [] });
+    }
+    return this.normalizeArchitecture({ nodes, edges });
+  }
+
+  private normalizeArchitecture(topology: Topology): Topology {
+    const originalById = new Map(topology.nodes.map((node) => [node.id, node]));
+    const portIds = new Set(topology.nodes.filter((node) => node.kind === 'port').map((node) => node.id));
+    const nodes = topology.nodes.filter((node) => node.kind !== 'port').map((node) => ({ ...node, details: [...node.details], findingIds: [...node.findingIds] }));
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const edges = topology.edges.filter((edge) => !portIds.has(edge.from) && !portIds.has(edge.to)).map((edge) => ({ ...edge }));
+    const edgeIds = new Set(edges.map((edge) => edge.id || `${edge.from}:${edge.to}:${edge.type || ''}`));
+    const addEdge = (edge: TopologyEdge) => {
+      const id = edge.id || `${edge.from}:${edge.to}:${edge.type || ''}`;
+      if (edgeIds.has(id) || edges.some((item) => item.from === edge.from && item.to === edge.to && item.type === edge.type)) return;
+      edgeIds.add(id); edges.push({ ...edge, id });
+    };
+    const stateRank: Record<NodeState, number> = { observed: 0, healthy: 1, unknown: 2, warning: 3, risk: 4 };
+    const mergePort = (source: TopologyNode, owner?: TopologyNode): TopologyNode => {
+      const port = Number(source.label.replace(/\D/g, '')) || Number(source.id.match(/:(\d+)$/)?.[1]) || 0;
+      const id = owner?.kind === 'server' ? `port:${owner.id.slice('server:'.length)}:${port}` : source.id;
+      const existing = nodeById.get(id);
+      if (existing) {
+        existing.findingIds = [...new Set([...existing.findingIds, ...source.findingIds])];
+        existing.details = [...existing.details, ...source.details.filter((detail) => !existing.details.some((item) => item.label === detail.label && item.value === detail.value))];
+        if (stateRank[source.state] > stateRank[existing.state]) existing.state = source.state;
+        return existing;
+      }
+      const created = { ...source, id, subtitle: owner?.label || source.subtitle, details: [...source.details], findingIds: [...source.findingIds] };
+      nodes.push(created); nodeById.set(id, created); return created;
+    };
+    for (const original of topology.nodes.filter((node) => node.kind === 'port')) {
+      const incoming = topology.edges.filter((edge) => edge.to === original.id);
+      const outgoing = topology.edges.filter((edge) => edge.from === original.id);
+      const serverOwners = incoming.map((edge) => originalById.get(edge.from)).filter((node): node is TopologyNode => node?.kind === 'server');
+      const owners = serverOwners.length ? serverOwners : [undefined];
+      for (const owner of owners) {
+        const port = mergePort(original, owner);
+        if (owner) {
+          const source = incoming.find((edge) => edge.from === owner.id);
+          addEdge({ ...(source || {}), id: `normalized:exposes:${owner.id}:${port.id}`, from: owner.id, to: port.id, type: source?.type || 'exposes_port', label: source?.label || 'exposes' });
+        } else {
+          for (const source of incoming) addEdge({ ...source, id: `normalized:${source.id || `${source.from}:${port.id}`}`, to: port.id });
+        }
+        for (const destination of outgoing) addEdge({ ...destination, id: `normalized:runs:${port.id}:${destination.to}`, from: port.id });
+      }
+    }
+
+    const urlNodes = new Map(nodes.filter((node) => node.kind === 'url').map((node) => [node.id, node]));
+    for (const service of nodes.filter((node) => node.kind === 'service')) {
+      const match = service.id.match(/^service:(.+):(\d+):[^:]+$/);
+      const hostname = match?.[1] || service.subtitle.replace(/:\d+$/, '');
+      const port = Number(match?.[2] || service.subtitle.match(/:(\d+)$/)?.[1] || 443);
+      if (!hostname || !port) continue;
+      const protocol = port === 443 || port === 8443 ? 'https' : 'http';
+      const urlId = `url:${protocol}:${hostname}:${port}`;
+      const origin = `${protocol}://${hostname}${port === (protocol === 'https' ? 443 : 80) ? '' : `:${port}`}`;
+      let urlNode = urlNodes.get(urlId);
+      if (!urlNode) {
+        urlNode = { id: urlId, kind: 'url', label: origin, subtitle: 'Observed public URL', state: service.state, x: 30, y: service.y, details: [{ label: 'Public URL', value: origin, evidence: 'Derived from a directly observed service endpoint.', confidence: 100, basis: 'observed' }], findingIds: [...service.findingIds] };
+        nodes.push(urlNode); nodeById.set(urlId, urlNode); urlNodes.set(urlId, urlNode);
+      } else {
+        urlNode.findingIds = [...new Set([...urlNode.findingIds, ...service.findingIds])];
+        if (stateRank[service.state] > stateRank[urlNode.state]) urlNode.state = service.state;
+      }
+      const host = nodes.find((node) => (node.kind === 'domain' || node.kind === 'hostname') && node.label.toLowerCase().replace(/\.$/, '') === hostname.toLowerCase().replace(/\.$/, ''));
+      if (host) addEdge({ id: `derived:publishes:${host.id}:${urlId}`, from: host.id, to: urlId, type: 'publishes_url', label: 'publishes', state: 'observed', confidence: 100, basis: 'observed', evidence: [`${origin} was observed as a public endpoint.`], findingIds: [] });
+      for (const portEdge of edges.filter((edge) => edge.to === service.id)) {
+        const serverEdges = edges.filter((edge) => edge.to === portEdge.from && nodeById.get(edge.from)?.kind === 'server');
+        for (const serverEdge of serverEdges) addEdge({ id: `derived:routes:${urlId}:${serverEdge.from}`, from: urlId, to: serverEdge.from, type: 'routes_to_address', label: 'routes to', state: serverEdge.state || 'observed', confidence: serverEdge.confidence || 100, basis: serverEdge.basis || 'observed', evidence: serverEdge.evidence || [`${origin} resolves to this observed network address.`], findingIds: [] });
+      }
     }
     return { nodes, edges };
   }

@@ -89,7 +89,7 @@ export interface TlsEvidence {
   certificateEmails: string[];
 }
 
-export type AssetKind = 'domain' | 'hostname' | 'edge' | 'network' | 'server' | 'port' | 'service';
+export type AssetKind = 'domain' | 'hostname' | 'url' | 'edge' | 'network' | 'server' | 'port' | 'service';
 export type EvidenceBasis = 'observed' | 'registry' | 'inferred' | 'owner_confirmed';
 export type AssetState = 'risk' | 'warning' | 'healthy' | 'observed' | 'unknown';
 export interface AgentAssetFact { label: string; value: string; evidence: string; confidence: number; basis: EvidenceBasis; }

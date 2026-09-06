@@ -20,8 +20,9 @@ It is intentionally bounded: no credential guessing, exploit payloads, exploit e
 - A checksum-verified Nuclei 3.11.1 engine in the production image. It can run only five committed Wellguard templates, only in Active validation: Go expvar, Prometheus metrics, public OpenAPI, Spring Actuator metadata, and diagnostics indexes. Community downloads, redirects, OOB callbacks, code, headless, fuzzing, and DAST are disabled.
 - Bounded active checks: two anonymous GETs for cookie/CORS posture; three GETs comparing a neutral value with inert text containing one quote; and up to ten sequential anonymous GETs plus at most three reserved-address `X-Forwarded-For` comparisons after an observed HTTP 429. Values, cookies, and response secrets are not retained or replayed.
 - Report-level OWASP coverage receipts show which external checks actually ran. CRA references are explicitly evidence relevance only, never a legal conclusion or conformity assessment.
-- Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase.
-- A pannable, zoomable evidence-linked topology with service, network-context, and full-evidence lenses. Hovering an asset highlights its complete directed upstream and downstream path without lighting sibling branches. The default domain → hostname → application view collapses repeated port/address transit records without discarding them.
+- Historical scan, finding, TLS, agent-message, and tool-action records in PocketBase. Current findings are explicitly separated into new, persistent, not observed in the latest run, and owner-confirmed resolved states; absence is never silently treated as remediation.
+- A pannable, zoomable evidence-linked topology with architecture, network-routing, and full-evidence lenses. Hovering an asset highlights its complete directed upstream and downstream path without lighting sibling branches. The default hierarchy is authorized root → hostname → public URL → observed machine/address → one port per machine → application, while provider/network records remain available without crowding the primary view.
+- A deterministic exposure knowledge layer that groups recurring mistakes by weakness, technology, and configuration category. Existing finding histories provide an immediate workspace view; every future run also writes immutable `knowledgeObservations` records for longer-term prevention analysis without an additional model call.
 - A target-scoped public identity ledger for names and mailboxes directly disclosed by owned services, RDAP, or `security.txt`. It supports owner-confirmed current/former status, shows only explicitly returned public links, and never guesses or scrapes social profiles.
 - A live job console with a five-second worker heartbeat, current phase, model messages, tool inputs/results, delayed/stalled indicators, safe user cancellation, and explicit recovery of jobs interrupted by a single-instance worker restart; evidence already retained remains auditable after a stop.
 - Working target administration and scan queue controls, target-scoped surface and finding views, all-target portfolio overview, scan reports, transparent agent traces, source catalog, and workspace settings.
@@ -44,7 +45,7 @@ Angular SPA ───────────── PocketBase API
                          policy-bounded read-only tools
 ```
 
-The Angular application does not use a Bun web API. Bun is an internal worker only. See [Architecture](docs/ARCHITECTURE.md), [Product adapters](docs/ADAPTERS.md), and [Agent safety](docs/AGENT_SAFETY.md).
+The Angular application does not use a Bun web API. Bun is an internal worker only. See [Architecture](docs/ARCHITECTURE.md), [Knowledge base](docs/KNOWLEDGE_BASE.md), [Product adapters](docs/ADAPTERS.md), and [Agent safety](docs/AGENT_SAFETY.md).
 
 ## Local development
 

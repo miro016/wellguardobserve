@@ -11,7 +11,7 @@ import { scanProfile } from '../scan-profiles';
   imports: [AppSidebarComponent, RouterLink, DatePipe],
   template: `
     <div class="app-layout"><wg-app-sidebar /><main class="app-main jobs-page">
-      <header class="app-header"><div><span class="app-breadcrumb">TRANSPARENCY / JOB CONTROL</span><h1>Observer jobs</h1><p>Worker heartbeat, current phase, and retained evidence activity for every investigation.</p></div><span class="system-state" [class.live]="active().length > 0"><i></i>{{ active().length ? active().length + ' active' : 'Queue clear' }}</span></header>
+      <header class="app-header"><div><span class="app-breadcrumb">OPERATE / INVESTIGATIONS</span><h1>Investigations</h1><p>Live execution, stop control, and retained job history. Completed outcomes live in Posture and Change history.</p></div><span class="system-state" [class.live]="active().length > 0"><i></i>{{ active().length ? active().length + ' active' : 'Queue clear' }}</span></header>
       @if (error()) { <div class="error-banner"><strong>Jobs unavailable</strong><span>{{ error() }}</span></div> }
 
       @if (active().length) {

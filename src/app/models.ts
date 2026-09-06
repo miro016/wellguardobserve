@@ -1,6 +1,6 @@
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type NodeState = 'risk' | 'warning' | 'healthy' | 'observed' | 'unknown';
-export type NodeKind = 'domain' | 'hostname' | 'network' | 'edge' | 'server' | 'port' | 'service';
+export type NodeKind = 'domain' | 'hostname' | 'url' | 'network' | 'edge' | 'server' | 'port' | 'service';
 export type ScanMode = 'light' | 'standard' | 'extended' | 'advanced' | 'unbounded';
 
 export interface ScanPolicySnapshot {
@@ -51,6 +51,20 @@ export interface Finding {
   assetKey: string; relatedAssetKeys: string[]; relationKey: string;
   observations: Array<{ scan: string; observedAt: string; profile?: string }>; runCount: number;
   created: string; status: 'open' | 'accepted' | 'resolved';
+}
+
+export type FindingLifecycle = 'new' | 'persistent' | 'not_observed' | 'resolved';
+
+export interface KnowledgeObservation {
+  id: string; target: string; scan: string; patternKey: string; category: string; technology: string;
+  findingTitle: string; severity: Severity; assetKey: string; assetKind: NodeKind | 'unknown'; weaknessIds: string[];
+  frameworkControls: string[]; configurationSignals: string[]; observedAt: string; created: string;
+}
+
+export interface KnowledgePattern {
+  key: string; title: string; category: string; technology: string; severity: Severity; weaknessIds: string[];
+  occurrences: number; affectedTargetIds: string[]; currentCount: number; newCount: number; persistentCount: number;
+  firstSeenAt: string; lastSeenAt: string; findingIds: string[];
 }
 
 export interface TlsObservation {
