@@ -1,7 +1,7 @@
 import PocketBase, { type RecordModel } from 'pocketbase';
 import type { AgentAction, AgentMessage, AuthorizedTarget, InvestigationReport, ScanPolicySnapshot } from './types';
 import { buildKnowledgeObservation } from './knowledge';
-import { nextScheduledAt } from '../src/app/services/observation-schedule';
+import { nextScheduledAt } from './observation-schedule';
 import type { CacheTelemetry } from './external-cache';
 import { evaluateScan, improvementCandidates, type LearningDirectives } from './self-improvement';
 

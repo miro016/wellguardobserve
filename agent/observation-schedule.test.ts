@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { nextScheduledAt } from '../src/app/services/observation-schedule';
+import { nextScheduledAt } from './observation-schedule';
 
 describe('observation scheduling', () => {
   it('computes daily and weekly runs without local timezone drift', () => {

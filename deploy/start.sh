@@ -92,8 +92,7 @@ gosu bun env -u POCKETBASE_SUPERUSER_EMAIL -u POCKETBASE_SUPERUSER_PASSWORD bun 
 agent_pid=$!
 sleep 1
 if ! kill -0 "$agent_pid" 2>/dev/null; then
-  diagnostic="$(tail -n 12 "$error_file" | tr '\n' ' ' | sed -E 's/(password|token|authorization)[^ ]*/\1=[redacted]/Ig' | cut -c1-700)"
-  fail_startup "observer worker exited during startup${diagnostic:+: $diagnostic}"
+  fail_startup 'observer worker exited during startup'
 fi
 
 printf 'ready\n' >"$status_file"
