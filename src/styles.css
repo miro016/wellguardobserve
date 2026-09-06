@@ -464,3 +464,56 @@ button:disabled { cursor: wait; opacity: .55; }
 @media(max-width:640px){.app-main{padding-inline:13px}.posture-header .header-actions{width:100%}.as-of-chip{flex:1}.posture-overview{grid-template-columns:1fr 1fr}.posture-stat{min-height:100px}.posture-lower{display:block}.knowledge-preview{margin-top:18px}.estate-ledger-row{padding-inline:14px}.knowledge-metrics{gap:8px}.knowledge-intro{padding:18px}.knowledge-flow{grid-template-columns:1fr}.knowledge-flow i{display:none}.issue-filters,.knowledge-filters{display:flex}.pattern-head,.pattern-row{grid-template-columns:minmax(0,1fr) 64px}.pattern-head span:nth-child(2),.pattern-row>span:nth-child(3){display:none}.history-delta{grid-template-columns:1fr}.history-delta>div{border-right:0;border-bottom:1px solid var(--line)}.topology-node[data-kind='url']{width:150px}}
 @media(prefers-reduced-motion:reduce){.posture-workspace>section,.posture-rail::after{animation:none!important}}
 @media(min-width:821px){.topology-shell{grid-template-columns:minmax(0,1fr) 320px}.topology-stage{width:max(100%,1100px)}.topology-stage[data-view='evidence']{width:max(100%,1500px)}}
+
+/* Full-viewport surface workspace */
+html.topology-focus-open { overflow:hidden; }
+.topology-focus-context { display:none; min-width:0; align-items:center; gap:10px; }
+.topology-focus-context>span { width:34px; height:34px; flex:0 0 auto; display:grid; place-items:center; border:1px solid color-mix(in srgb,var(--cyan) 42%,var(--line)); border-radius:8px; background:var(--cyan-soft); color:var(--cyan); font:700 9px 'IBM Plex Mono',monospace; }
+.topology-focus-context>p { min-width:0; margin:0; display:grid; text-align:left; }
+.topology-focus-context small { color:var(--faint); font:500 7px 'IBM Plex Mono',monospace; letter-spacing:.1em; }
+.topology-focus-context strong { overflow:hidden; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.topology-toolbar { grid-template-columns:auto minmax(180px,1fr) auto minmax(140px,.55fr) auto; }
+.map-expand-control { height:38px; padding:0 10px; display:flex; align-items:center; gap:8px; border:1px solid color-mix(in srgb,var(--cyan) 34%,var(--line)); border-radius:7px; background:var(--cyan-soft); color:var(--cyan); font:650 8px 'Manrope Variable',sans-serif; white-space:nowrap; }
+.map-expand-control:hover,.map-expand-control[aria-pressed='true'] { border-color:var(--cyan); background:color-mix(in srgb,var(--cyan) 14%,var(--panel)); }
+.map-expand-control>i { position:relative; width:13px; height:13px; border:1.5px solid currentColor; border-radius:2px; }
+.map-expand-control>i::after { content:''; position:absolute; inset:3px; border:1px solid currentColor; border-radius:1px; opacity:.55; }
+.map-expand-control>kbd { min-width:25px; padding:2px 4px; border:1px solid color-mix(in srgb,var(--cyan) 34%,var(--line)); border-radius:4px; background:var(--panel); color:var(--muted); font:500 7px 'IBM Plex Mono',monospace; text-align:center; }
+.topology-shell.map-expanded { position:fixed; inset:0; z-index:10000; width:100vw; height:100dvh!important; min-height:0!important; grid-template-columns:minmax(0,1fr) clamp(320px,23vw,430px); grid-template-rows:auto minmax(0,1fr); border:0; border-radius:0; background:var(--bg-elevated); box-shadow:none; animation:topology-focus-enter .18s cubic-bezier(.22,.75,.25,1) both; }
+@keyframes topology-focus-enter { from { opacity:.72; transform:scale(.995); } to { opacity:1; transform:none; } }
+.topology-shell.map-expanded .topology-toolbar { min-height:64px; grid-template-columns:minmax(150px,.58fr) auto minmax(220px,1fr) auto minmax(130px,.45fr) auto; border-bottom-color:var(--line-bright); box-shadow:0 8px 30px rgba(2,8,20,.08); }
+.topology-shell.map-expanded .topology-focus-context { display:flex; }
+.topology-shell.map-expanded .topology-canvas,.topology-panel.expanded .topology-shell.map-expanded .topology-canvas { height:auto; min-height:0; }
+.topology-shell.map-expanded .evidence-inspector { min-height:0; overflow:auto; border-left-color:var(--line-bright); }
+.topology-shell.map-expanded .topology-stage { width:max(100%,1240px); }
+.topology-shell.map-expanded .topology-stage[data-view='evidence'] { width:max(100%,1600px); }
+.topology-shell.map-expanded .map-controls { top:16px; right:16px; }
+.topology-shell.map-expanded .topology-legend { bottom:17px; left:18px; }
+
+@media(max-width:1100px){
+  .topology-toolbar { grid-template-columns:auto minmax(180px,1fr) auto auto; }
+  .topology-count { display:none!important; }
+  .map-expand-control { justify-content:center; }
+  .topology-shell.map-expanded .topology-toolbar { grid-template-columns:minmax(150px,.55fr) minmax(330px,1fr) minmax(190px,.7fr) auto; }
+  .topology-shell.map-expanded .topology-search { display:none; }
+  .topology-shell.map-expanded .risk-filter { justify-content:center; }
+}
+@media(max-width:820px){
+  .topology-shell.map-expanded { grid-template-columns:1fr; grid-template-rows:auto minmax(340px,1fr) minmax(170px,.48fr); }
+  .topology-shell.map-expanded .topology-toolbar { grid-template-columns:minmax(130px,.6fr) minmax(300px,1fr) auto; overflow-x:auto; }
+  .topology-shell.map-expanded .risk-filter { display:none; }
+  .topology-shell.map-expanded .evidence-inspector { border-top:1px solid var(--line-bright); border-left:0; }
+}
+@media(max-width:640px){
+  .topology-toolbar { grid-template-columns:1fr auto; }
+  .topology-lens,.topology-search { grid-column:1/-1; }
+  .topology-toolbar>.risk-filter { grid-column:1; }
+  .map-expand-control>span { display:none; }
+  .map-expand-control>kbd { display:none; }
+  .topology-shell.map-expanded .topology-toolbar { grid-template-columns:minmax(0,1fr) 42px; padding-inline:9px; }
+  .topology-shell.map-expanded .topology-focus-context { grid-column:1; }
+  .topology-shell.map-expanded .topology-lens { grid-column:1/-1; grid-row:2; }
+  .topology-shell.map-expanded .map-expand-control { grid-column:2; grid-row:1; }
+  .topology-shell.map-expanded .topology-focus-context>span { display:none; }
+  .topology-shell.map-expanded .map-expand-control { width:38px; padding:0; }
+}
+@media(prefers-reduced-motion:reduce){.topology-shell.map-expanded{animation:none;scroll-behavior:auto}}

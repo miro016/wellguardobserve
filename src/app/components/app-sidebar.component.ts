@@ -13,6 +13,7 @@ import { ThemeService } from '../services/theme.service';
       <nav class="app-navigation" aria-label="Workspace navigation">
         <span>Posture</span>
         <a routerLink="/app" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}"><i>P</i>Current posture</a>
+        <a routerLink="/app/surface" routerLinkActive="active"><i>M</i>Surface map</a>
         <a routerLink="/app/targets" routerLinkActive="active"><i>T</i>Targets</a>
         <span>Analyze</span>
         <a routerLink="/app/findings" routerLinkActive="active"><i>I</i>Issue register</a>

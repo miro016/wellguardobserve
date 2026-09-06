@@ -1,4 +1,5 @@
-import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, HostListener, inject, input, signal, viewChild } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, ElementRef, HostListener, inject, input, OnDestroy, signal, viewChild } from '@angular/core';
 import { Finding, Target, TlsObservation, AgentActionRecord, AssetRecord, AssetRelationRecord, NodeKind, TopologyEdge, TopologyNode } from '../models';
 import { Topology, TopologyService } from '../services/topology.service';
 import { topologyEdgeId, traceTopologyPath } from '../services/topology-path';
@@ -10,12 +11,14 @@ type GraphView = 'architecture' | 'routing' | 'evidence';
   selector: 'wg-infrastructure-graph',
   imports: [FindingStoryComponent],
   template: `
-    <div class="topology-shell">
+    <div class="topology-shell" [class.map-expanded]="mapExpanded()">
       <div class="topology-toolbar">
+        <div class="topology-focus-context"><span>WG</span><p><small>EXTERNAL SURFACE</small><strong>{{ target().hostname }}</strong></p></div>
         <div class="topology-lens" role="group" aria-label="Topology detail"><span>MAP LENS</span><button type="button" [class.active]="viewMode() === 'architecture'" (click)="setView('architecture')">Architecture</button><button type="button" [class.active]="viewMode() === 'routing'" (click)="setView('routing')">Network routing</button><button type="button" [class.active]="viewMode() === 'evidence'" (click)="setView('evidence')">All evidence</button></div>
         <label class="topology-search"><span>FILTER ASSETS</span><input type="search" placeholder="Hostname, service, technology…" [value]="query()" (input)="changeQuery($event)"></label>
         <button class="risk-filter" type="button" [class.active]="riskOnly()" (click)="riskOnly.set(!riskOnly())"><i></i>Needs action</button>
-        <p><strong>{{ topology().nodes.length }} shown</strong><span>{{ collapsedLabel() }}</span></p>
+        <p class="topology-count"><strong>{{ topology().nodes.length }} shown</strong><span>{{ collapsedLabel() }}</span></p>
+        <button class="map-expand-control" type="button" [attr.aria-pressed]="mapExpanded()" [attr.aria-label]="mapExpanded() ? 'Exit full-screen surface map' : 'Expand surface map to full screen'" (click)="toggleMapExpanded()"><i aria-hidden="true"></i><span>{{ mapExpanded() ? 'Exit full screen' : 'Expand map' }}</span><kbd>{{ mapExpanded() ? 'Esc' : 'F' }}</kbd></button>
       </div>
       <div #canvas class="topology-canvas" [class.dragging]="dragging()" role="application" aria-label="Observed infrastructure topology. Hover a node to trace its complete upstream and downstream evidence path. Drag to pan and use the controls or mouse wheel to zoom." (wheel)="zoomWheel($event)" (pointerdown)="panStart($event)" (pointermove)="panMove($event)" (pointerup)="panEnd($event)" (pointercancel)="panEnd($event)">
         <div class="map-controls" aria-label="Map controls"><button type="button" title="Zoom in" aria-label="Zoom in" (click)="zoomBy(0.15)">+</button><span>{{ zoomPercent() }}%</span><button type="button" title="Zoom out" aria-label="Zoom out" (click)="zoomBy(-0.15)">−</button><button class="fit-control" type="button" title="Fit all nodes" (click)="resetView()">Fit</button></div>
@@ -65,7 +68,7 @@ type GraphView = 'architecture' | 'routing' | 'evidence';
   `,
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class InfrastructureGraphComponent {
+export class InfrastructureGraphComponent implements OnDestroy {
   readonly target = input.required<Target>();
   readonly findings = input<Finding[]>([]);
   readonly tls = input<TlsObservation | null>(null);
@@ -73,6 +76,7 @@ export class InfrastructureGraphComponent {
   readonly assets = input<AssetRecord[]>([]);
   readonly relations = input<AssetRelationRecord[]>([]);
   private readonly builder = inject(TopologyService);
+  private readonly document = inject(DOCUMENT);
   private readonly canvas = viewChild<ElementRef<HTMLElement>>('canvas');
   protected readonly selectedId = signal('');
   protected readonly selectedEdgeId = signal('');
@@ -80,6 +84,7 @@ export class InfrastructureGraphComponent {
   protected readonly viewMode = signal<GraphView>('architecture');
   protected readonly query = signal('');
   protected readonly riskOnly = signal(false);
+  protected readonly mapExpanded = signal(false);
   protected readonly fullTopology = computed(() => this.builder.build(this.target(), this.findings(), this.tls(), this.actions(), this.assets(), this.relations()));
   protected readonly topology = computed(() => this.layout(this.filter(this.project(this.fullTopology(), this.viewMode()))));
   protected readonly laneLabels = computed(() => {
@@ -116,6 +121,8 @@ export class InfrastructureGraphComponent {
   protected readonly viewBox = computed(() => `0 0 1000 ${this.stageHeight()}`);
   private dragOrigin = { pointerX: 0, pointerY: 0, panX: 0, panY: 0 };
   private previousNodeCount = 0;
+  private resizeObserver?: ResizeObserver;
+  private resizeFrame = 0;
 
   constructor() {
     effect(() => {
@@ -124,7 +131,25 @@ export class InfrastructureGraphComponent {
       if (this.selectedEdgeId() && !this.topology().edges.some((edge) => (edge.id || edge.from + edge.to) === this.selectedEdgeId())) this.selectedEdgeId.set('');
       if (count !== this.previousNodeCount) { this.previousNodeCount = count; queueMicrotask(() => this.resetView()); }
     });
-    afterNextRender(() => this.resetView());
+    effect((onCleanup) => {
+      const expanded = this.mapExpanded();
+      this.document.documentElement.classList.toggle('topology-focus-open', expanded);
+      onCleanup(() => this.document.documentElement.classList.remove('topology-focus-open'));
+      queueMicrotask(() => this.resetView());
+    });
+    afterNextRender(() => {
+      const canvas = this.canvas()?.nativeElement;
+      if (canvas && typeof ResizeObserver !== 'undefined') {
+        this.resizeObserver = new ResizeObserver(() => this.scheduleResetView());
+        this.resizeObserver.observe(canvas);
+      }
+      this.resetView();
+    });
+  }
+  ngOnDestroy(): void {
+    this.resizeObserver?.disconnect();
+    if (this.resizeFrame) cancelAnimationFrame(this.resizeFrame);
+    this.document.documentElement.classList.remove('topology-focus-open');
   }
   protected select(id: string): void {
     this.selectedId.set(id);
@@ -149,6 +174,20 @@ export class InfrastructureGraphComponent {
   protected nodeLabel(id: string): string { return this.topology().nodes.find((node) => node.id === id)?.label || id; }
   protected basisLabel(value?: string): string { return ({ observed: 'Direct observation', registry: 'Registry metadata', inferred: 'Inference', owner_confirmed: 'Owner confirmed' } as Record<string, string>)[value || ''] || 'Evidence'; }
   protected zoomBy(delta: number): void { this.zoom.set(this.clampZoom(this.zoom() + delta)); }
+  protected toggleMapExpanded(): void { this.mapExpanded.update((expanded) => !expanded); }
+  @HostListener('document:keydown.escape', ['$event'])
+  protected exitExpandedMap(event: Event): void {
+    if (!this.mapExpanded()) return;
+    event.preventDefault();
+    this.mapExpanded.set(false);
+  }
+  @HostListener('document:keydown.f', ['$event'])
+  protected openExpandedMap(event: Event): void {
+    const keyEvent = event as KeyboardEvent;
+    if (this.mapExpanded() || keyEvent.ctrlKey || keyEvent.metaKey || keyEvent.altKey || this.isTypingTarget(event.target)) return;
+    keyEvent.preventDefault();
+    this.mapExpanded.set(true);
+  }
   @HostListener('window:resize')
   protected resetView(): void {
     const canvas = this.canvas()?.nativeElement;
@@ -187,6 +226,13 @@ export class InfrastructureGraphComponent {
     const canvas = event.currentTarget as HTMLElement;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     this.dragging.set(false);
+  }
+  private scheduleResetView(): void {
+    if (this.resizeFrame) cancelAnimationFrame(this.resizeFrame);
+    this.resizeFrame = requestAnimationFrame(() => { this.resizeFrame = 0; this.resetView(); });
+  }
+  private isTypingTarget(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement && Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
   }
   private clampZoom(value: number): number { return Math.max(0.3, Math.min(1.8, Math.round(value * 100) / 100)); }
 
