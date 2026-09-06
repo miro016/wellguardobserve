@@ -161,9 +161,13 @@ export class InvestigationStore {
         observations.push(observation);
         const rank = { critical: 4, high: 3, medium: 2, low: 1, info: 0 } as Record<string, number>;
         const severity = (rank[finding.severity] || 0) >= (rank[String(existing['severity'])] || 0) ? finding.severity : String(existing['severity']);
+        const priorEvidence = Array.isArray(existing['evidence']) ? (existing['evidence'] as string[]) : [];
+        const mergedEvidence = [...new Set([...priorEvidence, ...finding.evidence])].slice(-24);
+        const priorSources = Array.isArray(existing['sourceUrls']) ? (existing['sourceUrls'] as string[]) : [];
+        const mergedSources = [...new Set([...priorSources, ...finding.sourceUrls])].slice(-20);
         await this.client.collection('findings').update(existing.id, {
           scan: scan.id, summary: finding.summary, severity, confidence: Math.max(Number(existing['confidence']) || 0, finding.confidence),
-          evidence: finding.evidence, remediation: finding.remediation, sourceUrls: finding.sourceUrls,
+          evidence: mergedEvidence, remediation: finding.remediation || existing['remediation'], sourceUrls: mergedSources,
           cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, frameworkRefs: finding.frameworkRefs || [],
           customerNarrative: finding.customerNarrative || existing['customerNarrative'] || null,
           assetKey: finding.assetKey || '', relatedAssetKeys: finding.relatedAssetKeys || [], relationKey: finding.relationKey || '',
