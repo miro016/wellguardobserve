@@ -13,13 +13,19 @@ const pollMs = Number(process.env['SCAN_POLL_MS'] || 4_000);
 const schedulePollMs = Math.max(15_000, Number(process.env['SCHEDULE_POLL_MS'] || 60_000));
 let nextScheduleCheck = 0;
 while (true) {
-  if (Date.now() >= nextScheduleCheck) {
-    try { await store.enqueueDueObservation(); await store.refreshImprovementProposals(); }
-    catch (error) { console.error('Observation scheduler check failed:', error); }
-    nextScheduleCheck = Date.now() + schedulePollMs;
-  }
   const request = await store.nextRequest();
-  if (!request) { await Bun.sleep(pollMs); continue; }
+  if (!request) {
+    if (Date.now() >= nextScheduleCheck) {
+      try {
+        await Promise.race([
+          (async () => { await store.enqueueDueObservation(); await store.refreshImprovementProposals(); })(),
+          Bun.sleep(10_000).then(() => { throw new Error('Background maintenance exceeded ten seconds.'); })
+        ]);
+      } catch (error) { console.error('Observer background maintenance failed:', error); }
+      nextScheduleCheck = Date.now() + schedulePollMs;
+    }
+    await Bun.sleep(pollMs); continue;
+  }
   let scan: RecordModel | null = null;
   let cancellationTimer: ReturnType<typeof setInterval> | undefined;
   let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
