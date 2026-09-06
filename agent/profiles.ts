@@ -16,7 +16,8 @@ const VERSION = 'scan-policy-v2';
 const CORE_TOOLS = [
   'dns', 'certificate-transparency', 'rdap', 'tls', 'bounded-tcp-connect', 'passive-banner',
   'single-http-get', 'service-discovery', 'configuration-review', 'public-metadata', 'service-adapters',
-  'public-directory-index-v1', 'frontend-api-evidence', 'authoritative-advisory-sources', 'security-framework-reference-catalog'
+  'public-directory-index-v1', 'frontend-api-evidence', 'authoritative-advisory-sources', 'product-lifecycle-intelligence',
+  'canonical-cve-records', 'source-supply-chain-context', 'security-framework-reference-catalog'
 ];
 
 export const AGENT_SCAN_PROFILES: Record<ScanMode, AgentScanProfile> = {

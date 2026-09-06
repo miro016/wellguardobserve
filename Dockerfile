@@ -46,6 +46,7 @@ ENV NODE_ENV=production \
     POCKETBASE_URL=http://127.0.0.1:8090 \
     POCKETBASE_DATA_DIR=/data \
     OLLAMA_MODEL=glm-5.3:cloud \
+    OLLAMA_REASONING_EFFORT=high \
     WELLGUARD_NUCLEI_TEMPLATES=/app/nuclei/templates \
     SCAN_POLL_MS=4000 \
     SCHEDULE_POLL_MS=60000 \

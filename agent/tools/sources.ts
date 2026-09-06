@@ -197,3 +197,116 @@ export async function queryCwe(cweId: string) {
     sourceUrl: `https://cwe.mitre.org/data/definitions/${id}.html`
   };
 }
+
+function publicProductSlug(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(normalized)) throw new Error('Use a concrete endoflife.date product slug such as nodejs, nginx, or postgresql.');
+  return normalized;
+}
+
+export async function queryProductLifecycle(input: { product: string; version: string }) {
+  const product = publicProductSlug(input.product);
+  const version = input.version.trim();
+  if (!version || version.length > 80) throw new Error('An exact observed version is required for lifecycle correlation.');
+  const response = await fetch(`https://endoflife.date/api/v1/products/${product}/`, {
+    signal: AbortSignal.timeout(12_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.1' }
+  });
+  if (!response.ok) throw new Error(`endoflife.date API returned ${response.status}.`);
+  const envelope = await response.json() as { result?: Record<string, unknown>; last_modified?: string; generated_at?: string };
+  const result = envelope.result || {};
+  const releases = Array.isArray(result['releases']) ? result['releases'] as Array<Record<string, unknown>> : [];
+  const matching = releases.filter((release) => {
+    const cycle = String(release['name'] || '');
+    const latest = release['latest'] && typeof release['latest'] === 'object' ? String((release['latest'] as Record<string, unknown>)['name'] || '') : '';
+    return version === cycle || version === latest || version.startsWith(`${cycle}.`);
+  }).slice(0, 5).map((release) => {
+    const latest = release['latest'] && typeof release['latest'] === 'object' ? release['latest'] as Record<string, unknown> : {};
+    return {
+      cycle: String(release['name'] || ''), label: String(release['label'] || ''), releaseDate: release['releaseDate'] || null,
+      latest: String(latest['name'] || ''), latestDate: latest['date'] || null, latestUrl: String(latest['link'] || ''),
+      isLts: release['isLts'] ?? null, ltsFrom: release['ltsFrom'] ?? null, isMaintained: release['isMaintained'] ?? null,
+      isEol: release['isEol'] ?? null, eolFrom: release['eolFrom'] ?? null, isEoas: release['isEoas'] ?? null, eoasFrom: release['eoasFrom'] ?? null
+    };
+  });
+  const links = result['links'] && typeof result['links'] === 'object' ? result['links'] as Record<string, unknown> : {};
+  return {
+    source: 'endoflife.date API v1', sourceUrl: String(links['html'] || `https://endoflife.date/${product}`), product,
+    label: String(result['label'] || product), observedVersion: version, releases: matching, lastModified: envelope.last_modified || '',
+    correlationNote: matching.length
+      ? 'Lifecycle dates apply to the matched release cycle. Confirm the retained product/version fingerprint before creating a finding.'
+      : 'No matching release cycle was found. Do not infer support status from this response.'
+  };
+}
+
+function compactCveMetrics(metrics: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(metrics)) return [];
+  const compact: Array<Record<string, unknown>> = [];
+  for (const entry of metrics.slice(0, 12)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const record = entry as Record<string, unknown>;
+    for (const key of ['cvssV4_0', 'cvssV3_1', 'cvssV3_0', 'cvssV2_0']) {
+      const metric = record[key];
+      if (metric && typeof metric === 'object') {
+        const value = metric as Record<string, unknown>;
+        compact.push({ type: key, score: value['baseScore'] ?? null, severity: value['baseSeverity'] || '', vector: value['vectorString'] || '', source: record['source'] || '' });
+        break;
+      }
+    }
+    const other = record['other'];
+    if (other && typeof other === 'object') {
+      const value = other as Record<string, unknown>;
+      compact.push({ type: String(value['type'] || 'other'), content: value['content'] || null });
+    }
+  }
+  return compact;
+}
+
+export async function queryCveRecord(cve: string) {
+  const normalized = cve.trim().toUpperCase();
+  if (!/^CVE-\d{4}-\d{4,}$/.test(normalized)) throw new Error('A valid CVE identifier is required.');
+  const response = await fetch(`https://cveawg.mitre.org/api/cve/${normalized}`, {
+    signal: AbortSignal.timeout(12_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.1' }
+  });
+  if (!response.ok) throw new Error(`CVE Program record API returned ${response.status}.`);
+  const data = await response.json() as Record<string, unknown>;
+  const metadata = data['cveMetadata'] && typeof data['cveMetadata'] === 'object' ? data['cveMetadata'] as Record<string, unknown> : {};
+  const containers = data['containers'] && typeof data['containers'] === 'object' ? data['containers'] as Record<string, unknown> : {};
+  const cna = containers['cna'] && typeof containers['cna'] === 'object' ? containers['cna'] as Record<string, unknown> : {};
+  const affected = Array.isArray(cna['affected']) ? (cna['affected'] as Array<Record<string, unknown>>).slice(0, 12).map((item) => ({
+    vendor: String(item['vendor'] || ''), product: String(item['product'] || item['packageName'] || ''), packageName: String(item['packageName'] || ''),
+    versions: Array.isArray(item['versions']) ? (item['versions'] as Array<Record<string, unknown>>).slice(0, 20).map((version) => ({ version: version['version'] || '', status: version['status'] || '', lessThan: version['lessThan'] || '', versionType: version['versionType'] || '' })) : []
+  })) : [];
+  const references = Array.isArray(cna['references']) ? (cna['references'] as Array<Record<string, unknown>>).slice(0, 20).map((reference) => ({ url: String(reference['url'] || ''), name: String(reference['name'] || ''), tags: Array.isArray(reference['tags']) ? reference['tags'] : [] })) : [];
+  const problemTypes = Array.isArray(cna['problemTypes']) ? (cna['problemTypes'] as Array<Record<string, unknown>>).slice(0, 8).flatMap((item) => Array.isArray(item['descriptions']) ? (item['descriptions'] as Array<Record<string, unknown>>).map((description) => ({ id: String(description['cweId'] || ''), description: String(description['description'] || '') })).slice(0, 12) : []) : [];
+  const adp = Array.isArray(containers['adp']) ? (containers['adp'] as Array<Record<string, unknown>>).slice(0, 8).map((item) => ({
+    provider: item['providerMetadata'] && typeof item['providerMetadata'] === 'object' ? String((item['providerMetadata'] as Record<string, unknown>)['shortName'] || (item['providerMetadata'] as Record<string, unknown>)['orgId'] || '') : '',
+    title: String(item['title'] || ''), metrics: compactCveMetrics(item['metrics'])
+  })).filter((item) => item.metrics.length) : [];
+  return {
+    source: 'CVE Program CVE Record API', sourceUrl: `https://www.cve.org/CVERecord?id=${normalized}`,
+    id: String(metadata['cveId'] || normalized), state: String(metadata['state'] || ''), published: metadata['datePublished'] || null, updated: metadata['dateUpdated'] || null,
+    title: String(cna['title'] || ''), description: englishDescription(cna['descriptions']), affected, problemTypes,
+    cnaMetrics: compactCveMetrics(cna['metrics']), adpMetrics: adp, references,
+    correlationNote: 'This is the canonical CVE record. The observed product edition and version must still match an affected range before the CVE can be attached to a finding.'
+  };
+}
+
+export async function queryOpenSsfScorecard(input: { owner: string; repository: string }) {
+  if (!/^[A-Za-z0-9_.-]{1,100}$/.test(input.owner) || !/^[A-Za-z0-9_.-]{1,100}$/.test(input.repository)) throw new Error('A valid public GitHub owner and repository are required.');
+  const repository = `github.com/${input.owner}/${input.repository}`;
+  const response = await fetch(`https://api.scorecard.dev/projects/${repository}`, {
+    signal: AbortSignal.timeout(12_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.1' }
+  });
+  if (!response.ok) throw new Error(`OpenSSF Scorecard API returned ${response.status}.`);
+  const data = await response.json() as Record<string, unknown>;
+  const repo = data['repo'] && typeof data['repo'] === 'object' ? data['repo'] as Record<string, unknown> : {};
+  const checks = Array.isArray(data['checks']) ? (data['checks'] as Array<Record<string, unknown>>).slice(0, 24).map((check) => {
+    const documentation = check['documentation'] && typeof check['documentation'] === 'object' ? check['documentation'] as Record<string, unknown> : {};
+    return { name: String(check['name'] || ''), score: Number(check['score']), reason: String(check['reason'] || '').slice(0, 500), documentationUrl: String(documentation['url'] || '') };
+  }) : [];
+  return {
+    source: 'OpenSSF Scorecard public REST API', sourceUrl: `https://scorecard.dev/viewer/?uri=${encodeURIComponent(repository)}`,
+    repository: String(repo['name'] || repository), commit: String(repo['commit'] || ''), date: String(data['date'] || ''), score: Number(data['score']), checks,
+    interpretation: 'This describes the identified source repository’s software-supply-chain practices. It is context only and is not evidence that a deployed instance is vulnerable or correctly configured.'
+  };
+}

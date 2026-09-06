@@ -2,9 +2,11 @@
 
 ## Browser and data plane
 
-The Angular SPA uses the official PocketBase client directly. Collection API rules enforce record ownership. Public registration is disabled because preview users are invited by an administrator.
+The Angular SPA uses the official PocketBase client directly. Collection API rules enforce workspace membership and role permissions. Public registration is disabled because preview users are invited by a platform administrator.
 
-Users can read their own targets, scans, findings, TLS observations, assets, relationships, private identity evidence, and agent actions. They can create a `scanRequests` record only for a target they own and only in the `queued` state. An authenticated owner can change an active request only to `cancelling`/`cancelled`; all other lifecycle transitions remain worker-controlled. Users cannot change their role. Administrators can create an `admin_override` target owned by their own account and approve exact related hostnames after recording authorization; public and member target creation remains blocked.
+An enabled workspace member can read the targets, scans, findings, TLS observations, assets, relationships, private identity evidence, and agent actions in that workspace. Viewers are read-only. Operators can enqueue or stop a bounded investigation. Workspace admins and owners can additionally review findings and changes, maintain safe observation schedules, update target context, and govern exact related-host scope. Platform administrators create accounts and workspaces, assign roles, move targets between boundaries, and create `admin_override` targets after recording authorization. PocketBase rules enforce the same matrix independently of Angular. Users cannot promote their own global or workspace role.
+
+The `owner` relation remains on targets as legacy authorization provenance, while `workspace` is the access boundary. Existing targets are migrated into one personal workspace per previous owner, with that user assigned as owner. Target uniqueness is enforced per `(hostname, workspace)` so separate customers can monitor the same provider hostname without sharing evidence.
 
 ## Observer plane
 
@@ -23,6 +25,8 @@ The browser computes a Wellguard priority score from technical severity, public 
 ## Collections
 
 - `users`: invited application users and role.
+- `workspaces`: isolated customer/team boundaries and lifecycle state.
+- `workspaceMembers`: user-to-workspace assignments with owner, admin, operator, or viewer role and an immediate suspension flag.
 - `targets`: hostname scope, optional owned-host hints, authorization evidence, owner-set business criticality, and portfolio tags.
 - `targetScopes`: administrator-approved exact related hostnames and their authorization evidence.
 - `scanRequests`: browser-to-worker queue, current phase, worker heartbeat, and immutable-at-run profile snapshot.

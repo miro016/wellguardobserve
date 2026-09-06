@@ -20,6 +20,7 @@ export const routes: Routes = [
   guarded('app/traces', () => import('./pages/traces.component').then((m) => m.TracesComponent), 'Agent traces — Wellguard Observe'),
   guarded('app/jobs', () => import('./pages/jobs.component').then((m) => m.JobsComponent), 'Investigations — Wellguard Observe'),
   guarded('app/sources', () => import('./pages/sources.component').then((m) => m.SourcesComponent), 'Evidence sources — Wellguard Observe'),
+  { path: 'app/workspaces', canActivate: [adminGuard], loadComponent: () => import('./pages/workspaces.component').then((m) => m.WorkspacesComponent), title: 'Workspaces — Wellguard Observe' },
   { path: 'app/admin', canActivate: [adminGuard], loadComponent: () => import('./pages/admin.component').then((m) => m.AdminComponent), title: 'Administration — Wellguard Observe' },
   guarded('app/settings', () => import('./pages/settings.component').then((m) => m.SettingsComponent), 'Settings — Wellguard Observe'),
   { path: '**', redirectTo: '' }

@@ -27,7 +27,7 @@ import { mineFrontendBundles } from './tools/endpoint-mining';
 import { probeHttpMethodSurface, analyzeTokenStructure } from './tools/unbounded';
 import { sweepCommonPaths } from './tools/dir-sweep';
 import { discoverServiceHosts } from './tools/service-hosts';
-import { queryCisaKev, queryCwe, queryEpss, queryGitHubAdvisory, queryGitHubReleases, queryNvdCves, queryOsv, readPublicSource } from './tools/sources';
+import { queryCisaKev, queryCveRecord, queryCwe, queryEpss, queryGitHubAdvisory, queryGitHubReleases, queryNvdCves, queryOpenSsfScorecard, queryOsv, queryProductLifecycle, readPublicSource } from './tools/sources';
 import { adapterCatalog, inspectWithAdapter } from './adapters/registry';
 import { fingerprintCatalog } from './fingerprints/web';
 import { recogCatalog } from './fingerprints/recog';
@@ -50,7 +50,7 @@ Use inspect_public_directory_index only when robots.txt, a sitemap, or direct pa
 
 Automatic suggestedFindings from a fixed tool are the authoritative threshold for that tool's strict condition. When suggestedFindings is empty, do not promote the same observation into a weakness without materially different independent evidence. In particular, Access-Control-Allow-Origin: * without Access-Control-Allow-Credentials does not establish a credentialed cross-origin vulnerability and must not be mapped to CWE-942.
 
-Map observed configuration weaknesses to specific mappable CWE weakness IDs and verify their names with query_cwe when useful. A CWE classifies the underlying weakness; it is not proof of exploitability. Only search vulnerability databases after an exact product version has been directly observed. Treat NVD/OSV results as candidates until edition and version ranges match. Record only confirmed matching CVE identifiers; do not attach CVEs based on a product name alone. For each confirmed CVE, use query_cisa_kev and query_epss, and retain affirmative KEV status, EPSS probability, and the unmodified NVD CVSS metric in threatContext. Missing threat data must remain unknown, never zero.
+Map observed configuration weaknesses to specific mappable CWE weakness IDs and verify their names with query_cwe when useful. A CWE classifies the underlying weakness; it is not proof of exploitability. Only search vulnerability databases after an exact product version has been directly observed. Use query_product_lifecycle for support status only when the observed product maps to an exact endoflife.date slug. Treat NVD/OSV and lifecycle results as candidates until product, edition and version ranges match. Record only confirmed matching CVE identifiers; do not attach CVEs based on a product name alone. For each confirmed CVE, use query_cve_record, query_cisa_kev and query_epss, and retain affirmative KEV status, EPSS probability, and the unmodified CVSS metric in threatContext. Missing threat data must remain unknown, never zero. Use query_openssf_scorecard only when direct vendor evidence identifies the official public GitHub repository. Its result describes source-repository supply-chain practice and never proves deployed-instance security.
 
 Use list_security_framework_references before adding frameworkRefs. OWASP WSTG entries describe a test method, OWASP ASVS entries describe verification requirements, and EU CRA entries are regulatory relevance only. Use only catalogued controls and never describe an external scan as an OWASP certification, CRA conformity assessment, or legal conclusion. A finding may have no framework mapping when none fits precisely.
 
@@ -111,9 +111,16 @@ function conversationMessage(message: Record<string, unknown>, sequence: number,
   return { role, content: content.slice(0, 12_000) || '(empty message)', toolName, sequence, at };
 }
 
+export type ModelReasoningEffort = 'low' | 'high' | 'max';
+
+export function resolveReasoningEffort(value: unknown): ModelReasoningEffort {
+  return value === 'low' || value === 'high' || value === 'max' ? value : 'high';
+}
+
 export interface InvestigatorOptions {
   model?: string;
   baseUrl?: string;
+  reasoningEffort?: ModelReasoningEffort;
   maxActions?: number;
   profile?: AgentScanProfile;
   onAction?: (action: AgentAction) => void | Promise<void>;
@@ -478,6 +485,21 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       description: 'Retrieve the authoritative MITRE definition for a specific mappable CWE weakness identifier.',
       schema: z.object({ cweId: z.string().regex(/^CWE-\d+$/i) })
     }),
+    tool(async ({ product, version }) => tracked('query_product_lifecycle', { product, version }, () => queryProductLifecycle({ product, version })), {
+      name: 'query_product_lifecycle',
+      description: 'Query endoflife.date for lifecycle evidence only after an exact product and version were observed. Use a concrete catalogue slug; an unmatched cycle is not evidence of end-of-life status.',
+      schema: z.object({ product: z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/), version: z.string().min(1).max(80) })
+    }),
+    tool(async ({ cve }) => tracked('query_cve_record', { cve }, () => queryCveRecord(cve)), {
+      name: 'query_cve_record',
+      description: 'Retrieve the canonical CVE Program record, affected ranges, CNA metrics, and public ADP enrichment for a concrete CVE. Applicability still requires an exact observed product/version match.',
+      schema: z.object({ cve: z.string().regex(/^CVE-\d{4}-\d{4,}$/i) })
+    }),
+    tool(async ({ owner, repository }) => tracked('query_openssf_scorecard', { owner, repository }, () => queryOpenSsfScorecard({ owner, repository })), {
+      name: 'query_openssf_scorecard',
+      description: 'Retrieve OpenSSF Scorecard supply-chain context only for a vendor-confirmed official public GitHub repository. Never treat its score as evidence about the deployed target.',
+      schema: z.object({ owner: z.string().regex(/^[A-Za-z0-9_.-]{1,100}$/), repository: z.string().regex(/^[A-Za-z0-9_.-]{1,100}$/) })
+    }),
     tool(async (finding) => {
       options.signal?.throwIfAborted();
       const normalized = await recordFinding(finding);
@@ -498,12 +520,15 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
     inspect_rate_limit_controls: profile.allowActiveValidation
   };
   const availableTools = tools.filter((item) => profileGates[(item as { name?: string }).name || ''] !== false);
-  const effectiveSystemPrompt = `${SYSTEM_PROMPT}\n\nACTIVE SCAN CONTRACT: ${profile.name} (${profile.version}). Maximum ${profile.maxActions} tool calls; permitted methods: ${profile.methods.join(', ')}; reviewed Nuclei rate ceiling: ${profile.nucleiRequestsPerSecond ? `${profile.nucleiRequestsPerSecond}/second` : 'disabled'}. ${profile.agentInstructions}`;
+  const reasoningEffort = resolveReasoningEffort(options.reasoningEffort || process.env['OLLAMA_REASONING_EFFORT']);
+  const effectiveSystemPrompt = `${SYSTEM_PROMPT}\n\nMODEL REASONING EFFORT: ${reasoningEffort}.\nACTIVE SCAN CONTRACT: ${profile.name} (${profile.version}). Maximum ${profile.maxActions} tool calls; permitted methods: ${profile.methods.join(', ')}; reviewed Nuclei rate ceiling: ${profile.nucleiRequestsPerSecond ? `${profile.nucleiRequestsPerSecond}/second` : 'disabled'}. ${profile.agentInstructions}`;
 
   const model = new ChatOllama({
     model: options.model || process.env['OLLAMA_MODEL'] || 'glm-5.3:cloud',
     baseUrl: options.baseUrl || process.env['OLLAMA_BASE_URL'] || 'http://127.0.0.1:11434',
-    temperature: 0.1
+    temperature: 0.1,
+    // Ollama accepts named reasoning levels; ChatOllama's current type still exposes this option as boolean.
+    think: reasoningEffort as unknown as boolean
   });
 
   const agent = createAgent({

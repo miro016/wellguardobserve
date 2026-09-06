@@ -11,7 +11,7 @@ import { SCAN_PROFILES, scanProfile, storedScanProfile } from '../scan-profiles'
   selector: 'wg-admin', imports: [AppSidebarComponent, FormsModule, RouterLink, DatePipe],
   template: `
     <div class="app-layout"><wg-app-sidebar /><main class="app-main admin-page">
-      <header class="app-header"><div><span class="app-breadcrumb">WORKSPACE / ADMINISTRATION</span><h1>Target operations</h1><p>Approve owned infrastructure, give the observer useful host clues, and start a bounded investigation.</p></div><span class="scope-lock">⌾ Administrator approval required</span></header>
+      <header class="app-header"><div><span class="app-breadcrumb">WORKSPACE / TARGET ADMINISTRATION</span><h1>Target operations</h1><p>Approve owned infrastructure inside a workspace, give the observer useful host clues, and start a bounded investigation.</p></div><span class="scope-lock">⌾ Platform approval required</span></header>
       @if (!db.isAdmin()) { <div class="error-banner"><strong>Administrator access required</strong><span>Your account cannot approve new reconnaissance targets.</span></div> }
       @if (error()) { <div class="error-banner"><strong>Operation failed</strong><span>{{ error() }}</span></div> }
       @if (notice()) { <div class="success-banner"><strong>{{ notice() }}</strong><span>The observer queue will pick up requested scans automatically.</span></div> }
@@ -20,6 +20,7 @@ import { SCAN_PROFILES, scanProfile, storedScanProfile } from '../scan-profiles'
         <form class="panel target-form" (ngSubmit)="create(true)">
           <div class="panel-heading"><div><span class="section-index">AUTHORIZE A ROOT</span><h2>Add target</h2></div><span class="evidence-count">Recon only</span></div>
           <div class="form-body">
+            <label><span>Workspace</span><select name="workspace" [(ngModel)]="workspaceId" required>@for (workspace of db.workspaces(); track workspace.id) { <option [value]="workspace.id">{{ workspace.name }}</option> }</select><small>All evidence, findings, jobs, and history for this target stay inside the selected workspace.</small></label>
             <label><span>Display name</span><input name="name" [(ngModel)]="name" maxlength="160" placeholder="Production perimeter" required></label>
             <label><span>Root domain</span><input name="hostname" [(ngModel)]="hostname" maxlength="253" inputmode="url" autocomplete="off" placeholder="example.com" required><small>Enter a root domain without a protocol, path, or port.</small></label>
             <label><span>Known service hosts <em>optional</em></span><textarea name="hostHints" [(ngModel)]="hostHints" rows="4" placeholder="sso.example.com&#10;staging.example.com"></textarea><small>One hostname per line or comma separated. Hints must stay beneath the approved root; passive discovery still runs.</small></label>
@@ -27,7 +28,7 @@ import { SCAN_PROFILES, scanProfile, storedScanProfile } from '../scan-profiles'
             <label><span>Approval record</span><textarea name="reason" [(ngModel)]="reason" rows="3" maxlength="500" placeholder="I own and administer this domain." required></textarea></label>
             <fieldset class="form-profile"><legend>Scan contract</legend><div class="profile-tabs">@for (profile of profiles; track profile.id) { <button type="button" [class.active]="scanMode === profile.id" (click)="setScanMode(profile.id)"><span>{{ profile.signal }}</span><strong>{{ profile.name }}</strong><small>{{ profile.maxActions }} tools</small></button> }</div><p>{{ selectedProfile().description }}</p><dl><div><dt>Methods</dt><dd>{{ selectedProfile().methods }}</dd></div><div><dt>Capabilities</dt><dd>{{ selectedProfile().capabilities.join(' · ') }}</dd></div></dl></fieldset>
             <label class="authorization-check"><input name="confirmed" type="checkbox" [(ngModel)]="confirmed"><span><strong>I own this infrastructure or have explicit permission to assess it.</strong><small>Wellguard will make bounded DNS, TLS, TCP, and safe HTTP requests to this root and its discovered subdomains.</small></span></label>
-            <div class="form-actions"><button class="button primary" type="submit" [disabled]="busy() || !db.isAdmin()">{{ busy() ? 'Creating…' : 'Add target & run scan' }} <span>→</span></button><button class="button secondary" type="button" (click)="create(false)" [disabled]="busy() || !db.isAdmin()">Add without scan</button></div>
+            <div class="form-actions"><button class="button primary" type="submit" [disabled]="busy() || !db.isAdmin() || !workspaceId">{{ busy() ? 'Creating…' : 'Add target & run scan' }} <span>→</span></button><button class="button secondary" type="button" (click)="create(false)" [disabled]="busy() || !db.isAdmin() || !workspaceId">Add without scan</button></div>
           </div>
         </form>
 
@@ -45,13 +46,14 @@ export class AdminComponent implements OnInit {
   protected readonly db = inject(PocketBaseService);
   private readonly router = inject(Router);
   protected readonly targets = signal<Target[]>([]); protected readonly busy = signal(false); protected readonly queued = signal<Record<string, boolean>>({}); protected readonly error = signal(''); protected readonly notice = signal('');
+  protected workspaceId = '';
   protected name = ''; protected hostname = ''; protected hostHints = ''; protected authorizedHosts = ''; protected reason = 'I own and administer this infrastructure.'; protected confirmed = false;
   protected readonly profiles = SCAN_PROFILES; protected scanMode: ScanMode = storedScanProfile();
   protected selectedProfile() { return scanProfile(this.scanMode); }
   protected setScanMode(mode: ScanMode): void { this.scanMode = mode; }
   protected scopeTargetId = ''; protected scopeHostname = ''; protected scopeReason = 'I own or administer this related service hostname.'; protected scopeConfirmed = false; protected readonly scopeBusy = signal(false);
   ngOnInit(): void { void this.load(); }
-  private async load(): Promise<void> { try { const targets = await this.db.targets(); this.targets.set(targets); if (!targets.some((target) => target.id === this.scopeTargetId)) this.scopeTargetId = targets[0]?.id || ''; } catch (error) { this.error.set(error instanceof Error ? error.message : 'Targets could not be loaded.'); } }
+  private async load(): Promise<void> { try { await this.db.loadWorkspaceContext(); this.workspaceId ||= this.db.activeWorkspaceId() || this.db.workspaces()[0]?.id || ''; const targets = await this.db.targets(); this.targets.set(targets); if (!targets.some((target) => target.id === this.scopeTargetId)) this.scopeTargetId = targets[0]?.id || ''; } catch (error) { this.error.set(error instanceof Error ? error.message : 'Targets could not be loaded.'); } }
   protected async create(runScan: boolean): Promise<void> {
     this.error.set(''); this.notice.set('');
     if (!this.confirmed) { this.error.set('Confirm that you own the target or have explicit permission to assess it.'); return; }
@@ -61,7 +63,7 @@ export class AdminComponent implements OnInit {
     catch (error) { this.error.set(error instanceof Error ? error.message : 'Check the target hostname.'); return; }
     this.busy.set(true);
     try {
-      const target = await this.db.createTarget({ name: this.name.trim(), hostname, hostHints: hints, authorizedHosts, authorizationReason: this.reason.trim() });
+      const target = await this.db.createTarget({ workspace: this.workspaceId, name: this.name.trim(), hostname, hostHints: hints, authorizedHosts, authorizationReason: this.reason.trim() });
       if (runScan) {
         const requestId = await this.db.requestScan(target.id, this.scanMode);
         this.queued.update((state) => ({ ...state, [target.id]: true }));

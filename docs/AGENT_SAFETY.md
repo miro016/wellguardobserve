@@ -37,7 +37,7 @@ The model has no shell, filesystem, credential, arbitrary database, or general-p
 
 Service banners, HTML, JSON, documentation, fingerprints, and repository text are untrusted data. Prompts explicitly prohibit following instructions embedded in evidence. Public fingerprint packs are pinned to exact revisions, size-bounded, normalized, and limited to supported fields. Product names require direct response evidence and cannot be inferred from hostnames or generic tool notes. Tool policy is enforced in code regardless of model output.
 
-PocketBase users cannot change their own role. Administrative routes have both an Angular guard and PocketBase collection rules. The observer authenticates through a dedicated `workers` collection; its process environment does not receive the PocketBase superuser credentials, and it cannot change a target's hostname, owner, authorization, private-address policy, or related-host scope.
+PocketBase users cannot change their own global or workspace role. Workspace access, operator actions, and governance actions are enforced by PocketBase rules; administrative routes also have an Angular guard. The observer authenticates through a dedicated `workers` collection; its process environment does not receive the PocketBase superuser credentials, and it cannot change a target's hostname, workspace, owner, authorization, private-address policy, or related-host scope.
 
 Public identity records are tenant-private and derived only from fields a scoped service or authoritative registry directly returned. Wellguard does not search for a person by name, infer a LinkedIn URL, scrape social networks, or infer employment from the absence of public information. Current/former labels are owner review metadata, not agent conclusions.
 

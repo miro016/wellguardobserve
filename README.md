@@ -6,12 +6,12 @@ It is intentionally bounded: no credential guessing, exploit payloads, exploit e
 
 ## What the MVP does
 
-- Direct Angular-to-PocketBase authentication and data access, with a one-second live investigation view for the private-preview MVP.
-- Administrator-created accounts and administrator-approved target creation; there is no public registration.
+- Direct Angular-to-PocketBase authentication and workspace-scoped data access, with a one-second live investigation view for the private-preview MVP.
+- Administrator-created accounts and administrator-approved target creation; there is no public registration. A platform administrator manages isolated workspaces, assigns multiple users as owner, admin, operator, or viewer, and places multiple targets in each workspace.
 - Verified root/subdomain scope plus administrator-approved exact related hostnames. Approving `service.provider.example` never authorizes its parent or sibling tenants.
 - LangChain investigation driven by an Ollama model.
 - Five freely selectable PoC scan contracts, from Baseline through the explicitly consented Advanced and non-production Unbounded profiles. Target ownership approval remains mandatory, and the worker snapshots the selected limits and available tools into the job before investigation starts.
-- Safe DNS, RDAP registration, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, passive service banners, HTTP, TLS, public metadata, frontend-to-API discovery, curated safe web audits, bounded unknown-service recognition, a 30-product versioned adapter catalog, NVD, MITRE CWE, GitHub Advisory, OSV, CISA KEV, FIRST EPSS, and bounded public-document tools.
+- Safe DNS, RDAP registration, certificate-transparency, passive hostname search, verified subdomain/service discovery, TCP reachability, passive service banners, HTTP, TLS, public metadata, frontend-to-API discovery, curated safe web audits, bounded unknown-service recognition, a 30-product versioned adapter catalog, NVD, MITRE CWE, GitHub Advisory, OSV, CISA KEV, FIRST EPSS, endoflife.date lifecycle data, canonical CVE Program records, OpenSSF Scorecard context, and bounded public-document tools.
 - Findings with separate severity and confidence, preserved evidence, remediation, source URLs, CWE weakness mappings, version-matched CVE identifiers, curated OWASP/CRA relevance links, and a non-technical potential-incident path that visually separates observed facts from untested consequences.
 - TLS hostname, trust, issuer, validity window, protocol, cipher, expiry, and explicitly published certificate-email monitoring, plus a browsable certificate-transparency record inventory.
 - DNS control-plane visibility for registrar lifecycle, public registration contacts, nameservers, DNSSEC, CAA, MX, SPF, DMARC, MTA-STS, and SMTP TLS reporting.
@@ -47,7 +47,7 @@ Angular SPA ───────────── PocketBase API
                          policy-bounded read-only tools
 ```
 
-The Angular application does not use a Bun web API. Bun is an internal worker only. See [Architecture](docs/ARCHITECTURE.md), [Knowledge base](docs/KNOWLEDGE_BASE.md), [Product adapters](docs/ADAPTERS.md), and [Agent safety](docs/AGENT_SAFETY.md).
+The Angular application does not use a Bun web API. Bun is an internal worker only. PocketBase rules enforce workspace membership even if the browser UI is bypassed. See [Architecture](docs/ARCHITECTURE.md), [Knowledge base](docs/KNOWLEDGE_BASE.md), [Product adapters](docs/ADAPTERS.md), and [Agent safety](docs/AGENT_SAFETY.md).
 
 ## Local development
 
@@ -127,6 +127,7 @@ For a production deployment, set long random PocketBase credentials, a precise `
 | `PUBLIC_ORIGIN` | Allowed browser origin | `*` |
 | `OLLAMA_BASE_URL` | Ollama API used by LangChain | `http://127.0.0.1:11434` |
 | `OLLAMA_MODEL` | Investigator model | `glm-5.3:cloud` |
+| `OLLAMA_REASONING_EFFORT` | Ollama named reasoning level (`low`, `high`, or `max`) | `high` |
 | `WELLGUARD_NUCLEI_TEMPLATES` | Immutable reviewed Nuclei template directory | `/app/nuclei/templates` |
 | `NUCLEI_BINARY` | Pinned Nuclei executable | `nuclei` |
 | `SCAN_POLL_MS` | Queue polling interval | `4000` |
@@ -140,6 +141,9 @@ For a production deployment, set long random PocketBase credentials, a precise `
 - Rapid7 Recog fingerprints, pinned to a reviewed BSD-2-Clause revision and limited to passive SSH/FTP/SMTP greetings plus web server/auth headers and favicon hashes
 - ProjectDiscovery Nuclei 3.11.1 as an execution engine for the committed Wellguard GET-only allowlist; public community templates are not downloaded at runtime
 - NIST NVD CVE API 2.0 and the MITRE CWE REST API
+- CVE Program canonical CVE Record API (CC0 data)
+- endoflife.date API v1 lifecycle catalogue (MIT)
+- OpenSSF Scorecard precomputed public API for vendor-confirmed official source repositories
 - GitHub reviewed Security Advisories and Releases APIs
 - CISA Known Exploited Vulnerabilities feed
 - FIRST Exploit Prediction Scoring System API

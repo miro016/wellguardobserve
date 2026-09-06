@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { TopologyService } from '../src/app/services/topology.service';
 import type { AssetRecord, AssetRelationRecord, Target } from '../src/app/models';
 
-const target: Target = { id: 'target', name: 'Example', hostname: 'example.test', hostHints: [], authorizedHosts: [], authorizationStatus: 'admin_override', status: 'observed', lastScanAt: '', assetCount: 0, findingCount: 0, posture: 100, criticality: 'standard', tags: [] };
+const target: Target = { id: 'target', workspace: 'workspace', name: 'Example', hostname: 'example.test', hostHints: [], authorizedHosts: [], authorizationStatus: 'admin_override', status: 'observed', lastScanAt: '', assetCount: 0, findingCount: 0, posture: 100, criticality: 'standard', tags: [] };
 const asset = (key: string, kind: AssetRecord['kind'], label: string, subtitle = ''): AssetRecord => ({ id: key, target: 'target', scan: 'scan', key, kind, label, subtitle, state: 'observed', confidence: 100, basis: 'observed', details: [] });
 const relation = (key: string, fromKey: string, toKey: string, type: string): AssetRelationRecord => ({ id: key, target: 'target', scan: 'scan', key, fromKey, toKey, type, label: type.replace(/_/g, ' '), state: 'observed', confidence: 100, basis: 'observed', evidence: [], findingTitles: [] });
 

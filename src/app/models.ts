@@ -7,6 +7,20 @@ export type SurfaceChangeState = 'added' | 'changed' | 'not_observed';
 export type ChangeReviewStatus = 'unreviewed' | 'expected' | 'investigate' | 'resolved';
 export type ObservationCadence = 'off' | 'daily' | 'weekly' | 'monthly';
 export type ScheduledScanMode = Extract<ScanMode, 'light' | 'standard'>;
+export type WorkspaceRole = 'owner' | 'admin' | 'operator' | 'viewer';
+
+export interface Workspace {
+  id: string; name: string; slug: string; description: string; status: 'active' | 'archived'; createdBy: string; created: string; updated: string;
+}
+
+export interface WorkspaceMember {
+  id: string; workspace: string; user: string; role: WorkspaceRole; enabled: boolean; created: string; updated: string;
+  userName: string; userEmail: string;
+}
+
+export interface WorkspaceUser {
+  id: string; name: string; email: string; verified: boolean; created: string;
+}
 
 export interface ScanPolicySnapshot {
   id: ScanMode; name: string; version: string; maxActions: number; nucleiRequestsPerSecond: number;
@@ -24,6 +38,7 @@ export interface CustomerNarrative {
 
 export interface Target {
   id: string;
+  workspace: string;
   name: string;
   hostname: string;
   hostHints: string[];
@@ -39,6 +54,7 @@ export interface Target {
 }
 
 export interface CreateTargetInput {
+  workspace: string;
   name: string;
   hostname: string;
   hostHints: string[];
