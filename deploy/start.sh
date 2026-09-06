@@ -87,11 +87,13 @@ if [[ -n "${WELLGUARD_ADMIN_EMAIL:-}" && -n "${WELLGUARD_ADMIN_PASSWORD:-}" ]]; 
 fi
 
 printf 'starting the observer\n' >"$status_file"
-gosu bun env -u POCKETBASE_SUPERUSER_EMAIL -u POCKETBASE_SUPERUSER_PASSWORD bun run /app/agent/index.ts &
+gosu bun env -u POCKETBASE_SUPERUSER_EMAIL -u POCKETBASE_SUPERUSER_PASSWORD bun run /app/agent/index.ts \
+  2> >(tee -a "$error_file" >&2) &
 agent_pid=$!
 sleep 1
 if ! kill -0 "$agent_pid" 2>/dev/null; then
-  fail_startup 'observer worker exited during startup'
+  diagnostic="$(tail -n 12 "$error_file" | tr '\n' ' ' | sed -E 's/(password|token|authorization)[^ ]*/\1=[redacted]/Ig' | cut -c1-700)"
+  fail_startup "observer worker exited during startup${diagnostic:+: $diagnostic}"
 fi
 
 printf 'ready\n' >"$status_file"
