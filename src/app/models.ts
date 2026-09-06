@@ -49,6 +49,7 @@ export interface Finding {
   cveIds: string[]; weaknessIds: string[]; frameworkRefs: FrameworkReference[];
   customerNarrative: CustomerNarrative | null;
   assetKey: string; relatedAssetKeys: string[]; relationKey: string;
+  observations: Array<{ scan: string; observedAt: string; profile?: string }>; runCount: number;
   created: string; status: 'open' | 'accepted' | 'resolved';
 }
 

@@ -21,6 +21,7 @@ import { inspectAuthenticationControls } from './tools/authentication';
 import { probeEncodingFilterBypass } from './tools/filter-bypass';
 import { runHeadlessBrowserReview, runChromiumDomReview } from './tools/browser';
 import { replayWithAcquiredSession } from './tools/session-replay';
+import { probeBoundaryValidation } from './tools/boundary';
 import { sweepFullPortRange } from './tools/full-sweep';
 import { mineFrontendBundles } from './tools/endpoint-mining';
 import { probeHttpMethodSurface, analyzeTokenStructure } from './tools/unbounded';
@@ -392,6 +393,13 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
         name: 'replay_with_acquired_session',
         description: 'Unbounded profile only. If the authentication probe issued a session token earlier in this run, replay up to 20 previously discovered paths with the token and compare anonymous vs authenticated responses. Surfaces broken access control and record shapes for further review.',
         schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), paths: z.array(z.string().max(300)).max(20).describe('Previously discovered paths, e.g. from bundle mining or common-path sweep.') })
+      }),
+      tool(async ({ hostname, port, tls, path, fields }) => tracked('probe_boundary_validation', { hostname, port, tls, path }, () => probeBoundaryValidation(scope, sessionToken, { hostname, port, tls, path, fields }), async (result) => {
+        for (const finding of result.suggestedFindings) await recordFinding(finding);
+      }), {
+        name: 'probe_boundary_validation',
+        description: 'Unbounded profile only. POSTs fixed boundary-value bodies (zero, negative and overflow numbers, empty and 512-byte strings) to a discovered JSON endpoint whose field names and types you declare from API evidence. Accepted boundaries are recorded as server-side validation findings.',
+        schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), path: z.string().max(300).describe('JSON POST endpoint observed in evidence.'), fields: z.array(z.object({ name: z.string().max(49), kind: z.enum(['number', 'string', 'boolean']) })).max(8) })
       }),
       tool(async ({ hostname, port, tls, startPath, hashRoutes }) => tracked('review_dynamic_dom', { hostname, port, tls, startPath, hashRoutes }, async () => {
         const happyDomResult = await runChromiumDomReview(scope, { hostname, port, tls, startPath, sessionToken: sessionToken || undefined, hashRoutes });

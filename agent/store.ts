@@ -149,13 +149,36 @@ export class InvestigationStore {
       await this.client.collection('publicIdentities').create({ target: report.target.id, scan: scan.id, ...identity, ...ownerReview });
     }
     for (const finding of report.findings) {
-      await this.client.collection('findings').create({
-        target: report.target.id, scan: scan.id, title: finding.title, summary: finding.summary,
-        severity: finding.severity, confidence: finding.confidence, asset: finding.asset,
-        evidence: finding.evidence, remediation: finding.remediation, sourceUrls: finding.sourceUrls,
-        cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, frameworkRefs: finding.frameworkRefs || [], customerNarrative: finding.customerNarrative || null, assetKey: finding.assetKey || '',
-        relatedAssetKeys: finding.relatedAssetKeys || [], relationKey: finding.relationKey || '', status: 'open'
-      });
+      const observation = { scan: scan.id, observedAt: report.completedAt, profile: request['mode'] || '' };
+      let existing: RecordModel | null = null;
+      try {
+        existing = await this.client.collection('findings').getFirstListItem(
+          this.client.filter('target = {:target} && title = {:title} && asset = {:asset}', { target: report.target.id, title: finding.title, asset: finding.asset })
+        );
+      } catch { /* first observation of this finding class */ }
+      if (existing) {
+        const observations = Array.isArray(existing['observations']) ? (existing['observations'] as unknown[]).filter((entry) => JSON.stringify(entry).indexOf(scan.id) === -1) : [];
+        observations.push(observation);
+        const rank = { critical: 4, high: 3, medium: 2, low: 1, info: 0 } as Record<string, number>;
+        const severity = (rank[finding.severity] || 0) >= (rank[String(existing['severity'])] || 0) ? finding.severity : String(existing['severity']);
+        await this.client.collection('findings').update(existing.id, {
+          scan: scan.id, summary: finding.summary, severity, confidence: Math.max(Number(existing['confidence']) || 0, finding.confidence),
+          evidence: finding.evidence, remediation: finding.remediation, sourceUrls: finding.sourceUrls,
+          cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, frameworkRefs: finding.frameworkRefs || [],
+          customerNarrative: finding.customerNarrative || existing['customerNarrative'] || null,
+          assetKey: finding.assetKey || '', relatedAssetKeys: finding.relatedAssetKeys || [], relationKey: finding.relationKey || '',
+          observations: observations.slice(-12), runCount: (Number(existing['runCount']) || 0) + 1
+        });
+      } else {
+        await this.client.collection('findings').create({
+          target: report.target.id, scan: scan.id, title: finding.title, summary: finding.summary,
+          severity: finding.severity, confidence: finding.confidence, asset: finding.asset,
+          evidence: finding.evidence, remediation: finding.remediation, sourceUrls: finding.sourceUrls,
+          cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, frameworkRefs: finding.frameworkRefs || [], customerNarrative: finding.customerNarrative || null, assetKey: finding.assetKey || '',
+          relatedAssetKeys: finding.relatedAssetKeys || [], relationKey: finding.relationKey || '', status: 'open',
+          observations: [observation], runCount: 1
+        });
+      }
     }
     for (const tls of report.tls) {
       await this.client.collection('tlsObservations').create({ target: report.target.id, scan: scan.id, hostname: tls.hostname, valid: tls.valid, expiresAt: tls.validTo, details: tls });
