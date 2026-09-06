@@ -20,17 +20,26 @@ catch {
   user = await pb.collection('users').create({ email: userEmail, password: userPassword, passwordConfirm: userPassword, name: 'Miroslav Petro', role: 'admin', verified: true });
 }
 
+let existingTarget = null;
+try { existingTarget = await pb.collection('targets').getFirstListItem(pb.filter('hostname = {:hostname} && owner = {:owner}', { hostname: 'miroslav-petro.com', owner: user.id }), { sort: 'created' }); }
+catch { /* Fresh installation. */ }
+
 let workspace;
-try { workspace = await pb.collection('workspaces').getFirstListItem(pb.filter('slug = {:slug}', { slug: 'personal-infrastructure' })); }
-catch {
-  workspace = await pb.collection('workspaces').create({ name: 'Personal infrastructure', slug: 'personal-infrastructure', description: 'Owner-authorized infrastructure monitoring workspace.', status: 'active', createdBy: user.id });
+if (existingTarget?.['workspace']) workspace = await pb.collection('workspaces').getOne(existingTarget['workspace']);
+else {
+  try {
+    const membership = await pb.collection('workspaceMembers').getFirstListItem(pb.filter('user = {:user} && enabled = true', { user: user.id }), { sort: 'created' });
+    workspace = await pb.collection('workspaces').getOne(membership['workspace']);
+  } catch {
+    workspace = await pb.collection('workspaces').create({ name: 'Personal infrastructure', slug: `personal-${user.id.toLowerCase()}`, description: 'Owner-authorized infrastructure monitoring workspace.', status: 'active', createdBy: user.id });
+  }
 }
 try { await pb.collection('workspaceMembers').getFirstListItem(pb.filter('workspace = {:workspace} && user = {:user}', { workspace: workspace.id, user: user.id })); }
 catch { await pb.collection('workspaceMembers').create({ workspace: workspace.id, user: user.id, role: 'owner', enabled: true }); }
 
 let target;
-try { target = await pb.collection('targets').getFirstListItem(pb.filter('hostname = {:hostname} && workspace = {:workspace}', { hostname: 'miroslav-petro.com', workspace: workspace.id })); }
-catch {
+if (existingTarget) target = existingTarget;
+else {
   target = await pb.collection('targets').create({
     owner: user.id, workspace: workspace.id, name: 'Personal infrastructure', hostname: 'miroslav-petro.com',
     hostHints: ['keycloak1.miroslav-petro.com'],
