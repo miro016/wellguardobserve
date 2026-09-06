@@ -1,4 +1,4 @@
-import { createAgent, tool } from 'langchain';
+import { createAgent, tool, contextEditingMiddleware, ClearToolUsesEdit, modelRetryMiddleware } from 'langchain';
 import { ChatOllama } from '@langchain/ollama';
 import { z } from 'zod';
 import { ScopeGuard } from './security/scope-guard';
@@ -500,7 +500,22 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
   const agent = createAgent({
     model,
     tools: availableTools,
-    systemPrompt: effectiveSystemPrompt
+    systemPrompt: effectiveSystemPrompt,
+    middleware: [
+      modelRetryMiddleware({
+        maxRetries: 3,
+        initialDelayMs: 2_000,
+        backoffFactor: 2,
+        jitter: true
+      }),
+      contextEditingMiddleware({
+        edits: [new ClearToolUsesEdit({
+          trigger: { tokens: 60_000 },
+          keep: { messages: 8 },
+          placeholder: '[older tool evidence cleared to keep the investigation within the model context window; rely on recorded findings and run scoreboard]'
+        })]
+      })
+    ]
   });
 
   const hints = target.hostHints?.length ? ` Administrator-provided service hints: ${target.hostHints.join(', ')}.` : '';
