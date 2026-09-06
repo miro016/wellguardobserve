@@ -167,7 +167,7 @@ export class InvestigationStore {
           cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, frameworkRefs: finding.frameworkRefs || [],
           customerNarrative: finding.customerNarrative || existing['customerNarrative'] || null,
           assetKey: finding.assetKey || '', relatedAssetKeys: finding.relatedAssetKeys || [], relationKey: finding.relationKey || '',
-          observations: observations.slice(-12), runCount: (Number(existing['runCount']) || 0) + 1
+          observations: observations.slice(-12), runCount: (Number(existing['runCount']) || 1) + 1
         });
       } else {
         await this.client.collection('findings').create({
