@@ -72,6 +72,22 @@ export async function queryCisaKev(cve: string) {
   return { source: 'CISA Known Exploited Vulnerabilities', match: kevCache.entries.find((entry) => entry['cveID']?.toUpperCase() === cve.toUpperCase()) || null };
 }
 
+export async function queryEpss(cves: string[]) {
+  const normalized = [...new Set(cves.map((cve) => cve.trim().toUpperCase()))].slice(0, 20);
+  if (!normalized.length || normalized.some((cve) => !/^CVE-\d{4}-\d{4,}$/.test(cve))) throw new Error('One or more valid CVE identifiers are required.');
+  const query = new URLSearchParams({ cve: normalized.join(',') });
+  const response = await fetch(`https://api.first.org/data/v1/epss?${query}`, {
+    signal: AbortSignal.timeout(12_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.1' }
+  });
+  if (!response.ok) throw new Error(`FIRST EPSS API returned ${response.status}.`);
+  const data = await response.json() as { data?: Array<{ cve?: string; epss?: string; percentile?: string; date?: string }> };
+  return {
+    source: 'FIRST Exploit Prediction Scoring System', sourceUrl: 'https://www.first.org/epss/',
+    scores: (data.data || []).map((item) => ({ cve: String(item.cve || ''), probability: Number(item.epss), percentile: Number(item.percentile), date: String(item.date || '') })),
+    interpretation: 'EPSS estimates the probability of exploitation activity in the next 30 days. It complements rather than replaces severity and business context.'
+  };
+}
+
 export async function queryOsv(input: { ecosystem: string; packageName: string; version: string }) {
   const response = await fetch('https://api.osv.dev/v1/query', {
     method: 'POST', signal: AbortSignal.timeout(10_000),

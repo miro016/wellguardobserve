@@ -5,6 +5,7 @@ import { AppSidebarComponent } from '../components/app-sidebar.component';
 import { AgentActionRecord, Finding, FindingLifecycle, Scan, Target } from '../models';
 import { PocketBaseService } from '../services/pocketbase.service';
 import { buildKnowledgePatterns, findingLifecycle, latestCompletedScans } from '../services/posture-intelligence';
+import { assessFindingPriority } from '../services/surface-intelligence';
 
 @Component({
   selector: 'wg-dashboard',
@@ -50,7 +51,7 @@ import { buildKnowledgePatterns, findingLifecycle, latestCompletedScans } from '
 
         <section class="posture-lower">
           <article class="panel priority-panel"><div class="panel-heading"><div><span class="section-index">CURRENT PRIORITY</span><h2>Issues that need a decision</h2></div><a routerLink="/app/findings">Open issue register →</a></div>
-            <div class="priority-list">@for (finding of currentFindings().slice(0, 6); track finding.id) { <a routerLink="/app/findings" [queryParams]="{target:finding.target}" class="priority-row"><span class="severity-mark" [attr.data-severity]="finding.severity"></span><div><span class="lifecycle-tag" [attr.data-state]="lifecycle(finding)">{{ lifecycleLabel(finding) }}</span><strong>{{ finding.title }}</strong><small>{{ targetHost(finding.target) }} · {{ finding.asset }}</small></div><span class="confidence-value">{{ finding.confidence }}%</span><b>→</b></a> } @empty { <div class="empty-state"><strong>No current actionable findings.</strong><span>Review “not observed” items before treating them as fixed.</span></div> }</div>
+            <div class="priority-list">@for (finding of currentFindings().slice(0, 6); track finding.id) { <a routerLink="/app/findings" [queryParams]="{target:finding.target}" class="priority-row"><span class="severity-mark" [attr.data-severity]="finding.severity"></span><div><span class="lifecycle-tag" [attr.data-state]="lifecycle(finding)">{{ lifecycleLabel(finding) }}</span><strong>{{ finding.title }}</strong><small>{{ targetHost(finding.target) }} · {{ finding.asset }}</small></div><span class="confidence-value priority-value">{{ priority(finding).score }}<small>{{ priority(finding).label }}</small></span><b>→</b></a> } @empty { <div class="empty-state"><strong>No current actionable findings.</strong><span>Review “not observed” items before treating them as fixed.</span></div> }</div>
           </article>
           <article class="panel knowledge-preview"><div class="panel-heading"><div><span class="section-index">EVIDENCE KNOWLEDGE</span><h2>Patterns worth preventing</h2></div><a routerLink="/app/knowledge">Explore knowledge →</a></div>
             <div class="knowledge-preview-list">@for (pattern of recurringPatterns().slice(0, 4); track pattern.key) { <a routerLink="/app/knowledge"><span>{{ pattern.category }}</span><strong>{{ pattern.title }}</strong><small>{{ pattern.technology }} · {{ pattern.occurrences }} observations · {{ pattern.affectedTargetIds.length }} target{{ pattern.affectedTargetIds.length === 1 ? '' : 's' }}</small></a> } @empty { <div class="empty-state"><strong>Knowledge starts with repeat evidence.</strong><span>Patterns will appear as observations accumulate.</span></div> }</div>
@@ -74,7 +75,7 @@ export class DashboardComponent implements OnInit {
   protected readonly persistentFindings = computed(() => this.findings().filter((finding) => this.lifecycle(finding) === 'persistent' && finding.severity !== 'info'));
   protected readonly notObservedFindings = computed(() => this.findings().filter((finding) => this.lifecycle(finding) === 'not_observed' && finding.severity !== 'info'));
   protected readonly resolvedFindings = computed(() => this.findings().filter((finding) => this.lifecycle(finding) === 'resolved' && finding.severity !== 'info'));
-  protected readonly currentFindings = computed(() => [...this.newFindings(), ...this.persistentFindings()].filter((finding) => finding.status !== 'resolved').sort((a, b) => this.severityRank(b.severity) - this.severityRank(a.severity)));
+  protected readonly currentFindings = computed(() => [...this.newFindings(), ...this.persistentFindings()].filter((finding) => finding.status !== 'resolved').sort((a, b) => this.priority(b).score - this.priority(a).score));
   protected readonly urgentCount = computed(() => this.currentFindings().filter((finding) => finding.severity === 'critical' || finding.severity === 'high').length);
   protected readonly assetCount = computed(() => this.targets().reduce((sum, target) => sum + Math.max(1, target.assetCount), 0));
   protected readonly portfolioPosture = computed(() => Math.round(this.targets().reduce((sum, target) => sum + target.posture, 0) / Math.max(1, this.targets().length)));
@@ -95,6 +96,7 @@ export class DashboardComponent implements OnInit {
   protected newFor(target: Target): Finding[] { return this.newFindings().filter((finding) => finding.target === target.id); }
   protected persistentFor(target: Target): Finding[] { return this.persistentFindings().filter((finding) => finding.target === target.id); }
   protected targetHost(id: string): string { return this.targets().find((target) => target.id === id)?.hostname || 'Unknown target'; }
+  protected priority(finding: Finding) { const target = this.targets().find((item) => item.id === finding.target); return assessFindingPriority(finding, target?.criticality || 'standard', this.lifecycle(finding)); }
   protected provider(target: Target): string { return this.actions().some((action) => action.target === target.id && action.summary.toLowerCase().includes('cloudflare')) ? 'Cloudflare edge' : 'Direct public route'; }
   protected serviceCount(target: Target): number {
     const action = [...this.actions()].reverse().find((item) => item.target === target.id && item.tool === 'discover_service_hosts');
@@ -102,5 +104,4 @@ export class DashboardComponent implements OnInit {
   }
   protected targetState(target: Target): string { const severities = this.findingsFor(target).map((finding) => finding.severity); return severities.some((item) => item === 'critical' || item === 'high') ? 'risk' : severities.some((item) => item === 'medium' || item === 'low') ? 'warning' : 'healthy'; }
   protected postureLabel(score: number): string { return score >= 90 ? 'Strong posture' : score >= 70 ? 'Review recommended' : 'Attention required'; }
-  private severityRank(value: string): number { return ({ info: 0, low: 1, medium: 2, high: 3, critical: 4 } as Record<string, number>)[value] || 0; }
 }

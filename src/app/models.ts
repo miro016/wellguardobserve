@@ -2,6 +2,9 @@ export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type NodeState = 'risk' | 'warning' | 'healthy' | 'observed' | 'unknown';
 export type NodeKind = 'domain' | 'hostname' | 'url' | 'network' | 'edge' | 'server' | 'port' | 'service';
 export type ScanMode = 'light' | 'standard' | 'extended' | 'advanced' | 'unbounded';
+export type TargetCriticality = 'critical' | 'high' | 'standard' | 'low';
+export type SurfaceChangeState = 'added' | 'changed' | 'not_observed';
+export type ChangeReviewStatus = 'unreviewed' | 'expected' | 'investigate' | 'resolved';
 
 export interface ScanPolicySnapshot {
   id: ScanMode; name: string; version: string; maxActions: number; nucleiRequestsPerSecond: number;
@@ -29,6 +32,8 @@ export interface Target {
   assetCount: number;
   findingCount: number;
   posture: number;
+  criticality: TargetCriticality;
+  tags: string[];
 }
 
 export interface CreateTargetInput {
@@ -51,6 +56,11 @@ export interface Finding {
   assetKey: string; relatedAssetKeys: string[]; relationKey: string;
   observations: Array<{ scan: string; observedAt: string; profile?: string }>; runCount: number;
   created: string; status: 'open' | 'accepted' | 'resolved';
+  threatContext?: ThreatContext;
+}
+
+export interface ThreatContext {
+  kev?: boolean; epss?: number; cvssScore?: number; cvssVersion?: string; cvssVector?: string; sourceUrls?: string[];
 }
 
 export type FindingLifecycle = 'new' | 'persistent' | 'not_observed' | 'resolved';
@@ -112,6 +122,11 @@ export interface AssetRelationRecord {
   state: NodeState; confidence: number; basis: EvidenceBasis; evidence: string[]; findingTitles: string[];
 }
 
+export interface ChangeReview {
+  id: string; target: string; scan: string; changeKey: string; status: ChangeReviewStatus; note: string;
+  reviewedBy: string; reviewedAt: string; created: string; updated: string;
+}
+
 export interface PublicIdentity {
   id: string; target: string; scan: string; key: string; kind: 'person' | 'mailbox' | 'organization'; displayName: string;
   email: string; publicLinks: string[]; sourceUrls: string[]; evidence: string[]; sourceAssetKey: string; confidence: number;
@@ -120,10 +135,10 @@ export interface PublicIdentity {
 
 export interface TopologyNode {
   id: string; kind: NodeKind; label: string; subtitle: string; state: NodeState; x: number; y: number;
-  details: EvidenceItem[]; findingIds: string[];
+  details: EvidenceItem[]; findingIds: string[]; changeState?: SurfaceChangeState;
 }
 
 export interface TopologyEdge {
   id?: string; from: string; to: string; label?: string; type?: string; state?: NodeState; confidence?: number;
-  basis?: EvidenceBasis; evidence?: string[]; findingIds?: string[];
+  basis?: EvidenceBasis; evidence?: string[]; findingIds?: string[]; changeState?: SurfaceChangeState;
 }

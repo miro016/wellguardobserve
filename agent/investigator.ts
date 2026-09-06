@@ -27,7 +27,7 @@ import { mineFrontendBundles } from './tools/endpoint-mining';
 import { probeHttpMethodSurface, analyzeTokenStructure } from './tools/unbounded';
 import { sweepCommonPaths } from './tools/dir-sweep';
 import { discoverServiceHosts } from './tools/service-hosts';
-import { queryCisaKev, queryCwe, queryGitHubAdvisory, queryGitHubReleases, queryNvdCves, queryOsv, readPublicSource } from './tools/sources';
+import { queryCisaKev, queryCwe, queryEpss, queryGitHubAdvisory, queryGitHubReleases, queryNvdCves, queryOsv, readPublicSource } from './tools/sources';
 import { adapterCatalog, inspectWithAdapter } from './adapters/registry';
 import { fingerprintCatalog } from './fingerprints/web';
 import { recogCatalog } from './fingerprints/recog';
@@ -50,7 +50,7 @@ Use inspect_public_directory_index only when robots.txt, a sitemap, or direct pa
 
 Automatic suggestedFindings from a fixed tool are the authoritative threshold for that tool's strict condition. When suggestedFindings is empty, do not promote the same observation into a weakness without materially different independent evidence. In particular, Access-Control-Allow-Origin: * without Access-Control-Allow-Credentials does not establish a credentialed cross-origin vulnerability and must not be mapped to CWE-942.
 
-Map observed configuration weaknesses to specific mappable CWE weakness IDs and verify their names with query_cwe when useful. A CWE classifies the underlying weakness; it is not proof of exploitability. Only search vulnerability databases after an exact product version has been directly observed. Treat NVD/OSV results as candidates until edition and version ranges match. Record only confirmed matching CVE identifiers; do not attach CVEs based on a product name alone.
+Map observed configuration weaknesses to specific mappable CWE weakness IDs and verify their names with query_cwe when useful. A CWE classifies the underlying weakness; it is not proof of exploitability. Only search vulnerability databases after an exact product version has been directly observed. Treat NVD/OSV results as candidates until edition and version ranges match. Record only confirmed matching CVE identifiers; do not attach CVEs based on a product name alone. For each confirmed CVE, use query_cisa_kev and query_epss, and retain affirmative KEV status, EPSS probability, and the unmodified NVD CVSS metric in threatContext. Missing threat data must remain unknown, never zero.
 
 Use list_security_framework_references before adding frameworkRefs. OWASP WSTG entries describe a test method, OWASP ASVS entries describe verification requirements, and EU CRA entries are regulatory relevance only. Use only catalogued controls and never describe an external scan as an OWASP certification, CRA conformity assessment, or legal conclusion. A finding may have no framework mapping when none fits precisely.
 
@@ -76,7 +76,11 @@ const findingSchema = z.object({
   frameworkRefs: z.array(frameworkReferenceInputSchema).max(8).default([]),
   assetKey: z.string().max(500).default(''),
   relatedAssetKeys: z.array(z.string().max(500)).max(30).default([]),
-  relationKey: z.string().max(500).default('')
+  relationKey: z.string().max(500).default(''),
+  threatContext: z.object({
+    kev: z.boolean().optional(), epss: z.number().min(0).max(1).optional(), cvssScore: z.number().min(0).max(10).optional(),
+    cvssVersion: z.string().max(20).optional(), cvssVector: z.string().max(180).optional(), sourceUrls: z.array(z.string().url()).max(8).optional()
+  }).optional()
 });
 
 function stringify(value: unknown): string {
@@ -448,6 +452,11 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       name: 'query_cisa_kev',
       description: 'Check whether a concrete CVE is in the authoritative CISA Known Exploited Vulnerabilities catalog.',
       schema: z.object({ cve: z.string() })
+    }),
+    tool(async ({ cves }) => tracked('query_epss', { cves }, () => queryEpss(cves)), {
+      name: 'query_epss',
+      description: 'Retrieve the current FIRST EPSS 30-day exploitation probability for up to 20 concrete, confirmed CVE identifiers. It is a prioritization input, not vulnerability proof.',
+      schema: z.object({ cves: z.array(z.string().regex(/^CVE-\d{4}-\d{4,}$/i)).min(1).max(20) })
     }),
     tool(async ({ ecosystem, packageName, version }) => tracked('query_osv', { ecosystem, packageName, version }, () => queryOsv({ ecosystem, packageName, version })), {
       name: 'query_osv',

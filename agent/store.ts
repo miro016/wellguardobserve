@@ -169,7 +169,7 @@ export class InvestigationStore {
         await this.client.collection('findings').update(existing.id, {
           scan: scan.id, summary: finding.summary, severity, confidence: Math.max(Number(existing['confidence']) || 0, finding.confidence),
           evidence: mergedEvidence, remediation: finding.remediation || existing['remediation'], sourceUrls: mergedSources,
-          cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, frameworkRefs: finding.frameworkRefs || [],
+          cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, frameworkRefs: finding.frameworkRefs || [], threatContext: finding.threatContext || existing['threatContext'] || {},
           customerNarrative: finding.customerNarrative || existing['customerNarrative'] || null,
           assetKey: finding.assetKey || '', relatedAssetKeys: finding.relatedAssetKeys || [], relationKey: finding.relationKey || '',
           observations: observations.slice(-12), runCount: (Number(existing['runCount']) || 1) + 1,
@@ -180,7 +180,7 @@ export class InvestigationStore {
           target: report.target.id, scan: scan.id, title: finding.title, summary: finding.summary,
           severity: finding.severity, confidence: finding.confidence, asset: finding.asset,
           evidence: finding.evidence, remediation: finding.remediation, sourceUrls: finding.sourceUrls,
-          cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, frameworkRefs: finding.frameworkRefs || [], customerNarrative: finding.customerNarrative || null, assetKey: finding.assetKey || '',
+          cveIds: finding.cveIds, weaknessIds: finding.weaknessIds, frameworkRefs: finding.frameworkRefs || [], threatContext: finding.threatContext || {}, customerNarrative: finding.customerNarrative || null, assetKey: finding.assetKey || '',
           relatedAssetKeys: finding.relatedAssetKeys || [], relationKey: finding.relationKey || '', status: 'open',
           observations: [observation], runCount: 1
         });

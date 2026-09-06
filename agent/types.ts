@@ -9,6 +9,15 @@ export interface AuthorizedTarget {
 
 export type ScanMode = 'light' | 'standard' | 'extended' | 'advanced' | 'unbounded';
 
+export interface ThreatContext {
+  kev?: boolean;
+  epss?: number;
+  cvssScore?: number;
+  cvssVersion?: string;
+  cvssVector?: string;
+  sourceUrls?: string[];
+}
+
 export interface ScanPolicySnapshot {
   id: ScanMode;
   name: string;
@@ -70,6 +79,7 @@ export interface AgentFinding {
   assetKey?: string;
   relatedAssetKeys?: string[];
   relationKey?: string;
+  threatContext?: ThreatContext;
 }
 
 export interface TlsEvidence {

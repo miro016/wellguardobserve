@@ -13,6 +13,7 @@ export const routes: Routes = [
   guarded('app/investigations/:requestId', () => import('./pages/live-investigation.component').then((m) => m.LiveInvestigationComponent), 'Live investigation — Wellguard Observe'),
   guarded('app/surface', () => import('./pages/surface.component').then((m) => m.SurfaceComponent), 'Infrastructure topology — Wellguard Observe'),
   guarded('app/findings', () => import('./pages/findings.component').then((m) => m.FindingsComponent), 'Issue register — Wellguard Observe'),
+  guarded('app/changes', () => import('./pages/change-review.component').then((m) => m.ChangeReviewComponent), 'Change review — Wellguard Observe'),
   guarded('app/identities', () => import('./pages/identities.component').then((m) => m.IdentitiesComponent), 'Identity exposure — Wellguard Observe'),
   guarded('app/reports', () => import('./pages/reports.component').then((m) => m.ReportsComponent), 'Change history — Wellguard Observe'),
   guarded('app/knowledge', () => import('./pages/knowledge.component').then((m) => m.KnowledgeComponent), 'Exposure knowledge — Wellguard Observe'),

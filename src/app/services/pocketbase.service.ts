@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import PocketBase, { RecordModel } from 'pocketbase';
-import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, CreateTargetInput, Finding, KnowledgeObservation, PublicIdentity, Scan, ScanMode, ScanRequest, Target, TargetScope, TlsObservation } from '../models';
+import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, ChangeReview, ChangeReviewStatus, CreateTargetInput, Finding, KnowledgeObservation, PublicIdentity, Scan, ScanMode, ScanRequest, Target, TargetCriticality, TargetScope, TlsObservation } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class PocketBaseService {
@@ -28,7 +28,8 @@ export class PocketBaseService {
     return {
       id: record.id, name: record['name'], hostname: record['hostname'], hostHints: record['hostHints'] ?? [], authorizedHosts,
       authorizationStatus: record['authorizationStatus'], status: record['status'], lastScanAt: record['lastScanAt'],
-      assetCount: record['assetCount'] ?? 0, findingCount: record['findingCount'] ?? 0, posture: record['posture'] ?? 100
+      assetCount: record['assetCount'] ?? 0, findingCount: record['findingCount'] ?? 0, posture: record['posture'] ?? 100,
+      criticality: record['criticality'] || 'standard', tags: Array.isArray(record['tags']) ? record['tags'] : []
     } as Target;
   }
 
@@ -52,7 +53,7 @@ export class PocketBaseService {
         owner: this.user()!.id, name: input.name, hostname: input.hostname, hostHints: input.hostHints,
         authorizationStatus: 'admin_override', authorizationReason: input.authorizationReason,
         authorizedAt: new Date().toISOString(), allowPrivateAddresses: false, status: 'observed',
-        assetCount: 1, findingCount: 0, posture: 100
+        assetCount: 1, findingCount: 0, posture: 100, criticality: 'standard', tags: []
       });
       for (const hostname of input.authorizedHosts) await this.addTargetScope(record.id, hostname, input.authorizationReason);
       return this.target(record, input.authorizedHosts);
@@ -66,7 +67,7 @@ export class PocketBaseService {
       if (scanId) clauses.push(this.client.filter('scan = {:scanId}', { scanId }));
       const filter = clauses.join(' && ');
       const records = await this.client.collection('findings').getFullList({ filter, sort: '-created' });
-      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], title: r['title'], summary: r['summary'], severity: r['severity'], confidence: r['confidence'], asset: r['asset'], evidence: r['evidence'] ?? [], remediation: r['remediation'] ?? '', sourceUrls: r['sourceUrls'] ?? [], cveIds: r['cveIds'] ?? [], weaknessIds: r['weaknessIds'] ?? [], frameworkRefs: r['frameworkRefs'] ?? [], customerNarrative: r['customerNarrative'] && typeof r['customerNarrative'] === 'object' ? r['customerNarrative'] : null, assetKey: r['assetKey'] ?? '', relatedAssetKeys: r['relatedAssetKeys'] ?? [], relationKey: r['relationKey'] ?? '', observations: Array.isArray(r['observations']) ? r['observations'] : (r['scan'] ? [{ scan: r['scan'], observedAt: r['created'] }] : []), runCount: Number(r['runCount']) || (Array.isArray(r['observations']) && r['observations'].length ? r['observations'].length : 1), created: r['created'], status: r['status'] } as Finding));
+      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], title: r['title'], summary: r['summary'], severity: r['severity'], confidence: r['confidence'], asset: r['asset'], evidence: r['evidence'] ?? [], remediation: r['remediation'] ?? '', sourceUrls: r['sourceUrls'] ?? [], cveIds: r['cveIds'] ?? [], weaknessIds: r['weaknessIds'] ?? [], frameworkRefs: r['frameworkRefs'] ?? [], customerNarrative: r['customerNarrative'] && typeof r['customerNarrative'] === 'object' ? r['customerNarrative'] : null, assetKey: r['assetKey'] ?? '', relatedAssetKeys: r['relatedAssetKeys'] ?? [], relationKey: r['relationKey'] ?? '', observations: Array.isArray(r['observations']) ? r['observations'] : (r['scan'] ? [{ scan: r['scan'], observedAt: r['created'] }] : []), runCount: Number(r['runCount']) || (Array.isArray(r['observations']) && r['observations'].length ? r['observations'].length : 1), created: r['created'], status: r['status'], threatContext: r['threatContext'] && typeof r['threatContext'] === 'object' ? r['threatContext'] : undefined } as Finding));
     } catch (error) { return this.failed(error); }
   }
 
@@ -76,11 +77,12 @@ export class PocketBaseService {
     catch (error) { return this.failed(error); }
   }
 
-  async tls(targetId?: string, hostname?: string): Promise<TlsObservation | null> {
+  async tls(targetId?: string, hostname?: string, scanId?: string): Promise<TlsObservation | null> {
     try {
       const clauses: string[] = [];
       if (targetId) clauses.push(this.client.filter('target = {:targetId}', { targetId }));
       if (hostname) clauses.push(this.client.filter('hostname = {:hostname}', { hostname }));
+      if (scanId) clauses.push(this.client.filter('scan = {:scanId}', { scanId }));
       const filter = clauses.join(' && ');
       const r = await this.client.collection('tlsObservations').getFirstListItem(filter, { sort: '-created' });
       return { id: r.id, scan: r['scan'], ...(r['details'] as TlsObservation) };
@@ -184,6 +186,29 @@ export class PocketBaseService {
     if (scanId) clauses.push(this.client.filter('scan = {:scan}', { scan: scanId }));
     const records = await this.client.collection('assetRelations').getFullList({ filter: clauses.join(' && '), sort: 'created' });
     return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], key: r['key'], fromKey: r['fromKey'], toKey: r['toKey'], type: r['type'], label: r['label'], state: r['state'], confidence: r['confidence'], basis: r['basis'], evidence: r['evidence'] ?? [], findingTitles: r['findingTitles'] ?? [] } as AssetRelationRecord));
+  }
+
+  async changeReviews(targetId?: string): Promise<ChangeReview[]> {
+    try {
+      const filter = targetId ? this.client.filter('target = {:target}', { target: targetId }) : '';
+      const records = await this.client.collection('changeReviews').getFullList({ filter, sort: '-created' });
+      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], changeKey: r['changeKey'], status: r['status'], note: r['note'] ?? '', reviewedBy: r['reviewedBy'] ?? '', reviewedAt: r['reviewedAt'] ?? '', created: r['created'], updated: r['updated'] } as ChangeReview));
+    } catch (error: unknown) {
+      if ((error as { status?: number })?.status === 404) return [];
+      return this.failed(error);
+    }
+  }
+
+  async reviewChange(targetId: string, scanId: string, changeKey: string, status: ChangeReviewStatus, note: string, existingId?: string): Promise<ChangeReview> {
+    if (!this.isAdmin() || !this.user()?.id) throw new Error('Only a workspace administrator can review observed changes.');
+    const payload = { target: targetId, scan: scanId, changeKey, status, note, reviewedBy: this.user()!.id, reviewedAt: new Date().toISOString() };
+    const r = existingId ? await this.client.collection('changeReviews').update(existingId, payload) : await this.client.collection('changeReviews').create(payload);
+    return { id: r.id, target: r['target'], scan: r['scan'], changeKey: r['changeKey'], status: r['status'], note: r['note'] ?? '', reviewedBy: r['reviewedBy'] ?? '', reviewedAt: r['reviewedAt'] ?? '', created: r['created'], updated: r['updated'] } as ChangeReview;
+  }
+
+  async updateTargetContext(targetId: string, criticality: TargetCriticality, tags: string[]): Promise<void> {
+    if (!this.isAdmin()) throw new Error('Only a workspace administrator can change asset context.');
+    await this.client.collection('targets').update(targetId, { criticality, tags: [...new Set(tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean))].slice(0, 20) });
   }
 
   async knowledgeObservations(targetId?: string): Promise<KnowledgeObservation[]> {

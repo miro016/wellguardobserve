@@ -16,21 +16,24 @@ Deeper service checks are inspectors registered through typed tools and a 30-pro
 
 After investigation, deterministic graph assembly turns observations into typed assets and relationships. Facts retain their basis (`observed`, `registry`, `inferred`, or `owner_confirmed`) and confidence. Public URLs are first-class assets, and ports are keyed to the observed machine/address rather than repeated for every hostname alias. The primary architecture lens can therefore show authorized root → hostname → URL → observed machine → machine port → application, while a separate routing lens carries provider and registered-network context. Findings reference `assetKey`, optional related asset keys, and an optional relationship key, so the UI can show both where to fix a problem and which other asset was disclosed or affected. Hover traversal walks directed ancestors and descendants, highlighting the complete evidence path without crossing into sibling branches. Each finding also receives a deterministic customer narrative with an observed step, possible next step, possible business impact, and fixed non-exploitation boundary. Domain control-plane tools add authoritative RDAP, DNSSEC, CAA and mail-policy evidence. NVD correlation requires an exact observed product version and returned CPE applicability before a CVE can be confirmed. The executor controls destination scope, private-address policy, request sizes, timeouts, candidate and port counts, protocol behavior, and total action budget.
 
-Finding records retain a bounded observation trail and run count. The browser compares each record with the latest completed scan for its target to derive `new`, `persistent`, `not_observed`, and `resolved` views. Only explicit owner workflow produces `resolved`; a finding absent from the latest run remains `not_observed` because scan coverage can change. The worker also emits a deterministic knowledge observation for each finding using its category, observed technology, weakness IDs, framework controls, and asset type. See [Knowledge base](KNOWLEDGE_BASE.md).
+Finding records retain a bounded observation trail and run count. The browser compares each record with the latest completed scan for its target to derive `new`, `persistent`, `not_observed`, and `resolved` views. Only explicit owner workflow produces `resolved`; a finding absent from the latest run remains `not_observed` because scan coverage can change. Adjacent immutable asset snapshots also produce deterministic `added`, `changed`, and `not_observed` surface events. The Change review collection stores only the owner's disposition and note, never a mutable copy of the observed event. The same comparison drives the map time rail and visual overlay, preventing the inbox and topology from disagreeing.
+
+The browser computes a Wellguard priority score from technical severity, public reachability, owner-set target criticality, evidence confidence, lifecycle, and retained threat context. The threat-source layer can query CISA KEV and FIRST EPSS for confirmed CVEs while NVD contributes an unmodified CVSS base metric and vector. Absent KEV, EPSS, or CVSS evidence is displayed as unavailable rather than scored as zero. Asset criticality is environmental context for Wellguard priority; the application does not claim to recalculate or replace CVSS. The worker also emits a deterministic knowledge observation for each finding using its category, observed technology, weakness IDs, framework controls, and asset type. See [Knowledge base](KNOWLEDGE_BASE.md).
 
 ## Collections
 
 - `users`: invited application users and role.
-- `targets`: hostname scope, optional owned-host hints, and authorization evidence.
+- `targets`: hostname scope, optional owned-host hints, authorization evidence, owner-set business criticality, and portfolio tags.
 - `targetScopes`: administrator-approved exact related hostnames and their authorization evidence.
 - `scanRequests`: browser-to-worker queue, current phase, worker heartbeat, and immutable-at-run profile snapshot.
 - `scans`: investigation lifecycle and final summary.
-- `findings`: evidence, severity, confidence, remediation, sources, CWE weakness IDs, confirmed CVE IDs, curated OWASP/CRA references, and the customer-facing potential-impact narrative.
+- `findings`: evidence, severity, confidence, remediation, sources, CWE weakness IDs, confirmed CVE IDs, retained KEV/EPSS/CVSS threat context, curated OWASP/CRA references, and the customer-facing potential-impact narrative.
 - `tlsObservations`: structured certificate and protocol evidence.
 - `agentActions`: auditable tool calls and bounded outputs.
 - `agentMessages`: the application-visible LangChain transcript for each scan.
 - `assets`: per-scan typed nodes and evidence facts.
 - `assetRelations`: per-scan typed edges, relationship evidence, and linked findings.
+- `changeReviews`: administrator disposition and notes keyed to a deterministic change in one scan comparison.
 - `knowledgeObservations`: immutable per-run pattern facts used to measure recurring configuration and technology risks without another model call.
 - `publicIdentities`: tenant-private, directly published person/mailbox/organization evidence plus optional owner review.
 - `workers`: isolated internal observer identities; no browser login or collection-list access.

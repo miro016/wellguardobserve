@@ -3,9 +3,11 @@ import { afterNextRender, ChangeDetectionStrategy, Component, computed, effect, 
 import { Finding, Target, TlsObservation, AgentActionRecord, AssetRecord, AssetRelationRecord, NodeKind, TopologyEdge, TopologyNode } from '../models';
 import { Topology, TopologyService } from '../services/topology.service';
 import { topologyEdgeId, traceTopologyPath } from '../services/topology-path';
+import { mergeTopologySnapshots } from '../services/surface-intelligence';
 import { FindingStoryComponent } from './finding-story.component';
 
 type GraphView = 'architecture' | 'routing' | 'evidence';
+interface SavedGraphView { id: string; name: string; lens: GraphView; riskOnly: boolean; changesOnly: boolean; }
 
 @Component({
   selector: 'wg-infrastructure-graph',
@@ -22,12 +24,13 @@ type GraphView = 'architecture' | 'routing' | 'evidence';
       </div>
       <div #canvas class="topology-canvas" [class.dragging]="dragging()" role="application" aria-label="Observed infrastructure topology. Hover a node to trace its complete upstream and downstream evidence path. Drag to pan and use the controls or mouse wheel to zoom." (wheel)="zoomWheel($event)" (pointerdown)="panStart($event)" (pointermove)="panMove($event)" (pointerup)="panEnd($event)" (pointercancel)="panEnd($event)">
         <div class="map-controls" aria-label="Map controls"><button type="button" title="Zoom in" aria-label="Zoom in" (click)="zoomBy(0.15)">+</button><span>{{ zoomPercent() }}%</span><button type="button" title="Zoom out" aria-label="Zoom out" (click)="zoomBy(-0.15)">−</button><button class="fit-control" type="button" title="Fit all nodes" (click)="resetView()">Fit</button></div>
+        <div class="graph-utility-bar"><select aria-label="Saved surface views" (change)="applySavedView($event)"><option value="">Saved views</option>@for (view of savedViews(); track view.id) { <option [value]="view.id">{{ view.name }}</option> }</select><button type="button" (click)="saveCurrentView()">Save view</button>@if (comparisonEnabled()) { <button type="button" [class.active]="changesOnly()" (click)="changesOnly.update(value => !value)">Changes only</button> }@if (focusNodeId()) { <button type="button" class="active" (click)="clearFocus()">Show all</button> }<button type="button" (click)="exportSvg()">SVG ↓</button><button type="button" (click)="exportPdf()">PDF ↓</button></div>
         <div class="topology-stage" [attr.data-view]="viewMode()" [style.height.px]="stageHeight()" [style.transform]="stageTransform()">
           <div class="topology-grid" aria-hidden="true"></div>
           <div class="topology-lanes" aria-hidden="true" [style.grid-template-columns]="'repeat(' + laneLabels().length + ',1fr)'">@for (label of laneLabels(); track label) { <span>{{ label }}</span> }</div>
           <svg class="topology-links" [attr.viewBox]="viewBox()" preserveAspectRatio="none" aria-label="Observed asset relationships">
             @for (edge of topology().edges; track edge.id || edge.from + edge.to) {
-              <g class="topology-link" [class.selected]="selectedEdge()?.id === edge.id" [class.connection-active]="isHoveredEdge(edge)" [class.connection-muted]="!!hoveredNodeId() && !isHoveredEdge(edge)" [attr.data-state]="edge.state || 'observed'" role="button" tabindex="0" (click)="selectEdge(edge.id || edge.from + edge.to)" (keydown.enter)="selectEdge(edge.id || edge.from + edge.to)">
+              <g class="topology-link" [class.selected]="selectedEdge()?.id === edge.id" [class.connection-active]="isHoveredEdge(edge)" [class.connection-muted]="!!hoveredNodeId() && !isHoveredEdge(edge)" [attr.data-state]="edge.state || 'observed'" [attr.data-change]="edge.changeState || null" role="button" tabindex="0" (click)="selectEdge(edge.id || edge.from + edge.to)" (keydown.enter)="selectEdge(edge.id || edge.from + edge.to)">
                 <path class="link-hit" [attr.d]="path(edge.from, edge.to)" /><path [attr.d]="path(edge.from, edge.to)" />
               </g>
             }
@@ -36,13 +39,14 @@ type GraphView = 'architecture' | 'routing' | 'evidence';
             @if (edge.state === 'risk' || edge.state === 'warning') { <button type="button" class="topology-edge-badge" [class.selected]="selectedEdge()?.id === edge.id" [attr.data-state]="edge.state" [style.left.%]="midXPercent(edge.from, edge.to)" [style.top.px]="midY(edge.from, edge.to) - 28" (pointerdown)="$event.stopPropagation()" (click)="selectEdge(edge.id || edge.from + edge.to)">{{ edge.label }}</button> }
           }
           @for (node of topology().nodes; track node.id) {
-            <button class="topology-node" type="button" [class.selected]="!selectedEdge() && selected().id === node.id" [class.connection-source]="hoveredNodeId() === node.id" [class.connection-active]="isConnectedNode(node.id)" [class.connection-muted]="!!hoveredNodeId() && !isConnectedNode(node.id)" [attr.data-state]="node.state" [attr.data-kind]="node.kind" [style.left.%]="node.x" [style.top.%]="node.y" [style.--node-left]="node.x + '%'" [style.--node-top]="node.y + '%'" (pointerenter)="hoveredNodeId.set(node.id)" (pointerleave)="hoveredNodeId.set('')" (focus)="hoveredNodeId.set(node.id)" (blur)="hoveredNodeId.set('')" (click)="select(node.id)">
+            <button class="topology-node" type="button" [class.selected]="!selectedEdge() && selected().id === node.id" [class.connection-source]="hoveredNodeId() === node.id" [class.connection-active]="isConnectedNode(node.id)" [class.connection-muted]="!!hoveredNodeId() && !isConnectedNode(node.id)" [attr.data-state]="node.state" [attr.data-kind]="node.kind" [attr.data-change]="node.changeState || null" [style.left.%]="node.x" [style.top.%]="node.y" [style.--node-left]="node.x + '%'" [style.--node-top]="node.y + '%'" (pointerenter)="hoveredNodeId.set(node.id)" (pointerleave)="hoveredNodeId.set('')" (focus)="hoveredNodeId.set(node.id)" (blur)="hoveredNodeId.set('')" (click)="select(node.id)">
               <i aria-hidden="true">{{ icon(node.kind) }}</i><span><strong>{{ node.label }}</strong><small>{{ nodeSubtitle(node) }}</small></span>
               @if (node.findingIds.length) { <b>{{ node.findingIds.length }}</b> }
+              @if (node.changeState) { <em class="node-change-marker">{{ node.changeState === 'added' ? 'NEW' : node.changeState === 'changed' ? 'CHG' : 'OLD' }}</em> }
             </button>
           }
         </div>
-        <div class="topology-legend"><span><i class="observed"></i>Observed</span><span><i class="healthy"></i>Healthy</span><span><i class="unknown"></i>Unknown</span><span><i class="risk"></i>Needs action</span></div>
+        <div class="topology-legend"><span><i class="observed"></i>Observed</span><span><i class="healthy"></i>Healthy</span><span><i class="unknown"></i>Unknown</span><span><i class="risk"></i>Needs action</span>@if (comparisonEnabled()) { <span><i class="change-added"></i>New</span><span><i class="change-changed"></i>Changed</span><span><i class="change-absent"></i>Not observed</span> }</div>
       </div>
 
       <aside class="evidence-inspector">
@@ -53,7 +57,7 @@ type GraphView = 'architecture' | 'routing' | 'evidence';
           @for (finding of edgeFindings(); track finding.id) { <article class="node-finding" [attr.data-severity]="finding.severity"><span>{{ finding.severity }} · {{ finding.confidence }}%</span><strong>{{ finding.title }}</strong><p>{{ finding.summary }}</p><wg-finding-story [finding]="finding" [compact]="true" /><h4>Change on</h4><p>{{ finding.asset }}</p><h4>Recommended action</h4><p>{{ finding.remediation }}</p></article> }
         } @else if (selected(); as node) {
           <div class="inspector-head"><span class="node-kind">{{ node.kind }}</span><span class="state-pill" [attr.data-state]="node.state">{{ stateLabel(node.state) }}</span></div>
-          <h3>{{ node.label }}</h3><p>{{ node.subtitle }}</p>
+          <h3>{{ node.label }}</h3><p>{{ node.subtitle }}</p>@if (node.changeState) { <div class="node-change-banner" [attr.data-change]="node.changeState"><strong>{{ node.changeState === 'added' ? 'New in this snapshot' : node.changeState === 'changed' ? 'Evidence changed' : 'Not observed in this snapshot' }}</strong><span>{{ node.changeState === 'not_observed' ? 'This is prior evidence, shown for comparison. Confirm before treating it as removed.' : 'Compare the retained facts with the previous observation.' }}</span></div> }<div class="node-map-actions"><button type="button" (click)="focusSelectedBranch()">Focus branch</button>@if (hasChildren(node.id)) { <button type="button" (click)="toggleCollapse(node.id)">{{ isCollapsed(node.id) ? 'Expand downstream' : 'Collapse downstream' }}</button> }</div>
           <dl class="evidence-facts">
             @for (detail of node.details; track detail.label) {
               <div><dt>{{ detail.label }}</dt><dd>{{ detail.value }}</dd><small><span>{{ detail.basis ? basisLabel(detail.basis) : 'Evidence' }}{{ detail.confidence ? ' · ' + detail.confidence + '%' : '' }}</span>{{ detail.evidence }}</small></div>
@@ -75,6 +79,9 @@ export class InfrastructureGraphComponent implements OnDestroy {
   readonly actions = input<AgentActionRecord[]>([]);
   readonly assets = input<AssetRecord[]>([]);
   readonly relations = input<AssetRelationRecord[]>([]);
+  readonly previousAssets = input<AssetRecord[]>([]);
+  readonly previousRelations = input<AssetRelationRecord[]>([]);
+  readonly comparisonEnabled = input(false);
   private readonly builder = inject(TopologyService);
   private readonly document = inject(DOCUMENT);
   private readonly canvas = viewChild<ElementRef<HTMLElement>>('canvas');
@@ -84,8 +91,14 @@ export class InfrastructureGraphComponent implements OnDestroy {
   protected readonly viewMode = signal<GraphView>('architecture');
   protected readonly query = signal('');
   protected readonly riskOnly = signal(false);
+  protected readonly changesOnly = signal(false);
+  protected readonly focusNodeId = signal('');
+  protected readonly collapsedIds = signal<Set<string>>(new Set());
+  protected readonly savedViews = signal<SavedGraphView[]>([]);
   protected readonly mapExpanded = signal(false);
-  protected readonly fullTopology = computed(() => this.builder.build(this.target(), this.findings(), this.tls(), this.actions(), this.assets(), this.relations()));
+  protected readonly currentTopology = computed(() => this.builder.build(this.target(), this.findings(), this.tls(), this.actions(), this.assets(), this.relations()));
+  protected readonly previousTopology = computed(() => this.builder.build(this.target(), [], null, [], this.previousAssets(), this.previousRelations()));
+  protected readonly fullTopology = computed(() => this.comparisonEnabled() ? mergeTopologySnapshots(this.currentTopology(), this.previousTopology()) : this.currentTopology());
   protected readonly topology = computed(() => this.layout(this.filter(this.project(this.fullTopology(), this.viewMode()))));
   protected readonly laneLabels = computed(() => {
     const labels: Record<GraphView, Array<[NodeKind, string]>> = {
@@ -98,7 +111,7 @@ export class InfrastructureGraphComponent implements OnDestroy {
   });
   protected readonly collapsedLabel = computed(() => {
     const hidden = this.fullTopology().nodes.length - this.topology().nodes.length;
-    if (this.query() || this.riskOnly()) return `${hidden} asset${hidden === 1 ? '' : 's'} outside the current filter`;
+    if (this.query() || this.riskOnly() || (this.changesOnly() && this.comparisonEnabled()) || this.focusNodeId()) return `${hidden} asset${hidden === 1 ? '' : 's'} outside the current filter`;
     if (this.viewMode() === 'architecture') return hidden ? `${hidden} routing record${hidden === 1 ? '' : 's'} available in other lenses` : 'Complete observed application path';
     return hidden ? `${hidden} detail record${hidden === 1 ? '' : 's'} available in other lenses` : 'Every retained asset is visible';
   });
@@ -125,6 +138,7 @@ export class InfrastructureGraphComponent implements OnDestroy {
   private resizeFrame = 0;
 
   constructor() {
+    try { this.savedViews.set(JSON.parse(this.document.defaultView?.localStorage.getItem('wellguard-surface-views') || '[]')); } catch { this.savedViews.set([]); }
     effect(() => {
       const count = this.topology().nodes.length;
       if (!this.topology().nodes.some((n) => n.id === this.selectedId())) this.selectedId.set(this.topology().nodes[0]?.id || 'domain');
@@ -211,7 +225,7 @@ export class InfrastructureGraphComponent implements OnDestroy {
   }
   protected panStart(event: PointerEvent): void {
     const target = event.target as HTMLElement;
-    if (target.closest('.topology-node, .map-controls, .topology-edge-badge')) return;
+    if (target.closest('.topology-node, .map-controls, .graph-utility-bar, .topology-edge-badge')) return;
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     this.dragOrigin = { pointerX: event.clientX, pointerY: event.clientY, panX: this.panX(), panY: this.panY() };
     this.dragging.set(true);
@@ -288,17 +302,53 @@ export class InfrastructureGraphComponent implements OnDestroy {
 
   private filter(topology: Topology): Topology {
     const query = this.query().trim().toLowerCase();
-    if (!query && !this.riskOnly()) return topology;
-    const matched = topology.nodes.filter((node) => (!this.riskOnly() || node.state === 'risk' || node.state === 'warning') && (!query || [node.label, node.subtitle, ...node.details.flatMap((item) => [item.label, item.value])].join(' ').toLowerCase().includes(query)));
+    const collapsedHidden = new Set<string>();
+    const outgoing = new Map<string, string[]>();
+    for (const edge of topology.edges) outgoing.set(edge.from, [...(outgoing.get(edge.from) || []), edge.to]);
+    for (const root of this.collapsedIds()) {
+      const queue = [...(outgoing.get(root) || [])];
+      while (queue.length) { const id = queue.shift()!; if (collapsedHidden.has(id)) continue; collapsedHidden.add(id); queue.push(...(outgoing.get(id) || [])); }
+    }
+    const available = topology.nodes.filter((node) => !collapsedHidden.has(node.id));
+    const filterChanges = this.changesOnly() && this.comparisonEnabled();
+    if (!query && !this.riskOnly() && !filterChanges && !this.focusNodeId()) return { nodes: available, edges: topology.edges.filter((edge) => !collapsedHidden.has(edge.from) && !collapsedHidden.has(edge.to)) };
+    let matched = available.filter((node) => (!this.riskOnly() || node.state === 'risk' || node.state === 'warning') && (!filterChanges || Boolean(node.changeState)) && (!query || [node.label, node.subtitle, ...node.details.flatMap((item) => [item.label, item.value])].join(' ').toLowerCase().includes(query)));
+    if (this.focusNodeId()) matched = available.filter((node) => node.id === this.focusNodeId());
     const keep = new Set(matched.map((node) => node.id));
     const incoming = new Map<string, string[]>();
     for (const edge of topology.edges) incoming.set(edge.to, [...(incoming.get(edge.to) || []), edge.from]);
     const queue = [...keep];
     while (queue.length) for (const parent of incoming.get(queue.shift()!) || []) if (!keep.has(parent)) { keep.add(parent); queue.push(parent); }
+    if (this.focusNodeId()) {
+      const descendants = [this.focusNodeId()];
+      while (descendants.length) for (const child of outgoing.get(descendants.shift()!) || []) if (!keep.has(child) && !collapsedHidden.has(child)) { keep.add(child); descendants.push(child); }
+    }
     for (const node of matched.filter((item) => item.kind === 'domain' || item.kind === 'hostname')) {
       for (const edge of topology.edges.filter((item) => item.from === node.id)) keep.add(edge.to);
     }
-    return { nodes: topology.nodes.filter((node) => keep.has(node.id)), edges: topology.edges.filter((edge) => keep.has(edge.from) && keep.has(edge.to)) };
+    return { nodes: available.filter((node) => keep.has(node.id)), edges: topology.edges.filter((edge) => keep.has(edge.from) && keep.has(edge.to) && !collapsedHidden.has(edge.from) && !collapsedHidden.has(edge.to)) };
+  }
+
+  protected focusSelectedBranch(): void { const node = this.selected(); if (!node) return; this.focusNodeId.set(node.id); queueMicrotask(() => this.resetView()); }
+  protected clearFocus(): void { this.focusNodeId.set(''); queueMicrotask(() => this.resetView()); }
+  protected hasChildren(id: string): boolean { return this.fullTopology().edges.some((edge) => edge.from === id); }
+  protected isCollapsed(id: string): boolean { return this.collapsedIds().has(id); }
+  protected toggleCollapse(id: string): void { this.collapsedIds.update((value) => { const next = new Set(value); next.has(id) ? next.delete(id) : next.add(id); return next; }); queueMicrotask(() => this.resetView()); }
+  protected saveCurrentView(): void {
+    const base = this.viewMode() === 'architecture' ? 'Architecture' : this.viewMode() === 'routing' ? 'Routing' : 'Evidence';
+    const view: SavedGraphView = { id: `${Date.now()}`, name: `${base}${this.riskOnly() ? ' · risks' : this.changesOnly() ? ' · changes' : ''}`, lens: this.viewMode(), riskOnly: this.riskOnly(), changesOnly: this.changesOnly() };
+    const views = [...this.savedViews().filter((item) => item.name !== view.name), view].slice(-6); this.savedViews.set(views);
+    try { this.document.defaultView?.localStorage.setItem('wellguard-surface-views', JSON.stringify(views)); } catch { /* A private browser may disable local storage. */ }
+  }
+  protected applySavedView(event: Event): void { const view = this.savedViews().find((item) => item.id === (event.target as HTMLSelectElement).value); if (!view) return; this.viewMode.set(view.lens); this.riskOnly.set(view.riskOnly); this.changesOnly.set(view.changesOnly); this.focusNodeId.set(''); queueMicrotask(() => this.resetView()); }
+  protected exportPdf(): void { this.document.defaultView?.print(); }
+  protected exportSvg(): void {
+    const topology = this.topology(); const height = this.stageHeight();
+    const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' } as Record<string, string>)[char]!);
+    const edges = topology.edges.map((edge) => `<path d="${esc(this.path(edge.from, edge.to))}" fill="none" stroke="#718198" stroke-width="1.5"${edge.changeState === 'not_observed' ? ' stroke-dasharray="5 5"' : ''}/>`).join('');
+    const nodes = topology.nodes.map((node) => { const x = node.x * 10 - 70; const y = node.y * height / 100 - 28; const color = node.changeState === 'added' ? '#2aa889' : node.changeState === 'changed' ? '#d99a35' : node.changeState === 'not_observed' ? '#718198' : node.state === 'risk' ? '#df5a67' : '#4e82ed'; return `<g><rect x="${x}" y="${y}" width="140" height="56" rx="7" fill="#142033" stroke="${color}"/><text x="${x + 10}" y="${y + 22}" fill="#f2f5f9" font-family="sans-serif" font-size="11" font-weight="600">${esc(node.label.slice(0, 24))}</text><text x="${x + 10}" y="${y + 39}" fill="#9aa8ba" font-family="sans-serif" font-size="8">${esc(node.subtitle.slice(0, 31))}</text></g>`; }).join('');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 ${height}" width="1000" height="${height}"><rect width="100%" height="100%" fill="#0f1828"/><text x="24" y="30" fill="#9aa8ba" font-family="sans-serif" font-size="10">Wellguard Observe · ${esc(this.target().hostname)} · ${esc(this.viewMode())}</text>${edges}${nodes}</svg>`;
+    const win = this.document.defaultView; if (!win) return; const url = win.URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); const anchor = this.document.createElement('a'); anchor.href = url; anchor.download = `${this.target().hostname}-surface.svg`; anchor.click(); win.URL.revokeObjectURL(url);
   }
 
   private layout(topology: Topology): Topology {
@@ -313,7 +363,7 @@ export class InfrastructureGraphComponent implements OnDestroy {
     order.forEach((kind, column) => {
       const items = topology.nodes.filter((node) => node.kind === kind).sort((a, b) => a.y - b.y || a.label.localeCompare(b.label));
       const x = order.length === 1 ? 50 : 8 + column * (84 / (order.length - 1));
-      items.forEach((node, index) => positions.set(node.id, { x, y: items.length === 1 ? 50 : 10 + index * (80 / Math.max(1, items.length - 1)) }));
+      items.forEach((node, index) => positions.set(node.id, { x, y: items.length === 1 ? 50 : 17 + index * (67 / Math.max(1, items.length - 1)) }));
     });
     return { nodes: topology.nodes.map((node) => ({ ...node, ...(positions.get(node.id) || { x: node.x, y: node.y }) })), edges: topology.edges };
   }

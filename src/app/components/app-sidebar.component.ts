@@ -17,6 +17,7 @@ import { ThemeService } from '../services/theme.service';
         <a routerLink="/app/targets" routerLinkActive="active"><i>T</i>Targets</a>
         <span>Analyze</span>
         <a routerLink="/app/findings" routerLinkActive="active"><i>I</i>Issue register</a>
+        <a routerLink="/app/changes" routerLinkActive="active"><i>∆</i>Change review</a>
         <a routerLink="/app/reports" routerLinkActive="active"><i>H</i>Change history</a>
         <a routerLink="/app/knowledge" routerLinkActive="active"><i>K</i>Knowledge</a>
         <span>Operate</span>
