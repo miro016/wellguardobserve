@@ -14,12 +14,13 @@ export interface AgentScanProfile extends ScanPolicySnapshot {
   agentInstructions: string;
 }
 
-const VERSION = 'scan-policy-v3';
+const VERSION = 'scan-policy-v4';
 const CORE_TOOLS = [
   'dns', 'certificate-transparency', 'rdap', 'tls', 'bounded-tcp-connect', 'passive-banner',
   'single-http-get', 'service-discovery', 'configuration-review', 'public-metadata', 'service-adapters',
   'public-directory-index-v1', 'frontend-api-evidence', 'authoritative-advisory-sources', 'product-lifecycle-intelligence',
-  'canonical-cve-records', 'source-supply-chain-context', 'security-framework-reference-catalog', 'generated-probe-registry-v1'
+  'canonical-cve-records', 'source-supply-chain-context', 'security-framework-reference-catalog', 'generated-probe-registry-v1',
+  'exact-tool-call-limit-v1'
 ];
 
 export const AGENT_SCAN_PROFILES: Record<ScanMode, AgentScanProfile> = {
@@ -54,7 +55,7 @@ export const AGENT_SCAN_PROFILES: Record<ScanMode, AgentScanProfile> = {
   unbounded: {
     id: 'unbounded', name: 'Unbounded (admin decision)', version: VERSION, maxActions: 320, nucleiRequestsPerSecond: 4,
     methods: ['DNS', 'TLS handshake', 'TCP connect (full range)', 'HTTP GET', 'HTTP POST (bounded form/JSON probes)', 'HTTP introspection methods', 'Emulated DOM (bounded, same-origin)'],
-    enabledTools: [...CORE_TOOLS, 'safe-web-audit-v1', 'browser-session-controls-v1', 'quoted-input-differential-v1', 'bounded-rate-controls-v1', 'reviewed-nuclei-get-v1', 'unknown-web-recognition-v1', 'authentication-probe-v1', 'encoding-filter-bypass-v1', 'emulated-dom-review-v1', 'full-port-sweep-v1', 'frontend-bundle-mining-v1', 'http-method-surface-v1', 'common-path-sweep-v1', 'offline-token-analysis-v1', 'authenticated-session-replay-v1', 'dynamic-dom-chromium-v1', 'boundary-validation-v1'],
+    enabledTools: [...CORE_TOOLS, 'safe-web-audit-v1', 'browser-session-controls-v1', 'quoted-input-differential-v1', 'bounded-rate-controls-v1', 'reviewed-nuclei-get-v1', 'unknown-web-recognition-v1', 'authentication-probe-v1', 'encoding-filter-bypass-v1', 'emulated-dom-review-v1', 'full-port-sweep-v1', 'frontend-bundle-mining-v1', 'http-method-surface-v1', 'common-path-sweep-v2', 'offline-token-analysis-v1', 'authenticated-session-replay-v1', 'dynamic-dom-chromium-v1', 'boundary-validation-v1'],
     nucleiPolicy: 'reviewed local templates only; HTTP GET only; no redirects, OOB, code, headless, unsigned downloads, fuzzing or DAST',
     consentRequired: true, allowSafeWebAudit: true, allowNucleiAudit: true, allowUnknownWebInspection: true, allowBrowserSessionReview: true, allowActiveValidation: true,
     allowAuthenticationProbe: true, allowEncodingBypass: true, allowHeadlessBrowser: true, allowGeneratedToolProposals: true, allowUnreviewedGeneratedTools: true,

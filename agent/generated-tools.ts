@@ -9,6 +9,12 @@ export const GENERATED_TOOL_SCHEMA_VERSION = 'http-probe-v1';
 const profileOrder: ScanMode[] = ['light', 'standard', 'extended', 'advanced', 'unbounded'];
 const scalarBody = z.string().max(400);
 
+function fileShapedPath(path: string): boolean {
+  const pathname = path.split(/[?#]/, 1)[0]!.toLowerCase();
+  const basename = pathname.split('/').at(-1) || '';
+  return basename === 'dockerfile' || basename.startsWith('.') || /\.[a-z0-9]{1,12}$/.test(basename);
+}
+
 export const generatedAssertionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('status-in'), values: z.array(z.number().int().min(100).max(599)).min(1).max(8) }),
   z.object({ type: z.literal('header-present'), name: z.string().regex(/^[A-Za-z0-9-]{1,80}$/) }),
@@ -29,6 +35,10 @@ export const generatedProbeStepSchema = z.object({
   if (bodyEntries.length > 8) context.addIssue({ code: 'custom', message: 'Generated request bodies may contain at most eight fields.' });
   if (step.method !== 'POST_JSON' && bodyEntries.length) context.addIssue({ code: 'custom', message: 'Only POST_JSON steps may include a body.' });
   if (step.method === 'POST_JSON' && JSON.stringify(step.body || {}).length > 2_048) context.addIssue({ code: 'custom', message: 'Generated JSON bodies are bounded to 2048 bytes.' });
+  if (fileShapedPath(step.path) && step.method === 'HEAD') context.addIssue({ code: 'custom', message: 'File-shaped probes must read a bounded body; HEAD cannot establish that the requested document was returned.' });
+  if (fileShapedPath(step.path) && step.method === 'GET' && !step.assertions.some((assertion) => assertion.type === 'body-contains' || assertion.type === 'json-key-exists')) {
+    context.addIssue({ code: 'custom', message: 'File-shaped GET probes require a body marker or JSON-key assertion; HTTP status alone is insufficient.' });
+  }
 });
 
 export const generatedProbeSpecSchema = z.object({

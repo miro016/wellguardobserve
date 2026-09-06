@@ -207,7 +207,7 @@ export class InvestigationStore {
   }
 
   async saveMessage(targetId: string, scanId: string, message: AgentMessage): Promise<void> {
-    await this.client.collection('agentMessages').create({ target: targetId, scan: scanId, role: message.role, content: message.content, toolName: message.toolName, sequence: message.sequence, occurredAt: message.at });
+    await this.client.collection('agentMessages').create({ target: targetId, scan: scanId, role: message.role, content: message.content, reasoning: message.reasoning, toolName: message.toolName, sequence: message.sequence, occurredAt: message.at });
   }
 
   async heartbeat(requestId: string, phase: string, actionCount?: number, messageCount?: number): Promise<void> {

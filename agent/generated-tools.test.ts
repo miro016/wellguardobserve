@@ -37,4 +37,13 @@ describe('generated declarative tools', () => {
     expect(generatedToolEligible({ ...definition, unboundedAutoUse: false }, 'unbounded')).toBe(false);
     expect(generatedToolEligible({ ...definition, status: 'rejected' }, 'unbounded')).toBe(false);
   });
+
+  test('requires content validation for file-shaped probes', () => {
+    const statusOnly = validateGeneratedTool({
+      ...proposal,
+      spec: { version: 'http-probe-v1', steps: [{ id: 'read-file', purpose: 'Determine whether a public data file is genuinely returned.', method: 'GET', path: '/config.json', assertions: [{ type: 'status-in', values: [200] }] }] }
+    });
+    expect(statusOnly.validation.valid).toBeFalse();
+    expect(statusOnly.validation.errors.join(' ')).toContain('body marker or JSON-key assertion');
+  });
 });

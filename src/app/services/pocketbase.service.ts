@@ -255,7 +255,7 @@ export class PocketBaseService {
       else if (!options.scanId) clauses.push(await this.currentWorkspaceFilter());
       if (options.scanId) clauses.push(this.client.filter('scan = {:scanId}', { scanId: options.scanId }));
       const records = await this.client.collection('agentMessages').getFullList({ filter: clauses.join(' && '), sort: 'sequence' });
-      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], role: r['role'], content: r['content'] ?? '', toolName: r['toolName'] ?? '', sequence: r['sequence'] ?? 0, occurredAt: r['occurredAt'] }));
+      return records.map((r) => ({ id: r.id, target: r['target'], scan: r['scan'], role: r['role'], content: r['content'] ?? '', reasoning: r['reasoning'] ?? '', toolName: r['toolName'] ?? '', sequence: r['sequence'] ?? 0, occurredAt: r['occurredAt'] }));
     } catch (error: unknown) {
       if ((error as { status?: number })?.status === 404) return [];
       return this.failed(error);

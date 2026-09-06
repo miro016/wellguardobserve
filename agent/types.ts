@@ -41,6 +41,7 @@ export interface AgentAction {
 export interface AgentMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  reasoning: string;
   toolName: string;
   sequence: number;
   at: string;

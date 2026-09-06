@@ -164,7 +164,7 @@ export interface AgentActionRecord {
 
 export interface AgentMessageRecord {
   id: string; target: string; scan: string; role: 'system' | 'user' | 'assistant' | 'tool'; content: string;
-  toolName: string; sequence: number; occurredAt: string;
+  reasoning: string; toolName: string; sequence: number; occurredAt: string;
 }
 
 export interface CertificateTransparencyRecord {

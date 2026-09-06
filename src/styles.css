@@ -216,6 +216,11 @@ button:disabled { cursor: wait; opacity: .55; }
 .failure-diagnostic > div { min-width: 0; display: grid; gap: 3px; }.failure-diagnostic small { color: var(--red); font: 8px 'IBM Plex Mono',monospace; letter-spacing: .08em; }.failure-diagnostic strong { font-size: 11px; }.failure-diagnostic p { margin: 2px 0 0; overflow-wrap: anywhere; color: var(--muted); font: 9px/1.55 'IBM Plex Mono',monospace; }
 .job-failure-reason { overflow: hidden; color: var(--red); text-overflow: ellipsis; white-space: nowrap; }
 .live-trace .transcript,.live-trace .tool-calls { height: 590px; max-height: none; }
+.model-reasoning { margin: 0 0 10px; padding: 10px 11px; border: 1px solid color-mix(in srgb,var(--cyan) 28%,var(--line)); border-left: 2px solid var(--cyan); background: var(--cyan-soft); }
+.model-reasoning > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
+.model-reasoning span { color: var(--cyan); font: 600 7px 'IBM Plex Mono',monospace; letter-spacing: .08em; }
+.model-reasoning small { color: var(--faint); font: 7px 'IBM Plex Mono',monospace; }
+.message .model-reasoning pre { max-height: 300px; margin: 0; padding: 0; overflow: auto; background: transparent; color: var(--muted); font-size: 8px; white-space: pre-wrap; }
 .live-wait { min-height: 260px; display: grid; place-content: center; justify-items: center; gap: 7px; color: var(--muted); text-align: center; }
 .live-wait i { width: 18px; height: 18px; margin-bottom: 7px; border: 1px solid var(--line-bright); border-top-color: var(--cyan); border-radius: 50%; animation: spin 1.2s linear infinite; }
 .live-wait strong { color: var(--text); font-size: 11px; }.live-wait span { max-width: 280px; font-size: 9px; }
