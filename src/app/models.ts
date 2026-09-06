@@ -89,6 +89,26 @@ export interface KnowledgeObservation {
   frameworkControls: string[]; configurationSignals: string[]; observedAt: string; created: string;
 }
 
+export interface ScanEvaluation {
+  id: string; workspace: string; target: string; scan: string; model: string; reasoningEffort: string; profile: string;
+  qualityScore: number; toolSuccessRate: number; evidenceCoverage: number; sourceCoverage: number; assetLinkage: number;
+  toolErrors: number; duplicateCalls: number; unknownServices: number; cacheHits: number; cacheMisses: number; originRequests: number;
+  signals: Record<string, unknown>; created: string;
+}
+
+export interface FindingFeedback {
+  id: string; workspace: string; target: string; finding: string; patternKey: string;
+  verdict: 'confirmed' | 'false_positive' | 'unclear'; note: string; reviewedBy: string; created: string; updated: string;
+}
+
+export interface ImprovementProposal {
+  id: string; workspace: string; proposalKey: string; kind: 'confidence_guard' | 'coverage_priority' | 'tool_reliability';
+  scopeKey: string; title: string; rationale: string; evidence: Record<string, unknown>;
+  recommendedAction: 'cap-confidence' | 'prioritize-unknown-service' | 'review-tool'; parameter: Record<string, unknown>;
+  confidence: number; occurrences: number; status: 'proposed' | 'approved' | 'rejected'; reviewedBy: string;
+  reviewedAt: string; reviewNote: string; applicationCount: number; lastAppliedAt: string; created: string; updated: string;
+}
+
 export interface KnowledgePattern {
   key: string; title: string; category: string; technology: string; severity: Severity; weaknessIds: string[];
   occurrences: number; affectedTargetIds: string[]; currentCount: number; newCount: number; persistentCount: number;

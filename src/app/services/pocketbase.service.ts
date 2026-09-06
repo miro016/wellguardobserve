@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import PocketBase, { RecordModel } from 'pocketbase';
-import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, ChangeReview, ChangeReviewStatus, CreateTargetInput, Finding, KnowledgeObservation, ObservationCadence, ObservationSchedule, PublicIdentity, Scan, ScanMode, ScanRequest, ScheduledScanMode, Target, TargetCriticality, TargetScope, TlsObservation, Workspace, WorkspaceMember, WorkspaceRole, WorkspaceUser } from '../models';
+import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, ChangeReview, ChangeReviewStatus, CreateTargetInput, Finding, FindingFeedback, ImprovementProposal, KnowledgeObservation, ObservationCadence, ObservationSchedule, PublicIdentity, Scan, ScanEvaluation, ScanMode, ScanRequest, ScheduledScanMode, Target, TargetCriticality, TargetScope, TlsObservation, Workspace, WorkspaceMember, WorkspaceRole, WorkspaceUser } from '../models';
 import { nextScheduledAt } from './observation-schedule';
 
 @Injectable({ providedIn: 'root' })
@@ -363,6 +363,56 @@ export class PocketBaseService {
       if ((error as { status?: number })?.status === 404) return [];
       return this.failed(error);
     }
+  }
+
+  async scanEvaluations(): Promise<ScanEvaluation[]> {
+    try {
+      await this.loadWorkspaceContext();
+      const workspace = this.activeWorkspaceId(); if (!workspace) return [];
+      const records = await this.client.collection('scanEvaluations').getList(1, 50, { filter: this.client.filter('workspace = {:workspace}', { workspace }), sort: '-created' });
+      return records.items.map((r) => ({
+        id: r.id, workspace: r['workspace'], target: r['target'], scan: r['scan'], model: r['model'] || '', reasoningEffort: r['reasoningEffort'] || '', profile: r['profile'] || '',
+        qualityScore: Number(r['qualityScore']) || 0, toolSuccessRate: Number(r['toolSuccessRate']) || 0, evidenceCoverage: Number(r['evidenceCoverage']) || 0,
+        sourceCoverage: Number(r['sourceCoverage']) || 0, assetLinkage: Number(r['assetLinkage']) || 0, toolErrors: Number(r['toolErrors']) || 0,
+        duplicateCalls: Number(r['duplicateCalls']) || 0, unknownServices: Number(r['unknownServices']) || 0, cacheHits: Number(r['cacheHits']) || 0,
+        cacheMisses: Number(r['cacheMisses']) || 0, originRequests: Number(r['originRequests']) || 0, signals: r['signals'] || {}, created: r['created']
+      } as ScanEvaluation));
+    } catch (error: unknown) { if ((error as { status?: number })?.status === 404) return []; return this.failed(error); }
+  }
+
+  async improvementProposals(): Promise<ImprovementProposal[]> {
+    try {
+      await this.loadWorkspaceContext();
+      const workspace = this.activeWorkspaceId(); if (!workspace) return [];
+      const records = await this.client.collection('improvementProposals').getFullList({ filter: this.client.filter('workspace = {:workspace}', { workspace }), sort: '-updated' });
+      return records.map((r) => ({ id: r.id, workspace: r['workspace'], proposalKey: r['proposalKey'], kind: r['kind'], scopeKey: r['scopeKey'], title: r['title'], rationale: r['rationale'], evidence: r['evidence'] || {}, recommendedAction: r['recommendedAction'], parameter: r['parameter'] || {}, confidence: Number(r['confidence']) || 0, occurrences: Number(r['occurrences']) || 0, status: r['status'], reviewedBy: r['reviewedBy'] || '', reviewedAt: r['reviewedAt'] || '', reviewNote: r['reviewNote'] || '', applicationCount: Number(r['applicationCount']) || 0, lastAppliedAt: r['lastAppliedAt'] || '', created: r['created'], updated: r['updated'] } as ImprovementProposal));
+    } catch (error: unknown) { if ((error as { status?: number })?.status === 404) return []; return this.failed(error); }
+  }
+
+  async findingFeedback(): Promise<FindingFeedback[]> {
+    try {
+      await this.loadWorkspaceContext();
+      const workspace = this.activeWorkspaceId(); if (!workspace) return [];
+      const records = await this.client.collection('findingFeedback').getFullList({ filter: this.client.filter('workspace = {:workspace}', { workspace }), sort: '-updated' });
+      return records.map((r) => ({ id: r.id, workspace: r['workspace'], target: r['target'], finding: r['finding'], patternKey: r['patternKey'], verdict: r['verdict'], note: r['note'] || '', reviewedBy: r['reviewedBy'], created: r['created'], updated: r['updated'] } as FindingFeedback));
+    } catch (error: unknown) { if ((error as { status?: number })?.status === 404) return []; return this.failed(error); }
+  }
+
+  async recordFindingFeedback(finding: Finding, patternKey: string, verdict: FindingFeedback['verdict']): Promise<FindingFeedback> {
+    if (!this.user()?.id) throw new Error('Sign in to review evidence.');
+    const workspace = await this.targetWorkspace(finding.target);
+    if (!this.canManageWorkspace(workspace)) throw new Error('Only a workspace owner or administrator can review learning evidence.');
+    let current: RecordModel | null = null;
+    try { current = await this.client.collection('findingFeedback').getFirstListItem(this.client.filter('finding = {:finding} && reviewedBy = {:user}', { finding: finding.id, user: this.user()!.id })); }
+    catch (error: unknown) { if ((error as { status?: number })?.status !== 404) return this.failed(error); }
+    const payload = { workspace, target: finding.target, finding: finding.id, patternKey, verdict, reviewedBy: this.user()!.id };
+    const r = current ? await this.client.collection('findingFeedback').update(current.id, payload) : await this.client.collection('findingFeedback').create(payload);
+    return { id: r.id, workspace: r['workspace'], target: r['target'], finding: r['finding'], patternKey: r['patternKey'], verdict: r['verdict'], note: r['note'] || '', reviewedBy: r['reviewedBy'], created: r['created'], updated: r['updated'] } as FindingFeedback;
+  }
+
+  async reviewImprovementProposal(proposal: ImprovementProposal, status: 'approved' | 'rejected'): Promise<void> {
+    if (!this.user()?.id || !this.canManageWorkspace(proposal.workspace)) throw new Error('Only a workspace owner or administrator can approve learning proposals.');
+    await this.client.collection('improvementProposals').update(proposal.id, { status, reviewedBy: this.user()!.id, reviewedAt: new Date().toISOString() });
   }
 
   async publicIdentities(targetId: string): Promise<PublicIdentity[]> {

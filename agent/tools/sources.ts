@@ -1,6 +1,14 @@
 import { isPrivateAddress } from '../security/scope-guard';
 import { resolve4, resolve6 } from 'node:dns/promises';
 import https from 'node:https';
+import { cachedExternalFetch } from '../external-cache';
+
+function intelligenceFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const host = new URL(url).hostname;
+  const catalogue = host === 'cwe-api.mitre.org' ? 'MITRE CWE' : host === 'cveawg.mitre.org' ? 'CVE Program' : host === 'services.nvd.nist.gov' ? 'NIST NVD' : host === 'www.cisa.gov' ? 'CISA KEV' : host === 'api.first.org' ? 'FIRST EPSS' : host === 'api.osv.dev' ? 'OSV' : host === 'api.github.com' ? 'GitHub public API' : host === 'endoflife.date' ? 'endoflife.date' : host === 'api.scorecard.dev' ? 'OpenSSF Scorecard' : host;
+  const ttlMs = host === 'cwe-api.mitre.org' ? 7 * 86_400_000 : host === 'api.github.com' ? 3_600_000 : host === 'api.first.org' || host === 'endoflife.date' || host === 'api.scorecard.dev' ? 86_400_000 : 6 * 3_600_000;
+  return cachedExternalFetch(url, init, { source: catalogue, ttlMs, staleIfErrorMs: 2 * ttlMs });
+}
 
 async function assertPublicResearchUrl(raw: string): Promise<{ url: URL; address: string; family: 4 | 6 }> {
   const url = new URL(raw);
@@ -53,7 +61,7 @@ export async function queryGitHubAdvisory(identifier: string) {
     throw new Error('A valid CVE or GHSA identifier is required.');
   }
   const query = normalized.startsWith('CVE-') ? `cve_id=${normalized}` : `ghsa_id=${normalized.toLowerCase()}`;
-  const response = await fetch(`https://api.github.com/advisories?${query}`, {
+  const response = await intelligenceFetch(`https://api.github.com/advisories?${query}`, {
     signal: AbortSignal.timeout(10_000), headers: { accept: 'application/vnd.github+json', 'user-agent': 'WellguardObserve/0.1', 'x-github-api-version': '2026-03-10' }
   });
   if (!response.ok) throw new Error(`GitHub Advisory API returned ${response.status}.`);
@@ -64,7 +72,7 @@ let kevCache: { loadedAt: number; entries: Array<Record<string, string>> } | nul
 export async function queryCisaKev(cve: string) {
   if (!/^CVE-\d{4}-\d{4,}$/i.test(cve)) throw new Error('A valid CVE identifier is required.');
   if (!kevCache || Date.now() - kevCache.loadedAt > 3_600_000) {
-    const response = await fetch('https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json', { signal: AbortSignal.timeout(12_000) });
+    const response = await intelligenceFetch('https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json', { signal: AbortSignal.timeout(12_000) });
     if (!response.ok) throw new Error(`CISA KEV feed returned ${response.status}.`);
     const data = await response.json() as { vulnerabilities: Array<Record<string, string>> };
     kevCache = { loadedAt: Date.now(), entries: data.vulnerabilities };
@@ -76,7 +84,7 @@ export async function queryEpss(cves: string[]) {
   const normalized = [...new Set(cves.map((cve) => cve.trim().toUpperCase()))].slice(0, 20);
   if (!normalized.length || normalized.some((cve) => !/^CVE-\d{4}-\d{4,}$/.test(cve))) throw new Error('One or more valid CVE identifiers are required.');
   const query = new URLSearchParams({ cve: normalized.join(',') });
-  const response = await fetch(`https://api.first.org/data/v1/epss?${query}`, {
+  const response = await intelligenceFetch(`https://api.first.org/data/v1/epss?${query}`, {
     signal: AbortSignal.timeout(12_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.1' }
   });
   if (!response.ok) throw new Error(`FIRST EPSS API returned ${response.status}.`);
@@ -89,7 +97,7 @@ export async function queryEpss(cves: string[]) {
 }
 
 export async function queryOsv(input: { ecosystem: string; packageName: string; version: string }) {
-  const response = await fetch('https://api.osv.dev/v1/query', {
+  const response = await intelligenceFetch('https://api.osv.dev/v1/query', {
     method: 'POST', signal: AbortSignal.timeout(10_000),
     headers: { 'content-type': 'application/json', 'user-agent': 'WellguardObserve/0.1' },
     body: JSON.stringify({ package: { ecosystem: input.ecosystem, name: input.packageName }, version: input.version })
@@ -103,7 +111,7 @@ export async function queryGitHubReleases(input: { owner: string; repository: st
   if (!/^[A-Za-z0-9_.-]{1,100}$/.test(input.owner) || !/^[A-Za-z0-9_.-]{1,100}$/.test(input.repository)) {
     throw new Error('GitHub owner or repository is invalid.');
   }
-  const response = await fetch(`https://api.github.com/repos/${input.owner}/${input.repository}/releases?per_page=10`, {
+  const response = await intelligenceFetch(`https://api.github.com/repos/${input.owner}/${input.repository}/releases?per_page=10`, {
     signal: AbortSignal.timeout(10_000), headers: { accept: 'application/vnd.github+json', 'user-agent': 'WellguardObserve/0.1', 'x-github-api-version': '2026-03-10' }
   });
   if (!response.ok) throw new Error(`GitHub Releases API returned ${response.status}.`);
@@ -155,7 +163,7 @@ export async function queryNvdCves(input: { product: string; version: string }) 
   const version = input.version.trim();
   if (!product || !version || product.length > 120 || version.length > 80) throw new Error('An exact observed product and version are required for NVD correlation.');
   const query = new URLSearchParams({ keywordSearch: `${product} ${version}`, resultsPerPage: '10' });
-  const response = await fetch(`https://services.nvd.nist.gov/rest/json/cves/2.0?${query}`, {
+  const response = await intelligenceFetch(`https://services.nvd.nist.gov/rest/json/cves/2.0?${query}`, {
     signal: AbortSignal.timeout(15_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.1' }
   });
   if (!response.ok) throw new Error(`NVD CVE API returned ${response.status}.`);
@@ -183,7 +191,7 @@ export async function queryCwe(cweId: string) {
   const normalized = cweId.trim().toUpperCase();
   const id = normalized.match(/^CWE-(\d{1,5})$/)?.[1];
   if (!id) throw new Error('A valid CWE identifier such as CWE-200 is required.');
-  const response = await fetch(`https://cwe-api.mitre.org/api/v1/cwe/weakness/${id}`, {
+  const response = await intelligenceFetch(`https://cwe-api.mitre.org/api/v1/cwe/weakness/${id}`, {
     signal: AbortSignal.timeout(12_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.1' }
   });
   if (!response.ok) throw new Error(`MITRE CWE API returned ${response.status}; the identifier may not represent a mappable weakness.`);
@@ -208,7 +216,7 @@ export async function queryProductLifecycle(input: { product: string; version: s
   const product = publicProductSlug(input.product);
   const version = input.version.trim();
   if (!version || version.length > 80) throw new Error('An exact observed version is required for lifecycle correlation.');
-  const response = await fetch(`https://endoflife.date/api/v1/products/${product}/`, {
+  const response = await intelligenceFetch(`https://endoflife.date/api/v1/products/${product}/`, {
     signal: AbortSignal.timeout(12_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.1' }
   });
   if (!response.ok) throw new Error(`endoflife.date API returned ${response.status}.`);
@@ -264,7 +272,7 @@ function compactCveMetrics(metrics: unknown): Array<Record<string, unknown>> {
 export async function queryCveRecord(cve: string) {
   const normalized = cve.trim().toUpperCase();
   if (!/^CVE-\d{4}-\d{4,}$/.test(normalized)) throw new Error('A valid CVE identifier is required.');
-  const response = await fetch(`https://cveawg.mitre.org/api/cve/${normalized}`, {
+  const response = await intelligenceFetch(`https://cveawg.mitre.org/api/cve/${normalized}`, {
     signal: AbortSignal.timeout(12_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.1' }
   });
   if (!response.ok) throw new Error(`CVE Program record API returned ${response.status}.`);
@@ -294,7 +302,7 @@ export async function queryCveRecord(cve: string) {
 export async function queryOpenSsfScorecard(input: { owner: string; repository: string }) {
   if (!/^[A-Za-z0-9_.-]{1,100}$/.test(input.owner) || !/^[A-Za-z0-9_.-]{1,100}$/.test(input.repository)) throw new Error('A valid public GitHub owner and repository are required.');
   const repository = `github.com/${input.owner}/${input.repository}`;
-  const response = await fetch(`https://api.scorecard.dev/projects/${repository}`, {
+  const response = await intelligenceFetch(`https://api.scorecard.dev/projects/${repository}`, {
     signal: AbortSignal.timeout(12_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.1' }
   });
   if (!response.ok) throw new Error(`OpenSSF Scorecard API returned ${response.status}.`);

@@ -37,6 +37,8 @@ import { buildAssetGraph } from './asset-graph';
 import { AGENT_SCAN_PROFILES, type AgentScanProfile } from './profiles';
 import { complianceCatalog, frameworkReferenceInputs, frameworkReferenceInputSchema, frameworkReferences } from './compliance';
 import { customerNarrativeFor } from './customer-narrative';
+import { buildKnowledgeObservation } from './knowledge';
+import { applyConfidenceGuard, approvedPrompt, type LearningDirectives } from './self-improvement';
 
 const SYSTEM_PROMPT = `You are Wellguard Observe, a defensive external-exposure investigator working only on infrastructure its owner authorized.
 
@@ -127,6 +129,7 @@ export interface InvestigatorOptions {
   onMessage?: (message: AgentMessage) => void | Promise<void>;
   onProgress?: (phase: string) => void | Promise<void>;
   signal?: AbortSignal;
+  learningDirectives?: LearningDirectives;
 }
 
 export async function investigate(target: AuthorizedTarget, options: InvestigatorOptions = {}): Promise<InvestigationReport> {
@@ -143,7 +146,9 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
   async function recordFinding(value: unknown): Promise<AgentFinding> {
     const candidate = value && typeof value === 'object' ? value as Record<string, unknown> : {};
     const parsed = findingSchema.parse({ ...candidate, frameworkRefs: frameworkReferenceInputs(candidate['frameworkRefs']) });
-    const normalized = { ...parsed, frameworkRefs: frameworkReferences(...parsed.frameworkRefs.map((reference) => reference.control)) } as AgentFinding;
+    let normalized = { ...parsed, frameworkRefs: frameworkReferences(...parsed.frameworkRefs.map((reference) => reference.control)) } as AgentFinding;
+    const patternKey = buildKnowledgeObservation(normalized, []).patternKey;
+    normalized = applyConfidenceGuard(normalized, patternKey, options.learningDirectives);
     normalized.customerNarrative = customerNarrativeFor(normalized);
     const sameWordPressUserExposure = (item: AgentFinding) => item.asset === normalized.asset && /wordpress rest api/i.test(item.title) && /(?:user|account) identifier|enumerat(?:es|ion)/i.test(item.title) && /wordpress rest api/i.test(normalized.title) && /(?:user|account) identifier|enumerat(?:es|ion)/i.test(normalized.title);
     const sameDirectoryExposure = (item: AgentFinding) => item.weaknessIds.includes('CWE-548')
@@ -179,7 +184,14 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       return skipped;
     }
     await options.onProgress?.(`Running ${toolName}`);
-    const output = await operation();
+    let output: T;
+    try { output = await operation(); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const action: AgentAction = { tool: toolName, input, summary: stringify({ _wellguardError: message.slice(0, 1_000) }), at: new Date().toISOString() };
+      actions.push(action); await options.onAction?.(action); await options.onProgress?.(`${toolName} failed; evidence retained`);
+      throw error;
+    }
     options.signal?.throwIfAborted();
     const serialized = stringify(output);
     const action: AgentAction = { tool: toolName, input, summary: serialized.slice(0, 28_000), at: new Date().toISOString() };
@@ -521,7 +533,7 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
   };
   const availableTools = tools.filter((item) => profileGates[(item as { name?: string }).name || ''] !== false);
   const reasoningEffort = resolveReasoningEffort(options.reasoningEffort || process.env['OLLAMA_REASONING_EFFORT']);
-  const effectiveSystemPrompt = `${SYSTEM_PROMPT}\n\nMODEL REASONING EFFORT: ${reasoningEffort}.\nACTIVE SCAN CONTRACT: ${profile.name} (${profile.version}). Maximum ${profile.maxActions} tool calls; permitted methods: ${profile.methods.join(', ')}; reviewed Nuclei rate ceiling: ${profile.nucleiRequestsPerSecond ? `${profile.nucleiRequestsPerSecond}/second` : 'disabled'}. ${profile.agentInstructions}`;
+  const effectiveSystemPrompt = `${SYSTEM_PROMPT}\n\nMODEL REASONING EFFORT: ${reasoningEffort}.\nACTIVE SCAN CONTRACT: ${profile.name} (${profile.version}). Maximum ${profile.maxActions} tool calls; permitted methods: ${profile.methods.join(', ')}; reviewed Nuclei rate ceiling: ${profile.nucleiRequestsPerSecond ? `${profile.nucleiRequestsPerSecond}/second` : 'disabled'}. ${profile.agentInstructions}${approvedPrompt(options.learningDirectives)}`;
 
   const model = new ChatOllama({
     model: options.model || process.env['OLLAMA_MODEL'] || 'glm-5.3:cloud',

@@ -40,6 +40,10 @@ The browser computes a Wellguard priority score from technical severity, public 
 - `changeReviews`: administrator disposition and notes keyed to a deterministic change in one scan comparison.
 - `observationSchedules`: opt-in daily, weekly, or monthly monitoring contracts. The worker can enqueue only the Baseline or Standard profiles; schedules default to absent/off and saving one never launches an immediate run.
 - `knowledgeObservations`: immutable per-run pattern facts used to measure recurring configuration and technology risks without another model call.
+- `scanEvaluations`: deterministic post-run quality and cache receipts.
+- `findingFeedback`: attributed workspace-admin evidence verdicts, separate from immutable observations.
+- `improvementProposals`: reviewable, typed learning proposals and their application audit counters.
+- `externalSourceCache`: worker-managed third-party intelligence representations; target observations are never stored here.
 - `publicIdentities`: tenant-private, directly published person/mailbox/organization evidence plus optional owner review.
 - `workers`: isolated internal observer identities; no browser login or collection-list access.
 

@@ -1,5 +1,6 @@
 import { resolveAny } from 'node:dns/promises';
 import type { ScopeGuard } from '../security/scope-guard';
+import { cachedExternalFetch } from '../external-cache';
 
 export async function inspectDns(scope: ScopeGuard, hostname?: string) {
   const host = scope.assertHostname(hostname);
@@ -15,7 +16,7 @@ export async function inspectDns(scope: ScopeGuard, hostname?: string) {
 
 export async function inspectCertificateTransparency(scope: ScopeGuard) {
   const url = `https://crt.sh/?q=${encodeURIComponent(`%.${scope.rootHostname}`)}&output=json`;
-  const response = await fetch(url, { signal: AbortSignal.timeout(12_000), headers: { 'user-agent': 'WellguardObserve/0.1' } });
+  const response = await cachedExternalFetch(url, { signal: AbortSignal.timeout(12_000), headers: { 'user-agent': 'WellguardObserve/0.1' } }, { source: 'crt.sh certificate transparency', ttlMs: 6 * 3_600_000, staleIfErrorMs: 86_400_000 });
   if (!response.ok) throw new Error(`Certificate transparency source returned ${response.status}.`);
   const rows = await response.json() as Array<{ id?: number; common_name?: string; name_value?: string; issuer_ca_id?: number; issuer_name?: string; not_before?: string; not_after?: string; serial_number?: string; result_count?: number }>;
   const names = [...new Set(rows.flatMap((row) => (row.name_value || '').split(/\r?\n/)))]

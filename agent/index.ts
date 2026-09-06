@@ -2,9 +2,11 @@ import type { RecordModel } from 'pocketbase';
 import { investigate } from './investigator';
 import { InvestigationStore } from './store';
 import { policySnapshot, resolveScanProfile } from './profiles';
+import { cacheTelemetrySnapshot, configureExternalCache, PocketBaseExternalCache, resetCacheTelemetry } from './external-cache';
 
 const store = new InvestigationStore();
 await store.connect();
+configureExternalCache(new PocketBaseExternalCache(store.client));
 console.log('Wellguard observer connected to PocketBase.');
 
 const pollMs = Number(process.env['SCAN_POLL_MS'] || 4_000);
@@ -12,7 +14,7 @@ const schedulePollMs = Math.max(15_000, Number(process.env['SCHEDULE_POLL_MS'] |
 let nextScheduleCheck = 0;
 while (true) {
   if (Date.now() >= nextScheduleCheck) {
-    try { await store.enqueueDueObservation(); }
+    try { await store.enqueueDueObservation(); await store.refreshImprovementProposals(); }
     catch (error) { console.error('Observation scheduler check failed:', error); }
     nextScheduleCheck = Date.now() + schedulePollMs;
   }
@@ -25,7 +27,9 @@ while (true) {
     const profile = resolveScanProfile(request['mode']);
     if (!await store.claim(request, policySnapshot(profile))) continue;
     const target = await store.loadTarget(request['target']);
+    const learningDirectives = await store.approvedLearning(target.workspace || '');
     scan = await store.createScan(target.id, request.id);
+    resetCacheTelemetry();
     console.log(`Investigating ${target.hostname} for request ${request.id}.`);
     const controller = new AbortController();
     let currentPhase = 'Preparing investigation';
@@ -41,13 +45,14 @@ while (true) {
     }, 1_000);
     const report = await investigate(target, {
       profile,
+      learningDirectives,
       signal: controller.signal,
       onAction: async (action) => { await store.saveAction(target.id, scan!.id, action); actionCount += 1; await store.heartbeat(request.id, currentPhase, actionCount, messageCount); },
       onMessage: async (message) => { await store.saveMessage(target.id, scan!.id, message); messageCount += 1; await store.heartbeat(request.id, currentPhase, actionCount, messageCount); },
       onProgress: publishPhase
     });
     if (await store.isCancellationRequested(request.id)) { await store.cancel(request, scan); continue; }
-    await store.complete(request, scan, report);
+    await store.complete(request, scan, report, cacheTelemetrySnapshot(), learningDirectives);
     console.log(`Completed ${target.hostname}: ${report.findings.length} findings.`);
   } catch (error) {
     if (await store.isCancellationRequested(request.id).catch(() => false)) {

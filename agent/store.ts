@@ -2,6 +2,8 @@ import PocketBase, { type RecordModel } from 'pocketbase';
 import type { AgentAction, AgentMessage, AuthorizedTarget, InvestigationReport, ScanPolicySnapshot } from './types';
 import { buildKnowledgeObservation } from './knowledge';
 import { nextScheduledAt } from '../src/app/services/observation-schedule';
+import type { CacheTelemetry } from './external-cache';
+import { evaluateScan, improvementCandidates, type LearningDirectives } from './self-improvement';
 
 export class InvestigationStore {
   readonly client: PocketBase;
@@ -99,10 +101,52 @@ export class InvestigationStore {
       filter: this.client.filter('target = {:target} && enabled = true', { target: record.id }), sort: 'created'
     });
     return {
-      id: record.id, hostname: record['hostname'], hostHints: record['hostHints'] ?? [],
+      id: record.id, workspace: String(record['workspace'] || ''), hostname: record['hostname'], hostHints: record['hostHints'] ?? [],
       authorizedHosts: scopes.map((scope) => String(scope['hostname'] || '')).filter(Boolean),
       authorizationStatus: record['authorizationStatus'], allowPrivateAddresses: record['allowPrivateAddresses']
     };
+  }
+
+  async approvedLearning(workspace: string): Promise<LearningDirectives> {
+    if (!workspace) return { confidenceCaps: {}, prioritizeUnknownServices: false, proposalIds: [] };
+    const rows = await this.client.collection('improvementProposals').getFullList({
+      filter: this.client.filter('workspace = {:workspace} && status = "approved"', { workspace }), sort: 'created'
+    });
+    const directives: LearningDirectives = { confidenceCaps: {}, prioritizeUnknownServices: false, proposalIds: [] };
+    for (const row of rows) {
+      if (row['recommendedAction'] === 'cap-confidence') {
+        directives.proposalIds.push(row.id);
+        const parameter = row['parameter'] && typeof row['parameter'] === 'object' ? row['parameter'] as Record<string, unknown> : {};
+        directives.confidenceCaps[String(row['scopeKey'])] = Math.max(1, Math.min(100, Number(parameter['maximumConfidence']) || 60));
+      }
+      if (row['recommendedAction'] === 'prioritize-unknown-service') { directives.prioritizeUnknownServices = true; directives.proposalIds.push(row.id); }
+    }
+    return directives;
+  }
+
+  async refreshImprovementProposals(workspaceId?: string): Promise<void> {
+    const workspaces = workspaceId
+      ? [{ id: workspaceId }]
+      : await this.client.collection('workspaces').getFullList({ filter: 'status = "active"', fields: 'id' });
+    for (const workspace of workspaces) {
+      const [feedback, evaluationRows] = await Promise.all([
+        this.client.collection('findingFeedback').getFullList({ filter: this.client.filter('workspace = {:workspace} && verdict = "false_positive"', { workspace: workspace.id }), fields: 'patternKey' }),
+        this.client.collection('scanEvaluations').getList(1, 50, { filter: this.client.filter('workspace = {:workspace}', { workspace: workspace.id }), sort: '-created', fields: 'unknownServices,toolErrors,signals' })
+      ]);
+      const patterns = new Map<string, number>();
+      for (const item of feedback) patterns.set(String(item['patternKey']), (patterns.get(String(item['patternKey'])) || 0) + 1);
+      const candidates = improvementCandidates({
+        falsePositivePatterns: [...patterns].map(([patternKey, count]) => ({ patternKey, count })),
+        evaluations: evaluationRows.items.map((row) => ({ unknownServices: Number(row['unknownServices']) || 0, toolErrors: Number(row['toolErrors']) || 0, signals: row['signals'] && typeof row['signals'] === 'object' ? row['signals'] as { failingTools: string[]; unknownAssetKeys: string[]; cacheBySource: Record<string, { hits: number; misses: number; originRequests: number }> } : { failingTools: [], unknownAssetKeys: [], cacheBySource: {} } }))
+      });
+      for (const candidate of candidates) {
+        let existing: RecordModel | null = null;
+        try { existing = await this.client.collection('improvementProposals').getFirstListItem(this.client.filter('workspace = {:workspace} && proposalKey = {:key}', { workspace: workspace.id, key: candidate.proposalKey })); }
+        catch (error: unknown) { if ((error as { status?: number })?.status !== 404) throw error; }
+        if (existing) await this.client.collection('improvementProposals').update(existing.id, { ...candidate, status: existing['status'] });
+        else await this.client.collection('improvementProposals').create({ workspace: workspace.id, ...candidate, status: 'proposed', applicationCount: 0 });
+      }
+    }
   }
 
   async createScan(targetId: string, requestId: string): Promise<RecordModel> {
@@ -168,7 +212,7 @@ export class InvestigationStore {
     return lines.join('\n');
   }
 
-  async complete(request: RecordModel, scan: RecordModel, report: InvestigationReport): Promise<void> {
+  async complete(request: RecordModel, scan: RecordModel, report: InvestigationReport, cache: CacheTelemetry, directives?: LearningDirectives): Promise<void> {
     for (const asset of report.assets) {
       await this.client.collection('assets').create({ target: report.target.id, scan: scan.id, ...asset });
     }
@@ -246,6 +290,22 @@ export class InvestigationStore {
     const combined = `${report.summary}\n\n${scoreboard}`;
     await this.client.collection('scans').update(scan.id, { status: 'completed', completedAt: report.completedAt, summary: combined.slice(0, 4000) });
     await this.client.collection('scanRequests').update(request.id, { status: 'completed', completedAt: report.completedAt, heartbeatAt: report.completedAt, phase: 'Evidence retained' });
+    try {
+      const target = await this.client.collection('targets').getOne(report.target.id, { fields: 'workspace' });
+      const evaluation = evaluateScan(report, cache);
+      await this.client.collection('scanEvaluations').create({
+        workspace: target['workspace'], target: report.target.id, scan: scan.id,
+        model: process.env['OLLAMA_MODEL'] || 'glm-5.3:cloud', reasoningEffort: process.env['OLLAMA_REASONING_EFFORT'] || 'high', profile: request['mode'] || 'standard', ...evaluation
+      });
+      const appliedAt = new Date().toISOString();
+      for (const id of directives?.proposalIds || []) {
+        const proposal = await this.client.collection('improvementProposals').getOne(id, { fields: 'applicationCount' });
+        await this.client.collection('improvementProposals').update(id, { applicationCount: (Number(proposal['applicationCount']) || 0) + 1, lastAppliedAt: appliedAt });
+      }
+      await this.refreshImprovementProposals(String(target['workspace'] || ''));
+    } catch (error) {
+      console.warn('Could not retain scan evaluation or refresh learning proposals:', error);
+    }
   }
 
   async fail(request: RecordModel, scan: RecordModel | null, error: unknown): Promise<void> {

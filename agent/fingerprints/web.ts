@@ -1,4 +1,5 @@
 import type { TechnologySignal } from '../tools/http';
+import { cachedExternalFetch } from '../external-cache';
 
 const PROJECTDISCOVERY_REVISION = '50c00c4a9dbea2a9145097714691d3c5b253177d';
 const PROJECTDISCOVERY_URL = `https://raw.githubusercontent.com/projectdiscovery/wappalyzergo/${PROJECTDISCOVERY_REVISION}/fingerprints_data.json`;
@@ -48,7 +49,7 @@ function compilePack(pack: SourcePack): CompiledRule[] {
 
 async function loadCompiledPack() {
   try {
-    const response = await fetch(PROJECTDISCOVERY_URL, { signal: AbortSignal.timeout(15_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.2' } });
+    const response = await cachedExternalFetch(PROJECTDISCOVERY_URL, { signal: AbortSignal.timeout(15_000), headers: { accept: 'application/json', 'user-agent': 'WellguardObserve/0.2' } }, { source: 'ProjectDiscovery fingerprints', ttlMs: 30 * 86_400_000, staleIfErrorMs: 90 * 86_400_000 });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const length = Number(response.headers.get('content-length') || 0);
     if (length > MAX_PACK_BYTES) throw new Error('fingerprint pack exceeds the size limit');

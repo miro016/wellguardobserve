@@ -1,3 +1,5 @@
+import { cachedExternalFetch } from '../external-cache';
+
 const RECOG_REVISION = 'd3d20938da9f5f1e442c2419fe6c30cd651b6878';
 const MAX_XML_BYTES = 2 * 1024 * 1024;
 const packs: Record<string, string> = {
@@ -39,7 +41,7 @@ async function load(protocol: string) {
   if (!packs[protocol]) return { rules: [] as Rule[], source: '', status: `No Recog pack is enabled for ${protocol}.` };
   const source = `https://raw.githubusercontent.com/rapid7/recog/${RECOG_REVISION}/xml/${packs[protocol]}`;
   try {
-    const response = await fetch(source, { signal: AbortSignal.timeout(12_000), headers: { 'user-agent': 'WellguardObserve/0.2', accept: 'application/xml,text/xml' } });
+    const response = await cachedExternalFetch(source, { signal: AbortSignal.timeout(12_000), headers: { 'user-agent': 'WellguardObserve/0.2', accept: 'application/xml,text/xml' } }, { source: 'Rapid7 Recog fingerprints', ttlMs: 30 * 86_400_000, staleIfErrorMs: 90 * 86_400_000 });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const length = Number(response.headers.get('content-length') || 0);
     if (length > MAX_XML_BYTES) throw new Error('fingerprint pack exceeds the size limit');

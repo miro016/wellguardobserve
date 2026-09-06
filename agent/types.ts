@@ -1,5 +1,6 @@
 export interface AuthorizedTarget {
   id: string;
+  workspace?: string;
   hostname: string;
   hostHints?: string[];
   authorizedHosts?: string[];

@@ -1,5 +1,6 @@
 import type { ScopeGuard } from '../security/scope-guard';
 import { inspectHttp } from './http';
+import { cachedExternalFetch } from '../external-cache';
 import type { TechnologySignal } from './http';
 
 const DEFAULT_LABELS = [
@@ -82,9 +83,9 @@ async function observeHostname(scope: ScopeGuard, hostname: string): Promise<Com
 
 async function passiveHosts(scope: ScopeGuard): Promise<{ hosts: string[]; status: string }> {
   try {
-    const response = await fetch(`https://api.hackertarget.com/hostsearch/?q=${encodeURIComponent(scope.rootHostname)}`, {
+    const response = await cachedExternalFetch(`https://api.hackertarget.com/hostsearch/?q=${encodeURIComponent(scope.rootHostname)}`, {
       headers: { 'user-agent': 'WellguardObserve/0.1 (+authorized reconnaissance)' }, signal: AbortSignal.timeout(12_000)
-    });
+    }, { source: 'HackerTarget host search', ttlMs: 3_600_000, staleIfErrorMs: 6 * 3_600_000 });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const body = (await response.text()).slice(0, 160_000);
     const hosts = [...new Set(body.split(/\r?\n/).map((line) => line.split(',')[0]?.trim().toLowerCase()).filter(Boolean))]

@@ -1,5 +1,6 @@
 import { resolve, resolveCaa, resolveMx, resolveNs, resolveSoa, resolveTxt } from 'node:dns/promises';
 import type { ScopeGuard } from '../security/scope-guard';
+import { cachedExternalFetch } from '../external-cache';
 
 type RdapEntity = { handle?: string; roles?: string[]; vcardArray?: unknown; entities?: RdapEntity[] };
 type RdapEvent = { eventAction?: string; eventDate?: string };
@@ -47,7 +48,7 @@ let bootstrapCache: { loadedAt: number; services: Array<[string[], string[]]> } 
 export async function inspectDomainRegistration(scope: ScopeGuard) {
   const domain = scope.rootHostname;
   if (!bootstrapCache || Date.now() - bootstrapCache.loadedAt > 86_400_000) {
-    const response = await fetch('https://data.iana.org/rdap/dns.json', { signal: AbortSignal.timeout(10_000), headers: { 'user-agent': 'WellguardObserve/0.1' } });
+    const response = await cachedExternalFetch('https://data.iana.org/rdap/dns.json', { signal: AbortSignal.timeout(10_000), headers: { 'user-agent': 'WellguardObserve/0.1' } }, { source: 'IANA RDAP bootstrap', ttlMs: 7 * 86_400_000, staleIfErrorMs: 30 * 86_400_000 });
     if (!response.ok) throw new Error(`IANA RDAP bootstrap returned ${response.status}.`);
     const document = await response.json() as { services?: Array<[string[], string[]]> };
     bootstrapCache = { loadedAt: Date.now(), services: document.services || [] };
@@ -57,7 +58,7 @@ export async function inspectDomainRegistration(scope: ScopeGuard) {
   const base = service?.[1]?.find((url) => url.startsWith('https://'));
   if (!base) throw new Error(`No HTTPS RDAP service is registered for .${tld}.`);
   const sourceUrl = `${base.replace(/\/+$/, '')}/domain/${encodeURIComponent(domain)}`;
-  const response = await fetch(sourceUrl, { signal: AbortSignal.timeout(12_000), headers: { accept: 'application/rdap+json,application/json', 'user-agent': 'WellguardObserve/0.1' } });
+  const response = await cachedExternalFetch(sourceUrl, { signal: AbortSignal.timeout(12_000), headers: { accept: 'application/rdap+json,application/json', 'user-agent': 'WellguardObserve/0.1' } }, { source: 'Authoritative domain RDAP', ttlMs: 86_400_000, staleIfErrorMs: 7 * 86_400_000 });
   if (!response.ok) throw new Error(`Authoritative RDAP service returned ${response.status} for ${domain}.`);
   return summarizeRdap(await response.json() as RdapDocument, sourceUrl);
 }
@@ -106,7 +107,7 @@ export async function inspectNetworkRegistration(scope: ScopeGuard, hostname?: s
   const networks = await Promise.all(addresses.map(async ({ address, family }) => {
     const sourceUrl = `https://rdap-bootstrap.arin.net/bootstrap/ip/${encodeURIComponent(address)}`;
     try {
-      const response = await fetch(sourceUrl, { signal: AbortSignal.timeout(12_000), headers: { accept: 'application/rdap+json,application/json', 'user-agent': 'WellguardObserve/0.1' } });
+      const response = await cachedExternalFetch(sourceUrl, { signal: AbortSignal.timeout(12_000), headers: { accept: 'application/rdap+json,application/json', 'user-agent': 'WellguardObserve/0.1' } }, { source: 'Public network RDAP', ttlMs: 86_400_000, staleIfErrorMs: 7 * 86_400_000 });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const document = await response.json() as Record<string, unknown>;
       return {

@@ -25,6 +25,8 @@ It is intentionally bounded: no credential guessing, exploit payloads, exploit e
 - An opt-in recurring observation scheduler (daily, weekly, or monthly; Baseline/Standard only) feeds a deterministic change-review inbox. It compares adjacent asset snapshots and lets an administrator approve expected changes, escalate unexpected changes, or confirm remediation. Review state is separate from immutable observation evidence.
 - A transparent Wellguard priority score that combines public reachability, owner-set asset criticality, evidence confidence, finding lifecycle, and any retained CISA KEV, FIRST EPSS, and unmodified CVSS data. Missing threat intelligence remains unknown; the score is explicitly not presented as CVSS.
 - A deterministic exposure knowledge layer that groups recurring mistakes by weakness, technology, and configuration category. Existing finding histories provide an immediate workspace view; every future run also writes immutable `knowledgeObservations` records for longer-term prevention analysis without an additional model call.
+- A governed improvement loop that scores scan completeness and tool reliability, learns from workspace-admin evidence verdicts, and raises narrowly typed proposals. Only an explicit owner/admin approval can apply a confidence guard or change the priority of an already-permitted inspector; the loop cannot edit code or prompts, enable tools, raise request budgets, or expand authorization scope.
+- A persistent external-intelligence cache for public catalogue and registration sources. It coalesces identical in-flight calls, uses bounded TTLs and conditional ETag/Last-Modified revalidation, respects `no-store`/`private`, and records per-scan hit, miss, revalidation, and origin-request metrics. Live requests to customer targets are never cached.
 - A target-scoped public identity ledger for names and mailboxes directly disclosed by owned services, RDAP, or `security.txt`. It supports owner-confirmed current/former status, shows only explicitly returned public links, and never guesses or scrapes social profiles.
 - A live job console with a five-second worker heartbeat, current phase, model messages, tool inputs/results, delayed/stalled indicators, safe user cancellation, and explicit recovery of jobs interrupted by a single-instance worker restart; evidence already retained remains auditable after a stop.
 - Working target administration and scan queue controls, target-scoped surface and finding views, all-target portfolio overview, scan reports, transparent agent traces, source catalog, and workspace settings.
@@ -153,7 +155,7 @@ For a production deployment, set long random PocketBase credentials, a precise `
 - OWASP Web Security Testing Guide, OWASP ASVS 5.0.0, and the official EUR-Lex Cyber Resilience Act text as curated evidence references
 - Vendor documentation selected by the investigator
 
-External responses are untrusted evidence and are never treated as agent instructions.
+External responses are untrusted evidence and are never treated as agent instructions. Public intelligence and fingerprint catalogues are cached in PocketBase using source-specific freshness ceilings; target HTTP, TLS, DNS resolution, banners, and port checks remain live. See [Knowledge base](docs/KNOWLEDGE_BASE.md) for the review and improvement controls.
 
 ## Transparency
 
