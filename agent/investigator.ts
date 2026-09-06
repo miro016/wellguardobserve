@@ -19,7 +19,8 @@ import { inspectBrowserSessionControls, inspectInputErrorHandling, inspectRateLi
 import { inspectPublicDirectoryIndex } from './tools/directory-index';
 import { inspectAuthenticationControls } from './tools/authentication';
 import { probeEncodingFilterBypass } from './tools/filter-bypass';
-import { runHeadlessBrowserReview } from './tools/browser';
+import { runHeadlessBrowserReview, runChromiumDomReview } from './tools/browser';
+import { replayWithAcquiredSession } from './tools/session-replay';
 import { sweepFullPortRange } from './tools/full-sweep';
 import { mineFrontendBundles } from './tools/endpoint-mining';
 import { probeHttpMethodSurface, analyzeTokenStructure } from './tools/unbounded';
@@ -177,6 +178,8 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
     return serialized;
   }
 
+  let sessionToken = '';
+
   const tools = [
     tool(async ({ hostname }) => tracked('inspect_dns', { hostname }, () => inspectDns(scope, hostname)), {
       name: 'inspect_dns',
@@ -332,6 +335,7 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), path: z.string().min(1).max(300) })
     }),
     ...(profile.allowAuthenticationProbe ? [tool(async ({ hostname, port, tls, path, usernameField, passwordField, maxAttempts }) => tracked('inspect_authentication_controls', { hostname, port, tls, path, usernameField, passwordField, maxAttempts }, () => inspectAuthenticationControls(scope, { hostname, port, tls, path, usernameField, passwordField, maxAttempts }), async (result) => {
+      if (result.acquiredSession) sessionToken = result.acquiredSession;
       for (const finding of result.suggestedFindings) await recordFinding(finding);
     }), {
       name: 'inspect_authentication_controls',
@@ -379,6 +383,25 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
         name: 'analyze_token_structure',
         description: 'Unbounded profile only, offline. Decodes a JWT-shaped token (header and payload only), flags alg=none and missing exp. The token is never sent anywhere; use for tokens already present in evidence.',
         schema: z.object({ token: z.string().max(4000).describe('A token string copied from earlier evidence in this investigation.') })
+      })
+    ] : []),
+    ...(profile.id === 'unbounded' ? [
+      tool(async ({ hostname, port, tls, paths }) => tracked('replay_with_acquired_session', { hostname, port, tls, pathCount: (paths || []).length }, () => replayWithAcquiredSession(scope, sessionToken, { hostname, port, tls, paths }), async (result) => {
+        for (const finding of result.suggestedFindings) await recordFinding(finding);
+      }), {
+        name: 'replay_with_acquired_session',
+        description: 'Unbounded profile only. If the authentication probe issued a session token earlier in this run, replay up to 20 previously discovered paths with the token and compare anonymous vs authenticated responses. Surfaces broken access control and record shapes for further review.',
+        schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), paths: z.array(z.string().max(300)).max(20).describe('Previously discovered paths, e.g. from bundle mining or common-path sweep.') })
+      }),
+      tool(async ({ hostname, port, tls, startPath, hashRoutes }) => tracked('review_dynamic_dom', { hostname, port, tls, startPath, hashRoutes }, async () => {
+        const happyDomResult = await runChromiumDomReview(scope, { hostname, port, tls, startPath, sessionToken: sessionToken || undefined, hashRoutes });
+        return happyDomResult;
+      }, async (result) => {
+        if ('suggestedFindings' in result) for (const finding of result.suggestedFindings || []) await recordFinding(finding);
+      }), {
+        name: 'review_dynamic_dom',
+        description: 'Unbounded profile only. Drives the packaged system Chromium on same-origin pages (including single-page-app hash routes you discovered from bundle mining or page evidence), injects an acquired session token into localStorage when available, and reports only if the fixed inert marker executes in the real browser engine.',
+        schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true), startPath: z.string().max(300).default('/'), hashRoutes: z.array(z.string().max(40)).max(8).optional().describe('SPA hash route names observed in the app, e.g. search.') })
       })
     ] : []),
     tool(async () => tracked('list_service_adapters', {}, async () => ({ activeProfile: { id: profile.id, name: profile.name, enabledTools: profile.enabledTools, nucleiPolicy: profile.nucleiPolicy }, adapters: adapterCatalog(), specializedInspectors: [{ id: 'wordpress-public-metadata', tool: 'inspect_wordpress', products: ['wordpress'], methods: ['HTTP GET'], requestCeiling: 6, authentication: false }], fingerprintPacks: [fingerprintCatalog(), recogCatalog()], note: 'Inspectors declare their products and bounded behavior. Fingerprints only identify candidates and cannot expand scan scope.' })), {

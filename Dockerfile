@@ -39,7 +39,7 @@ RUN arch="$TARGETARCH" \
   && chmod +x /out/nuclei
 
 FROM oven/bun:1.4.0-debian AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gosu nginx tini \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gosu nginx tini chromium \
   && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default
 WORKDIR /app
 ENV NODE_ENV=production \
@@ -47,7 +47,8 @@ ENV NODE_ENV=production \
     POCKETBASE_DATA_DIR=/data \
     OLLAMA_MODEL=glm-5.3:cloud \
     WELLGUARD_NUCLEI_TEMPLATES=/app/nuclei/templates \
-    SCAN_POLL_MS=4000
+    SCAN_POLL_MS=4000 \
+    OBSERVER_CHROMIUM_PATH=/usr/bin/chromium
 COPY --from=pocketbase-download /out/pocketbase /usr/local/bin/pocketbase
 COPY --from=nuclei-download /out/nuclei /usr/local/bin/nuclei
 COPY --from=web-build /build/dist/wellguard-observe/browser /usr/share/nginx/html

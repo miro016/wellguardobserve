@@ -94,6 +94,38 @@ export class InvestigationStore {
     if (scan) await this.client.collection('scans').update(scan.id, { status: 'cancelled', completedAt, summary: 'Investigation stopped by the user.' });
   }
 
+
+  private async runScoreboard(targetId: string, scan: RecordModel, report: InvestigationReport): Promise<string> {
+    const bySeverity = (list: Array<{ severity: string }>) => {
+      const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+      for (const item of list) (counts as Record<string, number>)[item.severity] = ((counts as Record<string, number>)[item.severity] || 0) + 1;
+      return counts;
+    };
+    const current = bySeverity(report.findings as Array<{ severity: string }>);
+    let previousNote = 'First recorded run for this target.';
+    let previous = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+    let previousPortCount = 0;
+    try {
+      const last = await this.client.collection('scans').getFirstListItem(
+        this.client.filter('target = {:target} && status = "completed" && id != {:scan}', { target: targetId, scan: scan.id }), { sort: '-completedAt' }
+      );
+      const priorFindings = await this.client.collection('findings').getFullList({ filter: this.client.filter('scan = {:scan}', { scan: last.id }), fields: 'severity' });
+      previous = bySeverity(priorFindings as unknown as Array<{ severity: string }>);
+      const priorActions = await this.client.collection('agentActions').getFullList({ filter: this.client.filter('scan = {:scan}', { scan: last.id }), fields: 'summary' });
+      const priorSweep = priorActions.find((a) => String(a['summary'] || '').includes('"openPorts"'));
+      if (priorSweep) previousPortCount = (String(priorSweep['summary']).match(/"openPorts":\s*\[[^\]]*\]/)?.[0]?.split(',').length) || 0;
+      previousNote = `Previous run ${last.completedAt || last.created}: critical ${previous.critical}, high ${previous.high}, medium ${previous.medium}, low ${previous.low}, info ${previous.info}.`;
+    } catch { /* no previous completed run */ }
+    const openPorts = (report.assets as unknown as Array<Record<string, unknown>>).filter((a) => String(a['kind']) === 'port' || String(a['key'] || '').startsWith('port:')).length;
+    const lines = [
+      '---', '## Run scoreboard (cumulative, for comparing capability growth)',
+      `This run: critical ${current.critical}, high ${current.high}, medium ${current.medium}, low ${current.low}, info ${current.info}.`,
+      previousNote,
+      `Assets observed this run: ${report.assets.length}. Open ports observed this run: ${openPorts || 'n/a'}${previousPortCount ? ` (previous: ${previousPortCount})` : ''}.`
+    ];
+    return lines.join('\n');
+  }
+
   async complete(request: RecordModel, scan: RecordModel, report: InvestigationReport): Promise<void> {
     for (const asset of report.assets) {
       await this.client.collection('assets').create({ target: report.target.id, scan: scan.id, ...asset });
@@ -130,7 +162,9 @@ export class InvestigationStore {
     }
     const posture = Math.max(0, 100 - report.findings.reduce((sum, finding) => sum + ({ critical: 35, high: 22, medium: 11, low: 4, info: 0 })[finding.severity], 0));
     await this.client.collection('targets').update(report.target.id, { lastScanAt: report.completedAt, findingCount: report.findings.filter((item) => item.severity !== 'info').length, assetCount: Math.max(1, report.assets.length), posture, status: 'observed' });
-    await this.client.collection('scans').update(scan.id, { status: 'completed', completedAt: report.completedAt, summary: report.summary.slice(0, 4000) });
+    const scoreboard = await this.runScoreboard(report.target.id, scan, report);
+    const combined = `${report.summary}\n\n${scoreboard}`;
+    await this.client.collection('scans').update(scan.id, { status: 'completed', completedAt: report.completedAt, summary: combined.slice(0, 4000) });
     await this.client.collection('scanRequests').update(request.id, { status: 'completed', completedAt: report.completedAt, heartbeatAt: report.completedAt, phase: 'Evidence retained' });
   }
 

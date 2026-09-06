@@ -47,11 +47,20 @@ function assertLoginPath(scope: ScopeGuard, path: string | undefined): string {
   return normalized;
 }
 
-function outcome(response: { status: number; raw: string }): { authenticated: boolean; marker: string } {
-  if (response.status === 401 || response.status === 403) return { authenticated: false, marker: 'rejected' };
-  if (response.status >= 200 && response.status < 300 && TOKEN_PATTERN.test(response.raw)) return { authenticated: true, marker: 'token issued' };
-  if (response.status >= 400) return { authenticated: false, marker: `http ${response.status}` };
-  return { authenticated: false, marker: 'no token' };
+function extractToken(raw: string): string {
+  try {
+    const body = JSON.parse(raw) as Record<string, unknown>;
+    const candidates = [body['token'], body['access_token'], (body['authentication'] as Record<string, unknown> | undefined)?.['token'], (body['session'] as Record<string, unknown> | undefined)?.['token']];
+    const token = candidates.find((value) => typeof value === 'string' && (value as string).length > 12 && (value as string).length < 4096);
+    return typeof token === 'string' ? token : '';
+  } catch { return ''; }
+}
+
+function outcome(response: { status: number; raw: string }): { authenticated: boolean; marker: string; token: string } {
+  if (response.status === 401 || response.status === 403) return { authenticated: false, marker: 'rejected', token: '' };
+  if (response.status >= 200 && response.status < 300 && TOKEN_PATTERN.test(response.raw)) return { authenticated: true, marker: 'token issued', token: extractToken(response.raw) };
+  if (response.status >= 400) return { authenticated: false, marker: `http ${response.status}`, token: '' };
+  return { authenticated: false, marker: 'no token', token: '' };
 }
 
 export async function inspectAuthenticationControls(scope: ScopeGuard, input: EndpointInput) {
@@ -67,6 +76,7 @@ export async function inspectAuthenticationControls(scope: ScopeGuard, input: En
   const baselinePayload = { [usernameField]: 'wellguard-control@example.invalid', [passwordField]: 'wellguard-control-0a9d1c' };
   const baseline = await requestAuthorizedJsonPost(scope, { hostname, port, tls, path }, baselinePayload);
   const baselineOutcome = outcome(baseline);
+  let acquiredSession = '';
 
   const attempts: Array<{ probe: string; status: number; result: string }> = [{ probe: 'baseline-invalid', status: baseline.status, result: baselineOutcome.marker }];
   const suggestedFindings: AgentFinding[] = [];
@@ -83,13 +93,14 @@ export async function inspectAuthenticationControls(scope: ScopeGuard, input: En
       const result = outcome(response);
       attempts.push({ probe: probe.id, status: response.status, result: result.marker });
       if (result.authenticated && !baselineOutcome.authenticated) {
+        if (!acquiredSession && result.token) acquiredSession = result.token;
         suggestedFindings.push({
           title: 'Authentication endpoint accepts a fixed SQL tautology input',
           summary: `The ${probe.field === 'username' ? usernameField : passwordField} field accepted a fixed SQL tautology value and the endpoint issued an authenticated artifact, while a random control pair was rejected. This proves the authentication query on this deployment is injectable.`,
           severity: 'critical', confidence: 97, asset,
           evidence: [
             `Baseline invalid credentials were rejected (${baselineOutcome.marker}).`,
-            `${probe.rationale} Result: HTTP ${response.status}, ${result.marker}. Tokens or session contents were not retained.`
+            `${probe.rationale} Result: HTTP ${response.status}, ${result.marker}. The issued token is retained in-memory for same-investigation session-replay tools (never written to storage or findings).`
           ],
           remediation: 'Use parameterized queries for credential lookup, enforce constant-shape rejection responses, and add rate limiting plus lockout signals to the endpoint.',
           sourceUrls: [], cveIds: [], weaknessIds: ['CWE-89'],
@@ -106,6 +117,7 @@ export async function inspectAuthenticationControls(scope: ScopeGuard, input: En
     try {
       const response = await requestAuthorizedJsonPost(scope, { hostname, port, tls, path }, { ...baselinePayload, [usernameField]: cred.username, [passwordField]: cred.password });
       const result = outcome(response);
+      if (result.authenticated && result.token && !acquiredSession) acquiredSession = result.token;
       attempts.push({ probe: `default-credential:${cred.username}`, status: response.status, result: result.marker });
       if (result.authenticated && !baselineOutcome.authenticated) {
         suggestedFindings.push({
@@ -124,6 +136,7 @@ export async function inspectAuthenticationControls(scope: ScopeGuard, input: En
 
   return {
     endpoint: path, baselineRejected: !baselineOutcome.authenticated,
+    acquiredSession: acquiredSession || undefined,
     attemptsUsed: used, attempts, suggestedFindings,
     policy: `Fixed payload list only (${INJECTION_PROBES.length} injection shapes + ${DEFAULT_CREDENTIALS.length} documented default pairs), at most ${MAX_ATTEMPTS} attempts, JSON POST bodies, no state-changing operations beyond login attempts, nothing exfiltrated.`
   };

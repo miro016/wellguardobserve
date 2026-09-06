@@ -40,6 +40,7 @@ export interface AuthorizedBinaryHttpResponse {
 interface AuthorizedRequestControls {
   fixedHeaders?: Partial<Record<'origin' | 'x-forwarded-for', string>>;
   timeoutMs?: number;
+  bearerToken?: string;
 }
 
 export interface TechnologySignal {
@@ -91,6 +92,10 @@ export function cookieMetadata(headers: IncomingHttpHeaders): CookieMetadata[] {
 
 function controlledHeaders(controls: AuthorizedRequestControls): Record<string, string> {
   const result: Record<string, string> = {};
+  if (controls.bearerToken) {
+    if (controls.bearerToken.length > 4096 || /[\r\n]/.test(controls.bearerToken)) throw new Error('Bearer tokens must be single-line and bounded.');
+    result.authorization = `Bearer ${controls.bearerToken}`;
+  }
   const origin = controls.fixedHeaders?.origin;
   if (origin !== undefined) {
     if (origin !== 'https://wellguard.invalid') throw new Error('Only the fixed Wellguard synthetic Origin is permitted.');

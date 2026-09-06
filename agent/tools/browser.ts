@@ -158,3 +158,203 @@ export async function runHeadlessBrowserReview(scope: ScopeGuard, input: { hostn
     policy: `Same-origin GET/form replays through the authorized transport, at most ${MAX_PAGES} pages, one fixed inert marker payload, no credentials, destructive-looking forms skipped. DOM emulation only (happy-dom); no native browser is installed.`
   };
 }
+
+/**
+ * Dynamic DOM review for the Unbounded profile.
+ * Executes the page's own same-origin JavaScript in the happy-dom runtime
+ * (no native browser), optionally with an investigation-acquired session
+ * token in localStorage, then exercises text inputs with the fixed marker.
+ */
+export async function runDynamicDomReview(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; startPath?: string; sessionToken?: string; testMarker?: boolean }) {
+  const hostname = scope.assertHostname(input.hostname);
+  const tls = input.tls ?? true;
+  const port = input.port ?? (tls ? 443 : 80);
+  const startPath = scope.assertPath(input.startPath || '/');
+  if (/[?#]/.test(startPath)) throw new Error('The start path must not contain a query or fragment.');
+
+  let happyDom: typeof import('happy-dom');
+  try { happyDom = await import('happy-dom'); } catch {
+    return { available: false, reason: 'happy-dom runtime not installed.', pages: [] as unknown[] };
+  }
+
+  const origin = `${tls ? 'https' : 'http'}://${hostname}${port === (tls ? 443 : 80) ? '' : `:${port}`}`;
+  const pages: Array<{ url: string; forms: number; markerExecuted: boolean; detail: string }> = [];
+  const suggestedFindings: AgentFinding[] = [];
+  const asset = `${hostname}:${port}`;
+  const assetKey = `service:${hostname}:${port}:web`;
+
+  const candidates = [`${origin}${startPath}`];
+  if (input.testMarker !== false) {
+    // Common single-page-app hash route shapes used to exercise client-side rendering of a query value.
+    for (const route of ['search', 'find', 'contact', 'about']) {
+      candidates.push(`${origin}/#/${route}?q=${encodeURIComponent(PAYLOAD)}`);
+    }
+  }
+
+  for (const url of candidates) {
+    const browser = new happyDom.Browser({
+      settings: {
+        disableJavaScriptFileLoading: false,
+        disableCSSFileLoading: true,
+        disableIframePageLoading: true,
+        fetch: { disableSameOriginPolicy: false },
+        navigation: { disableFallbackToSetURL: false, disableChildFrameNavigation: true, disableChildPageNavigation: true }
+      }
+    });
+    try {
+      const page = browser.newPage();
+      if (input.sessionToken) page.mainFrame.window.localStorage.setItem('token', input.sessionToken);
+      await page.goto(url, { timeout: 15_000 });
+      await page.mainFrame.waitUntilComplete();
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      const marker = Number((page.mainFrame.window as unknown as Record<string, unknown>)['__wellguardMarker'] || 0);
+      const doc = page.mainFrame.document;
+      const forms = doc.querySelectorAll('form').length;
+      let executed = marker === 1;
+      let detail = `scripts executed via emulated DOM; forms rendered: ${forms}; marker flag: ${marker}`;
+      if (!executed) {
+        // Try submitting text inputs with the fixed marker.
+        const inputs = [...doc.querySelectorAll('input[type=text], input[type=search], input:not([type]), textarea')] as unknown as Array<{ value: string; form: unknown | null }>;
+        for (const field of inputs.slice(0, 6)) {
+          field.value = PAYLOAD;
+          const form = field.form as { requestSubmit?: () => void; submit?: () => void } | null;
+          page.mainFrame.window.eval('window.__wellguardMarker=0');
+          if (form && typeof form.requestSubmit === 'function') form.requestSubmit();
+          else if (form && typeof form.submit === 'function') form.submit();
+          await new Promise((resolve) => setTimeout(resolve, 1_500));
+          if (Number((page.mainFrame.window as unknown as Record<string, unknown>)['__wellguardMarker'] || 0) === 1) { executed = true; detail += '; marker executed after form submit'; break; }
+        }
+      }
+      if (executed) {
+        suggestedFindings.push({
+          title: 'Client-side marker executed inside the emulated application runtime',
+          summary: `The page at ${url} executed the fixed inert marker while its own JavaScript ran in the emulated DOM, indicating a functional client-side injection path under real browsers as well.`,
+          severity: 'high', confidence: 90, asset,
+          evidence: [`URL exercised: ${url}.`, detail],
+          remediation: 'Trace the sink where untrusted values reach script execution, encode output, and apply a restrictive CSP.',
+          sourceUrls: [], cveIds: [], weaknessIds: ['CWE-79'],
+          frameworkRefs: frameworkReferences('WSTG-CLNT-07'),
+          assetKey, relatedAssetKeys: [], relationKey: ''
+        });
+      }
+      pages.push({ url: url.replace('//' + hostname, '//…'), forms, markerExecuted: executed, detail: detail.slice(0, 240) });
+    } catch (error) {
+      pages.push({ url, forms: 0, markerExecuted: false, detail: `emulation failed: ${error instanceof Error ? error.message.slice(0, 120) : 'unknown'}` });
+    } finally {
+      await browser.close().catch(() => {});
+    }
+  }
+
+  return {
+    available: true, origin, pagesExamined: pages.length, pages, suggestedFindings,
+    policy: 'Same-origin URL and same-origin bundle execution inside a JS-only DOM runtime; localStorage token reuse only when an earlier investigation probe acquired one; fixed marker payload only.'
+  };
+}
+
+/**
+ * System-Chromium review for the Unbounded profile.
+ * Drives the Debian-packaged headless Chromium over CDP for flows that need
+ * a real browser engine (single-page-app rendering, client-side script
+ * execution). Same-origin only; fixed marker payload only.
+ */
+export async function runChromiumDomReview(scope: ScopeGuard, input: { hostname?: string; port?: number; tls?: boolean; startPath?: string; sessionToken?: string; hashRoutes?: string[] }) {
+  const hostname = scope.assertHostname(input.hostname);
+  const tls = input.tls ?? true;
+  const port = input.port ?? (tls ? 443 : 80);
+  const startPath = scope.assertPath(input.startPath || '/');
+  if (/[?#]/.test(startPath)) throw new Error('The start path must not contain a query or fragment.');
+
+  const executablePath = process.env['OBSERVER_CHROMIUM_PATH'] || '/usr/bin/chromium';
+  let puppeteer: typeof import('puppeteer-core');
+  try { puppeteer = await import('puppeteer-core'); } catch {
+    return { available: false, reason: 'puppeteer-core not installed.', pages: [] as unknown[] };
+  }
+
+  const origin = `${tls ? 'https' : 'http'}://${hostname}${port === (tls ? 443 : 80) ? '' : `:${port}`}`;
+  const hashRoutes = (input.hashRoutes || ['search', 'contact', 'about']).slice(0, 8).map((route) => String(route).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40)).filter(Boolean);
+  const candidates = [`${origin}${startPath}`, ...hashRoutes.map((route) => `${origin}/#/${route}?q=${encodeURIComponent(PAYLOAD)}`)];
+
+  const pages: Array<{ url: string; title: string; dialogs: number; markerExecuted: boolean; detail: string }> = [];
+  const suggestedFindings: AgentFinding[] = [];
+  const asset = `${hostname}:${port}`;
+  const assetKey = `service:${hostname}:${port}:web`;
+
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      executablePath, headless: true,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-first-run', '--disable-extensions', `--host-resolver-rules=MAP ${hostname} ${(await scope.resolve(hostname))[0]!.address}`]
+    });
+  } catch (error) {
+    return { available: false, reason: `Chromium launch failed: ${error instanceof Error ? error.message.slice(0, 160) : 'unknown'}.`, pages: [] };
+  }
+
+  try {
+    for (const url of candidates) {
+      const page = await browser.newPage();
+      let dialogs = 0;
+      page.on('dialog', (dialog) => { dialogs++; void dialog.dismiss().catch(() => {}); });
+      const report = { url, title: '', dialogs: 0, markerExecuted: false, detail: '' };
+      try {
+        // Restrict the page to the authorized origin.
+        await page.setRequestInterception(true);
+        page.on('request', (request) => {
+          try {
+            const target = new URL(request.url());
+            if (target.hostname.toLowerCase() === hostname.toLowerCase()) void request.continue();
+            else void request.abort();
+          } catch { void request.abort(); }
+        });
+        if (input.sessionToken) {
+          await page.goto(origin, { timeout: 15_000 }).catch(() => null);
+          await page.evaluate((token) => { try { window.localStorage.setItem('token', token); } catch { /* storage may be unavailable */ } }, input.sessionToken);
+        }
+        await page.goto(url, { timeout: 20_000, waitUntil: 'networkidle2' }).catch(() => page.goto(url, { timeout: 15_000, waitUntil: 'domcontentloaded' }));
+        report.title = (await page.title()).slice(0, 160);
+        for (let attempt = 0; attempt < 6; attempt++) {
+          const marker = await page.evaluate(() => Number((window as unknown as Record<string, unknown>)['__wellguardMarker'] || 0)).catch(() => 0);
+          if (marker === 1 || dialogs > 0) { report.markerExecuted = true; break; }
+          await new Promise((resolve) => setTimeout(resolve, 1_500));
+        }
+        if (!report.markerExecuted) {
+          // Exercise rendered text inputs and search-like fields with the fixed marker.
+          const handles = await page.$$('input[type=text], input[type=search], input:not([type]), textarea');
+          for (const handle of handles.slice(0, 6)) {
+            await page.evaluate(() => { (window as unknown as Record<string, unknown>)['__wellguardMarker'] = 0; });
+            await handle.click().catch(() => {});
+            await handle.type(PAYLOAD, { delay: 5 }).catch(() => {});
+            await page.keyboard.press('Enter').catch(() => {});
+            await new Promise((resolve) => setTimeout(resolve, 2_500));
+            const marker = await page.evaluate(() => Number((window as unknown as Record<string, unknown>)['__wellguardMarker'] || 0)).catch(() => 0);
+            if (marker === 1 || dialogs > 0) { report.markerExecuted = true; report.detail = 'marker executed after text-input submission'; break; }
+          }
+        }
+        report.dialogs = dialogs;
+        if (report.markerExecuted) {
+          suggestedFindings.push({
+            title: 'Client-side marker executed in a real browser engine',
+            summary: `Headless Chromium rendered ${url}, exercised the fixed inert marker, and observed actual script execution (marker flag or a native dialog). This confirms exploitable client-side code injection (DOM XSS class) for this view.`,
+            severity: 'high', confidence: 97, asset,
+            evidence: [`URL: ${url}.`, `Dialogs observed: ${dialogs}.`, report.detail || 'marker flag set during page load'],
+            remediation: 'Encode untrusted data at injection sinks, remove innerHTML-style rendering of user input, and deploy a restrictive Content-Security-Policy.',
+            sourceUrls: [], cveIds: [], weaknessIds: ['CWE-79'],
+            frameworkRefs: frameworkReferences('WSTG-CLNT-07'),
+            assetKey, relatedAssetKeys: [], relationKey: ''
+          });
+        }
+      } catch (error) {
+        report.detail = `review failed: ${error instanceof Error ? error.message.slice(0, 140) : 'unknown'}`;
+      } finally {
+        await page.close().catch(() => {});
+      }
+      pages.push(report);
+    }
+  } finally {
+    await browser.close().catch(() => {});
+  }
+
+  return {
+    available: true, origin, pagesExamined: pages.length, pages, suggestedFindings,
+    policy: 'System Chromium only, requests intercepted and limited to the authorized origin, fixed inert marker payload, optional session reuse only when an earlier probe acquired a token, no other payload or credential entry.'
+  };
+}
