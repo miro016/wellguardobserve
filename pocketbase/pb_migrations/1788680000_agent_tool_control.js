@@ -42,8 +42,11 @@ migrate((app) => {
       { type: 'relation', name: 'scan', required: true, maxSelect: 1, collectionId: scans.id, cascadeDelete: true },
       { type: 'relation', name: 'action', maxSelect: 1, collectionId: actions.id, cascadeDelete: true },
       { type: 'text', name: 'tool', required: true, max: 100 },
-      { type: 'json', name: 'input', required: true, maxSize: 100000 },
-      { type: 'json', name: 'output', required: true, maxSize: 1000000 },
+      // PocketBase considers {} and [] blank for required JSON fields. These are
+      // valid receipts for zero-argument and empty-result tools, so presence is
+      // enforced by the worker and the fields deliberately remain optional here.
+      { type: 'json', name: 'input', maxSize: 100000 },
+      { type: 'json', name: 'output', maxSize: 1000000 },
       { type: 'text', name: 'outputSha256', required: true, min: 64, max: 64, pattern: '^[a-f0-9]{64}$' },
       { type: 'bool', name: 'failed' },
       { type: 'date', name: 'occurredAt', required: true },
