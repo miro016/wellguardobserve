@@ -43,6 +43,8 @@ import { buildKnowledgeObservation } from './knowledge';
 import { applyConfidenceGuard, approvedPrompt, type LearningDirectives } from './self-improvement';
 import { executeGeneratedTool, generatedToolEligible, generatedToolProposalSchema, type GeneratedToolDefinition, type GeneratedToolProposal } from './generated-tools';
 import { exactToolCallLimitMiddleware } from './tool-loop-guard';
+import { compiledAgentToolSupports, type AgentToolPolicy } from './tool-catalog';
+import { runVanguardObservation } from './tools/vanguard';
 
 const SYSTEM_PROMPT = `You are Wellguard Observe, a defensive external-exposure investigator working only on infrastructure its owner authorized.
 
@@ -51,6 +53,8 @@ Your job is to identify forgotten services, public management interfaces, accide
 Drive the investigation adaptively. Begin with DNS, DNS posture, authoritative domain RDAP, public network registration, certificate transparency, TLS and the root HTTP response. Always use discover_service_hosts once: it combines stored hints, passive host data and bounded HTTPS verification while excluding wildcard/CDN missing routes. Use a bounded port check, then choose deeper service checks from actual evidence. A CDN edge can make ports look open; do not mistake CDN ports for origin services. IP registration describes the public network holder, not a physical server location. Use public sources when they materially improve identification or remediation.
 
 Review every verified service host returned by discover_service_hosts and prioritize public administration, monitoring, storage, development, identity and API surfaces. Inspect DNS and public network registration for each separately approved exact hostname and for a distinct service host when its address attribution is relevant. Compare retained technology markers and confidence scores so pages with similar titles remain distinct by observed stack. Treat every hostname independently: never transfer a product or version marker between hosts because titles, infrastructure or redirects look similar. The discovery result already contains each host's root response; use deeper tools only when they add evidence. For a JavaScript application or page that appears to call a backend, use inspect_frontend_api once to inspect its shipped same-origin bundles without invoking discovered business operations. Use list_service_adapters to discover installed product inspectors. When direct response evidence matches an inspector's declared products, invoke that inspector exactly once and accept its declared request policy; never select an inspector from a hostname or prompt example. For other identified products, choose only documented unauthenticated metadata paths supported by evidence. For a reachable non-HTTP port that may emit a passive banner, use inspect_service_banner once.
+
+When run_vanguard_observation is available, use it once after initial discovery when an independent evidence-first inventory would materially improve coverage. Vanguard runs a pinned, bounded, no-paid-provider profile and returns a deterministic projection. Correlate its domain, address, service and finding evidence with other observations; do not treat independent-tool agreement as two separate weaknesses.
 
 Use inspect_public_directory_index only when robots.txt, a sitemap, or direct page evidence has already exposed a directory-shaped path. It records a generated index and filenames but never downloads a listed file. After a listing is confirmed, do not request a nested entry or any listed file with another tool; filenames are sufficient evidence. Use profile-gated checks selectively. inspect_safe_web_audit and inspect_reviewed_nuclei use reviewed fixed GET templates and record strict matches themselves. inspect_unknown_web_service is for a meaningful unidentified web surface after normal fingerprinting. inspect_browser_session_controls may review an important application response. inspect_input_error_handling is permitted only on a previously observed anonymous read-only path and parameter; it cannot prove SQL injection. inspect_rate_limit_controls is permitted once per important host on a previously observed anonymous read-only path; absence of HTTP 429 under ten requests is not a defect by itself. Do not run active validation indiscriminately across every host.
 
@@ -156,6 +160,7 @@ export interface InvestigatorOptions {
   onProgress?: (phase: string) => void | Promise<void>;
   signal?: AbortSignal;
   learningDirectives?: LearningDirectives;
+  agentToolPolicies?: Map<string, AgentToolPolicy>;
   generatedTools?: GeneratedToolDefinition[];
   proposeGeneratedTool?: (proposal: GeneratedToolProposal) => Promise<GeneratedToolDefinition>;
   onGeneratedToolExecution?: (tool: GeneratedToolDefinition, result: { status: 'completed' | 'failed'; hostname: string; requestCount: number; matchedAssertions: number; summary: string }) => void | Promise<void>;
@@ -331,6 +336,11 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
       name: 'inspect_unknown_web_service',
       description: 'Active validation profile only. Investigate an unidentified authorized web service using one root GET, one fixed favicon GET, selected headers, existing web markers, and pinned Rapid7 Recog server/auth/favicon fingerprints. Treat any single fingerprint as a hypothesis until corroborated.',
       schema: z.object({ hostname: z.string().optional(), port: z.number().int().min(1).max(65535).default(443), tls: z.boolean().default(true) })
+    }),
+    tool(async () => tracked('run_vanguard_observation', {}, () => runVanguardObservation(scope, options.signal)), {
+      name: 'run_vanguard_observation',
+      description: 'Active validation and stronger profiles. Run the pinned Vanguard evidence collector once for the authorized root, then import its bounded deterministic projection: domains, public addresses, services, web surfaces, findings, coverage and provenance. Paid providers, zone transfer, port scanning, GoScans and out-of-scope HTTP are disabled in this integration profile.',
+      schema: z.object({})
     }),
     tool(async ({ hostname, port, tls, basePath }) => tracked('inspect_wordpress', { hostname, port, tls, basePath }, () => inspectWordPress(scope, { hostname, port, tls, basePath }), async (observation) => {
       const publicUsers = observation.evidence.publicUsers.users;
@@ -606,9 +616,16 @@ export async function investigate(target: AuthorizedTarget, options: Investigato
     inspect_browser_session_controls: profile.allowBrowserSessionReview,
     inspect_input_error_handling: profile.allowActiveValidation,
     inspect_rate_limit_controls: profile.allowActiveValidation,
-    propose_generated_probe: profile.allowGeneratedToolProposals
+    propose_generated_probe: profile.allowGeneratedToolProposals,
+    run_vanguard_observation: ['extended', 'advanced', 'unbounded'].includes(profile.id)
   };
-  const availableTools = tools.filter((item) => profileGates[(item as { name?: string }).name || ''] !== false);
+  const availableTools = tools.filter((item) => {
+    const name = (item as { name?: string }).name || '';
+    if (!compiledAgentToolSupports(name, profile.id)) return false;
+    if (profileGates[name] === false) return false;
+    const policy = options.agentToolPolicies?.get(name);
+    return !policy || (policy.enabled && policy.profiles.includes(profile.id));
+  });
   const reasoningEffort = resolveReasoningEffort(options.reasoningEffort || process.env['OLLAMA_REASONING_EFFORT']);
   const effectiveSystemPrompt = `${SYSTEM_PROMPT}\n\nMODEL REASONING EFFORT: ${reasoningEffort}.\nACTIVE SCAN CONTRACT: ${profile.name} (${profile.version}). Maximum ${profile.maxActions} tool calls; permitted methods: ${profile.methods.join(', ')}; reviewed Nuclei rate ceiling: ${profile.nucleiRequestsPerSecond ? `${profile.nucleiRequestsPerSecond}/second` : 'disabled'}. ${profile.agentInstructions}${approvedPrompt(options.learningDirectives)}`;
 

@@ -1,0 +1,30 @@
+Domain Name: example.com
+Registry Domain ID: 12345
+Registrar: Example Registrar Inc.
+Registrar URL: http://www.example-registrar.com
+Updated Date: 2024-01-15T10:00:00Z
+Creation Date: 2020-06-01T00:00:00Z
+Registry Expiry Date: 2025-06-01T00:00:00Z
+Registrar WHOIS Server: whois.example-registrar.com
+Domain Status: clientTransferProhibited
+Name Server: ns1.example.com
+Name Server: ns2.example.com
+DNSSEC: signedDelegation
+
+Registrant Name: John Doe
+Registrant Organization: Example Corp
+Registrant Email: john@example.com
+Registrant Phone: +1.5551234567
+Registrant Phone Ext: 100
+Registrant Street: 123 Main St
+Registrant City: Springfield
+Registrant State/Province: IL
+Registrant Postal Code: 62701
+Registrant Country: US
+
+Admin Name: Jane Admin
+Admin Organization: Example Corp
+Admin Email: admin@example.com
+
+Tech Name: Tech Support
+Tech Email: tech@example.com

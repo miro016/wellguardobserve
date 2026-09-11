@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AppSidebarComponent } from '../components/app-sidebar.component';
-import { GeneratedProbeAssertion, GeneratedTool, GeneratedToolExecution, ScanMode } from '../models';
+import { AgentTool, GeneratedProbeAssertion, GeneratedTool, GeneratedToolExecution, ScanMode } from '../models';
 import { SCAN_PROFILES } from '../scan-profiles';
 import { PocketBaseService } from '../services/pocketbase.service';
 
@@ -12,8 +12,10 @@ import { PocketBaseService } from '../services/pocketbase.service';
   imports: [AppSidebarComponent, DatePipe, FormsModule, RouterLink],
   template: `
     <div class="app-layout"><wg-app-sidebar /><main class="app-main tools-page">
-      <header class="app-header"><div><span class="app-breadcrumb">MANAGE / CAPABILITY REGISTRY</span><h1>Agent tools</h1><p>Review capabilities composed from scan evidence and decide where they may run automatically.</p></div><span class="scope-lock"><i></i>Compiled plans · no generated code</span></header>
+      <header class="app-header"><div><span class="app-breadcrumb">MANAGE / CAPABILITY REGISTRY</span><h1>Agent tools</h1><p>Control every model-callable capability, its scan-profile reach, and reusable evidence output.</p></div><button class="button primary" type="button" (click)="showCreate.update(value => !value)">{{ showCreate() ? 'Close builder' : 'Add declarative tool' }}</button></header>
       @if (error()) { <div class="error-banner"><strong>Tool registry unavailable</strong><span>{{ error() }}</span></div> }
+
+      @if (showCreate()) { <section class="panel tool-builder"><div><span class="section-index">ADMINISTRATOR BUILDER</span><h2>Add a bounded evidence probe</h2><p>The runtime accepts one same-origin GET and proves the response using a required body marker. It cannot execute generated code or arbitrary requests.</p></div><form (ngSubmit)="createProbe()"><label><span>Machine name</span><input required minlength="3" maxlength="64" name="newName" [(ngModel)]="newProbe.name" placeholder="check-public-status"></label><label><span>Display title</span><input required minlength="8" maxlength="160" name="newTitle" [(ngModel)]="newProbe.title" placeholder="Public status document"></label><label class="wide"><span>Summary</span><input required minlength="20" maxlength="500" name="newSummary" [(ngModel)]="newProbe.summary" placeholder="Validate the public status document using a stable content marker."></label><label class="wide"><span>Why this probe exists</span><input required minlength="20" maxlength="240" name="newRationale" [(ngModel)]="newProbe.rationale" placeholder="Recurring evidence showed this document is useful for configuration review."></label><label><span>Relative path</span><input required maxlength="300" name="newPath" [(ngModel)]="newProbe.path" placeholder="/.well-known/status.json"></label><label><span>Required body marker</span><input required minlength="2" maxlength="200" name="newMarker" [(ngModel)]="newProbe.marker" placeholder="service_status"></label><label><span>First allowed profile</span><select name="newProfile" [(ngModel)]="newProbe.minProfile">@for (profile of profiles; track profile.id) { <option [value]="profile.id">{{ profile.name }}</option> }</select></label><button class="button primary" type="submit" [disabled]="saving()">Create and approve</button></form></section> }
 
       <section class="capability-promotion panel" aria-label="Generated tool promotion path">
         <div class="promotion-thesis"><span class="section-index">CAPABILITY PROMOTION</span><h2>The model may design the probe. Policy decides its reach.</h2><p>Every proposal is evidence-linked, schema-validated and checksum-bound. Unbounded can exercise a new plan; broader reuse begins only after review.</p></div>
@@ -26,10 +28,18 @@ import { PocketBaseService } from '../services/pocketbase.service';
       </section>
 
       <section class="tool-metrics">
-        <article><span>Registry</span><strong>{{ tools().length }}</strong><small>Immutable capability receipts</small></article>
+        <article><span>Installed</span><strong>{{ installed().length }}</strong><small>{{ enabledCount() }} enabled for the agent</small></article>
         <article><span>Awaiting review</span><strong>{{ proposedCount() }}</strong><small>Unbounded remains isolated</small></article>
         <article><span>Executed</span><strong>{{ executions().length }}</strong><small>{{ requestTotal() }} bounded requests retained</small></article>
         <article><span>Active profiles</span><strong>{{ profileSpread() }}</strong><small>Lowest approved contract</small></article>
+      </section>
+
+      <section class="panel installed-tool-registry">
+        <div class="installed-tool-heading"><div><span class="section-index">RUNTIME CONTROL PLANE</span><h2>Installed capabilities</h2><p>Changes apply to new scans. Filled cells are granted, empty cells can be granted, and muted cells are outside the compiled safety boundary.</p></div><div class="profile-key">@for (profile of profiles; track profile.id) { <span>{{ shortProfile(profile.id) }}<small>{{ profile.name }}</small></span> }</div></div>
+        <div class="installed-tool-table" role="table" aria-label="Installed agent tools and scan profiles">
+          <div class="installed-tool-row table-head" role="row"><span>Capability</span><span>Source</span><span>State</span><span>Allowed scan profiles</span></div>
+          @for (tool of installed(); track tool.id) { <div class="installed-tool-row" role="row" [class.tool-disabled]="!tool.enabled"><div><strong>{{ tool.title }}</strong><code>{{ tool.name }}</code><small>{{ tool.summary }}</small></div><span class="tool-origin" [attr.data-source]="tool.source">{{ tool.source }}<small>{{ tool.version }}</small></span><button type="button" class="tool-power" [class.active]="tool.enabled" [disabled]="tool.essential || savingToolId() === tool.id" (click)="toggleInstalled(tool)"><i></i>{{ tool.enabled ? 'Enabled' : 'Disabled' }}</button><div class="profile-permissions">@for (profile of profiles; track profile.id) { <button type="button" [class.allowed]="tool.profiles.includes(profile.id)" [class.unsupported]="!tool.supportedProfiles.includes(profile.id)" [disabled]="tool.essential || !tool.supportedProfiles.includes(profile.id) || savingToolId() === tool.id" [attr.aria-label]="!tool.supportedProfiles.includes(profile.id) ? tool.title + ' is unavailable in ' + profile.name : (tool.profiles.includes(profile.id) ? 'Remove ' : 'Allow ') + tool.title + ' in ' + profile.name" (click)="toggleProfile(tool, profile.id)">{{ shortProfile(profile.id) }}</button> }</div></div> }
+        </div>
       </section>
 
       <section class="tool-filter panel"><label><span>Search capabilities</span><input [ngModel]="query()" (ngModelChange)="query.set($event)" placeholder="Name, category, evidence…"></label><label><span>Status</span><select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"><option value="all">All states</option><option value="proposed">Proposed</option><option value="approved">Approved</option><option value="disabled">Disabled</option><option value="rejected">Rejected</option></select></label><span>{{ filtered().length }} shown</span></section>
@@ -57,7 +67,7 @@ import { PocketBaseService } from '../services/pocketbase.service';
             <h3>Compiled request plan</h3><div class="probe-plan">@for (step of tool.spec.steps; track step.id) { <article><div><span [attr.data-method]="step.method">{{ step.method }}</span><code>{{ step.path }}</code></div><p>{{ step.purpose }}</p><ul>@for (assertion of step.assertions; track $index) { <li>{{ assertionLabel(assertion) }}</li> }</ul></article> }</div>
 
             <h3>Deployment policy</h3><div class="tool-policy"><label><span>Automatic from profile</span><select [ngModel]="draftProfile()" (ngModelChange)="draftProfile.set($event)">@for (profile of profiles; track profile.id) { <option [value]="profile.id" [disabled]="!tool.compatibleProfiles.includes(profile.id)">{{ profile.name }}{{ !tool.compatibleProfiles.includes(profile.id) ? ' · incompatible' : '' }}</option> }</select></label><label class="policy-toggle"><input type="checkbox" [ngModel]="draftAutoUse()" (ngModelChange)="draftAutoUse.set($event)"><span><strong>Allow before review in Unbounded</strong><small>The schema-valid plan remains isolated to administrator-selected non-production runs.</small></span></label><label><span>Review note</span><textarea rows="3" maxlength="1200" [ngModel]="draftNote()" (ngModelChange)="draftNote.set($event)" placeholder="Reason for approval, rejection or profile choice"></textarea></label></div>
-            <div class="tool-review-actions">@if (tool.status !== 'approved') { <button class="button primary" type="button" [disabled]="saving()" (click)="review('approved')">Approve &amp; assign</button> } @else { <button class="button primary" type="button" [disabled]="saving()" (click)="review('approved')">Save policy</button> } @if (tool.status !== 'rejected') { <button class="button ghost" type="button" [disabled]="saving()" (click)="review('rejected')">Reject</button> } @if (tool.status === 'approved') { <button class="button ghost risk-action" type="button" [disabled]="saving()" (click)="review('disabled')">Disable</button> }</div>
+            <div class="tool-review-actions">@if (tool.status !== 'approved') { <button class="button primary" type="button" [disabled]="saving()" (click)="review('approved')">Approve &amp; assign</button> } @else { <button class="button primary" type="button" [disabled]="saving()" (click)="review('approved')">Save policy</button> } @if (tool.status !== 'rejected') { <button class="button ghost" type="button" [disabled]="saving()" (click)="review('rejected')">Reject</button> } @if (tool.status === 'approved') { <button class="button ghost risk-action" type="button" [disabled]="saving()" (click)="review('disabled')">Disable</button> } <button class="button ghost risk-action" type="button" [disabled]="saving()" (click)="remove(tool)">Remove</button></div>
 
             <h3>Execution receipts</h3><div class="tool-executions">@for (execution of executionsFor(tool); track execution.id) { <article><span [attr.data-status]="execution.status"></span><div><strong>{{ execution.hostname }}</strong><small>{{ profileName(execution.profile) }} · {{ execution.occurredAt | date:'MMM d, HH:mm' }}</small></div><p>{{ execution.summary }}</p></article> } @empty { <div class="empty-state">This capability has not run yet.</div> }</div>
             @if (tool.sourceScan) { <a class="tool-trace-link" [routerLink]="['/app/traces']" [queryParams]="{ scan: tool.sourceScan }">Open proposal trace →</a> }
@@ -72,6 +82,7 @@ export class ToolsComponent implements OnInit {
   private readonly db = inject(PocketBaseService);
   protected readonly profiles = SCAN_PROFILES;
   protected readonly tools = signal<GeneratedTool[]>([]);
+  protected readonly installed = signal<AgentTool[]>([]);
   protected readonly executions = signal<GeneratedToolExecution[]>([]);
   protected readonly selectedId = signal('');
   protected readonly query = signal('');
@@ -80,6 +91,9 @@ export class ToolsComponent implements OnInit {
   protected readonly draftAutoUse = signal(true);
   protected readonly draftNote = signal('');
   protected readonly saving = signal(false);
+  protected readonly savingToolId = signal('');
+  protected readonly showCreate = signal(false);
+  protected newProbe = { name: '', title: '', summary: '', rationale: '', path: '/', marker: '', minProfile: 'standard' as ScanMode };
   protected readonly error = signal('');
   protected readonly filtered = computed(() => {
     const query = this.query().trim().toLowerCase();
@@ -91,11 +105,13 @@ export class ToolsComponent implements OnInit {
   protected readonly autoCount = computed(() => this.tools().filter((tool) => tool.status === 'proposed' && tool.unboundedAutoUse).length);
   protected readonly requestTotal = computed(() => this.executions().reduce((sum, item) => sum + item.requestCount, 0));
   protected readonly profileSpread = computed(() => new Set(this.tools().filter((tool) => tool.status === 'approved').map((tool) => tool.minProfile)).size);
+  protected readonly enabledCount = computed(() => this.installed().filter((tool) => tool.enabled).length);
 
   ngOnInit(): void { void this.load(); }
   protected select(tool: GeneratedTool): void { this.selectedId.set(tool.id); this.draftProfile.set(tool.minProfile); this.draftAutoUse.set(tool.unboundedAutoUse); this.draftNote.set(tool.reviewNote); }
   protected profileName(id: ScanMode): string { return this.profiles.find((profile) => profile.id === id)?.name || id; }
   protected riskCode(tool: GeneratedTool): string { return tool.riskLevel === 'interactive' ? 'INT' : tool.riskLevel === 'low' ? 'LOW' : 'GET'; }
+  protected shortProfile(profile: ScanMode): string { return ({ light: 'B', standard: 'S', extended: 'V', advanced: 'A', unbounded: 'U' } as Record<ScanMode, string>)[profile]; }
   protected executionCount(tool: GeneratedTool): number { return this.executions().filter((item) => item.tool === tool.id).length; }
   protected executionsFor(tool: GeneratedTool): GeneratedToolExecution[] { return this.executions().filter((item) => item.tool === tool.id).slice(0, 8); }
   protected assertionLabel(assertion: GeneratedProbeAssertion): string {
@@ -114,10 +130,37 @@ export class ToolsComponent implements OnInit {
     } catch (error) { this.error.set(error instanceof Error ? error.message : 'Could not update the capability policy.'); }
     finally { this.saving.set(false); }
   }
+  protected async toggleInstalled(tool: AgentTool): Promise<void> { await this.saveInstalled(tool, !tool.enabled, tool.profiles); }
+  protected async toggleProfile(tool: AgentTool, profile: ScanMode): Promise<void> {
+    const profiles = tool.profiles.includes(profile) ? tool.profiles.filter((item) => item !== profile) : [...tool.profiles, profile];
+    await this.saveInstalled(tool, tool.enabled, profiles);
+  }
+  private async saveInstalled(tool: AgentTool, enabled: boolean, profiles: ScanMode[]): Promise<void> {
+    this.savingToolId.set(tool.id); this.error.set('');
+    try { await this.db.updateAgentTool(tool, enabled, profiles); this.installed.update((items) => items.map((item) => item.id === tool.id ? { ...item, enabled, profiles } : item)); }
+    catch (error) { this.error.set(error instanceof Error ? error.message : 'Could not update the tool policy.'); }
+    finally { this.savingToolId.set(''); }
+  }
+  protected async createProbe(): Promise<void> {
+    this.saving.set(true); this.error.set('');
+    try {
+      if (!this.newProbe.path.startsWith('/') || this.newProbe.path.startsWith('//') || this.newProbe.path.includes('\\') || /(^|\/)\.\.?(\/|$)/.test(this.newProbe.path)) throw new Error('Use one normalized same-origin relative path beginning with /.');
+      const created = await this.db.createAdminProbe(this.newProbe); this.tools.update((items) => [created, ...items]); this.select(created); this.showCreate.set(false);
+      this.newProbe = { name: '', title: '', summary: '', rationale: '', path: '/', marker: '', minProfile: 'standard' };
+    } catch (error) { this.error.set(error instanceof Error ? error.message : 'Could not create the declarative tool.'); }
+    finally { this.saving.set(false); }
+  }
+  protected async remove(tool: GeneratedTool): Promise<void> {
+    if (!confirm(`Remove ${tool.title}? Prior scan action traces remain, but this registry entry cannot be restored.`)) return;
+    this.saving.set(true); this.error.set('');
+    try { await this.db.removeGeneratedTool(tool); this.tools.update((items) => items.filter((item) => item.id !== tool.id)); this.selectedId.set(''); }
+    catch (error) { this.error.set(error instanceof Error ? error.message : 'Could not remove the generated tool.'); }
+    finally { this.saving.set(false); }
+  }
   private async load(): Promise<void> {
     try {
-      const [tools, executions] = await Promise.all([this.db.generatedTools(), this.db.generatedToolExecutions()]);
-      this.tools.set(tools); this.executions.set(executions); if (tools[0]) this.select(tools[0]);
+      const [installed, tools, executions] = await Promise.all([this.db.agentTools(), this.db.generatedTools(), this.db.generatedToolExecutions()]);
+      this.installed.set(installed); this.tools.set(tools); this.executions.set(executions); if (tools[0]) this.select(tools[0]);
     } catch (error) { this.error.set(error instanceof Error ? error.message : 'Could not load generated tools.'); }
   }
 }

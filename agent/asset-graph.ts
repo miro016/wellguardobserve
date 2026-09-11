@@ -8,6 +8,10 @@ const stateRank: Record<AssetState, number> = { risk: 4, warning: 3, unknown: 2,
 const strongerState = (current: AssetState, candidate: AssetState): AssetState => stateRank[candidate] > stateRank[current] ? candidate : current;
 const safeLinks = (values: unknown[]): string[] => [...new Set(values.map(clean).flatMap((value) => { try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? [url.toString()] : []; } catch { return []; } }))].slice(0, 20);
 const displayProduct = (value: string): string => /^[a-z0-9 -]+$/.test(value) ? value.replace(/\b\w/g, (letter) => letter.toUpperCase()) : value;
+const scopeHostname = (value: string, target: AuthorizedTarget): string => {
+  const hostname = value.trim().toLowerCase().replace(/\.$/, ''); const root = target.hostname.toLowerCase().replace(/\.$/, '');
+  return hostname === root || hostname.endsWith(`.${root}`) || (target.authorizedHosts || []).some((item) => item.toLowerCase().replace(/\.$/, '') === hostname) ? hostname : '';
+};
 
 export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[], findings: AgentFinding[], tls: TlsEvidence[]) {
   const assets = new Map<string, AgentAsset>();
@@ -97,6 +101,49 @@ export function buildAssetGraph(target: AuthorizedTarget, actions: AgentAction[]
 
   for (const action of actions) {
     const data = parse(action); if (!data) continue;
+    if (action.tool === 'run_vanguard_observation') {
+      const domains = Array.isArray(data['domains']) ? data['domains'].filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object')) : [];
+      const servers = Array.isArray(data['servers']) ? data['servers'].filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object')) : [];
+      const services = Array.isArray(data['services']) ? data['services'].filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object')) : [];
+      const webSurfaces = Array.isArray(data['webSurfaces']) ? data['webSurfaces'].filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object')) : [];
+      const edges = Array.isArray(data['edges']) ? data['edges'].filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object')) : [];
+      const byId = new Map([...domains, ...servers, ...services, ...webSurfaces].map((item) => [clean(item['id']), item]));
+      const domainForAddress = new Map<string, string[]>();
+      for (const domain of domains) {
+        const hostname = clean(domain['label'] || domain['key']);
+        if (hostname && hostname === scopeHostname(hostname, target)) ensureHost(hostname, 'Vanguard retained this name in its deterministic attack-surface projection.');
+      }
+      for (const edge of edges.filter((item) => clean(item['type']) === 'resolves_to')) {
+        const from = byId.get(clean(edge['from'])); const to = byId.get(clean(edge['to']));
+        const hostname = clean(from?.['label'] || from?.['key']); const address = clean(to?.['label'] || to?.['key']);
+        if (!hostname || !address || hostname !== scopeHostname(hostname, target)) continue;
+        rememberAddress(hostname, address, `Vanguard projected a DNS resolves_to relationship with evidence IDs ${(Array.isArray(edge['evidenceIds']) ? edge['evidenceIds'] : []).join(', ') || 'retained in its collection'}.`);
+        domainForAddress.set(address, [...(domainForAddress.get(address) || []), hostname]);
+      }
+      for (const server of servers) {
+        const address = clean(server['label'] || server['key']); if (!address) continue;
+        ensureAsset({ key: `server:${address}`, kind: 'server', label: address, subtitle: 'Observed network address', state: 'observed', confidence: 90, basis: 'observed', details: [fact('Vanguard corroboration', 'Observed in independent projection', `Vanguard evidence digest ${clean(data['outputSha256'])}.`, 100)] });
+      }
+      const retainService = (item: Record<string, unknown>, forcedHost = '') => {
+        const attributes = item['attributes'] && typeof item['attributes'] === 'object' ? item['attributes'] as Record<string, unknown> : {};
+        const address = clean(attributes['ip']); const port = Number(attributes['port'] || 0) || 443;
+        const host = forcedHost || (address ? domainForAddress.get(address)?.[0] : '') || target.hostname;
+        if (host !== scopeHostname(host, target)) return;
+        const technologies = Array.isArray(item['technologies']) ? item['technologies'].flatMap((value) => value && typeof value === 'object' ? [clean((value as Record<string, unknown>)['key'])].filter(Boolean) : []) : [];
+        const paths = Array.isArray(item['paths']) ? item['paths'].filter((value): value is Record<string, unknown> => Boolean(value && typeof value === 'object')) : [];
+        const pageTitle = clean(paths.find((path) => clean(path['title']))?.['title']);
+        const product = technologies[0] || clean(attributes['service']) || pageTitle || (clean(attributes['scheme']) ? `${clean(attributes['scheme']).toUpperCase()} service` : 'Observed service');
+        const key = ensureService(host, port, displayProduct(product), `Vanguard retained ${clean(item['label'] || item['key'])} in its deterministic projection.`, technologies);
+        const asset = assets.get(key)!;
+        const vanguardFindings = Array.isArray(item['findings']) ? item['findings'].filter((value): value is Record<string, unknown> => Boolean(value && typeof value === 'object')) : [];
+        if (vanguardFindings.length) asset.details.push(fact('Vanguard findings', vanguardFindings.map((finding) => clean(finding['title'] || finding['rule'])).filter(Boolean).join(' · '), `Independent projection; correlate against finding evidence IDs before remediation.`, 90));
+      };
+      for (const service of services) retainService(service);
+      for (const surface of webSurfaces) {
+        const attributes = surface['attributes'] && typeof surface['attributes'] === 'object' ? surface['attributes'] as Record<string, unknown> : {};
+        retainService(surface, clean(attributes['host']));
+      }
+    }
     if (action.tool === 'inspect_dns') {
       const hostname = clean(data['hostname'] || action.input['hostname'] || target.hostname);
       for (const item of Array.isArray(data['addresses']) ? data['addresses'] : []) {

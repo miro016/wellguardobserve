@@ -1,0 +1,225 @@
+{
+  "baseline": {
+    "root": "example.com",
+    "scanID": "scanA",
+    "events": 6,
+    "startedAt": "2024-01-01T00:00:00Z"
+  },
+  "candidate": {
+    "root": "example.com",
+    "scanID": "scanB",
+    "events": 5,
+    "startedAt": "2024-01-01T00:00:00Z"
+  },
+  "summary": {
+    "matched": 1,
+    "changed": 1,
+    "missing": 2,
+    "unexpected": 2,
+    "rootsDiffer": false,
+    "byType": {
+      "DnsDomainNameDiscovered": {
+        "matched": 1,
+        "changed": 0,
+        "missing": 1,
+        "unexpected": 1
+      },
+      "FindingRaised": {
+        "matched": 0,
+        "changed": 0,
+        "missing": 1,
+        "unexpected": 1
+      },
+      "ServiceDiscovered": {
+        "matched": 0,
+        "changed": 1,
+        "missing": 0,
+        "unexpected": 0
+      }
+    }
+  },
+  "findings": {
+    "new": [
+      {
+        "rule": "exposed-env",
+        "assetKind": "domain",
+        "assetID": "new.example.com",
+        "title": "exposed .env",
+        "severity": "critical"
+      }
+    ],
+    "resolved": [
+      {
+        "rule": "weak-tls",
+        "assetKind": "domain",
+        "assetID": "gone.example.com",
+        "title": "weak tls",
+        "severity": "high"
+      }
+    ],
+    "newBySeverity": {
+      "critical": 1
+    },
+    "resolvedBySeverity": {
+      "high": 1
+    }
+  },
+  "coverage": [
+    {
+      "kind": "domains",
+      "aCount": 2,
+      "bCount": 2,
+      "common": 1,
+      "added": [
+        "new.example.com"
+      ],
+      "removed": [
+        "gone.example.com"
+      ]
+    },
+    {
+      "kind": "ips",
+      "aCount": 1,
+      "bCount": 1,
+      "common": 1
+    },
+    {
+      "kind": "services",
+      "aCount": 1,
+      "bCount": 1,
+      "common": 1
+    },
+    {
+      "kind": "endpoints",
+      "aCount": 0,
+      "bCount": 0,
+      "common": 0
+    },
+    {
+      "kind": "certificates",
+      "aCount": 0,
+      "bCount": 0,
+      "common": 0
+    },
+    {
+      "kind": "findings",
+      "aCount": 1,
+      "bCount": 1,
+      "common": 0,
+      "added": [
+        "exposed-env|domain|new.example.com"
+      ],
+      "removed": [
+        "weak-tls|domain|gone.example.com"
+      ]
+    },
+    {
+      "kind": "netblocks",
+      "aCount": 0,
+      "bCount": 0,
+      "common": 0
+    }
+  ],
+  "events": [
+    {
+      "type": "DnsDomainNameDiscovered",
+      "identity": "DnsDomainNameDiscovered|gone.example.com",
+      "class": "missing",
+      "sources": {
+        "a": [
+          "crtsh"
+        ]
+      }
+    },
+    {
+      "type": "DnsDomainNameDiscovered",
+      "identity": "DnsDomainNameDiscovered|new.example.com",
+      "class": "unexpected",
+      "sources": {
+        "b": [
+          "crtsh"
+        ]
+      }
+    },
+    {
+      "type": "FindingRaised",
+      "identity": "FindingRaised|exposed-env|domain|new.example.com",
+      "class": "unexpected",
+      "sources": {
+        "b": [
+          "goscans"
+        ]
+      }
+    },
+    {
+      "type": "FindingRaised",
+      "identity": "FindingRaised|weak-tls|domain|gone.example.com",
+      "class": "missing",
+      "sources": {
+        "a": [
+          "tls"
+        ]
+      }
+    },
+    {
+      "type": "ServiceDiscovered",
+      "identity": "ServiceDiscovered|203.0.113.10|443/tcp",
+      "class": "changed",
+      "sources": {
+        "a": [
+          "portscan"
+        ],
+        "b": [
+          "portscan"
+        ]
+      },
+      "changes": [
+        {
+          "name": "product",
+          "a": [
+            "nginx"
+          ],
+          "b": [
+            "apache"
+          ],
+          "added": [
+            "apache"
+          ],
+          "removed": [
+            "nginx"
+          ]
+        }
+      ]
+    }
+  ],
+  "issues": {
+    "a": 1,
+    "b": 0
+  },
+  "op": {
+    "available": true,
+    "providers": [
+      {
+        "provider": "censys",
+        "aCalls": 3,
+        "bCalls": 1,
+        "aFailed": 0,
+        "bFailed": 2,
+        "aEmpties": 1,
+        "bEmpties": 0
+      },
+      {
+        "provider": "crtsh",
+        "aCalls": 1,
+        "bCalls": 1,
+        "aFailed": 0,
+        "bFailed": 0,
+        "aEmpties": 0,
+        "bEmpties": 0
+      }
+    ]
+  },
+  "environment": {
+    "changed": false
+  }
+}

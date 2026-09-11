@@ -3,6 +3,7 @@ import { investigate } from './investigator';
 import { InvestigationStore } from './store';
 import { policySnapshot, resolveScanProfile } from './profiles';
 import { cacheTelemetrySnapshot, configureExternalCache, PocketBaseExternalCache, resetCacheTelemetry } from './external-cache';
+import { compiledAgentToolSupports } from './tool-catalog';
 
 const store = new InvestigationStore();
 await store.connect();
@@ -31,7 +32,9 @@ while (true) {
   let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   try {
     const profile = resolveScanProfile(request['mode']);
-    if (!await store.claim(request, policySnapshot(profile))) continue;
+    const agentToolPolicies = await store.agentToolPolicies();
+    const enabledToolNames = [...agentToolPolicies.values()].filter((tool) => tool.enabled && tool.profiles.includes(profile.id) && compiledAgentToolSupports(tool.name, profile.id)).map((tool) => tool.name);
+    if (!await store.claim(request, policySnapshot({ ...profile, enabledTools: enabledToolNames }))) continue;
     const target = await store.loadTarget(request['target']);
     const learningDirectives = await store.approvedLearning(target.workspace || '');
     scan = await store.createScan(target.id, request.id);
@@ -53,6 +56,7 @@ while (true) {
     const report = await investigate(target, {
       profile,
       learningDirectives,
+      agentToolPolicies,
       generatedTools,
       proposeGeneratedTool: async (proposal) => await store.proposeGeneratedTool({
         workspace: target.workspace || '', target: target.id, scan: scan!.id,

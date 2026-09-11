@@ -1,0 +1,334 @@
+# Vanguard scan profile (the reusable "how" of a scan).
+#
+# A scan is defined by TWO files: this scan profile and a customer engagement
+# file (configs/engagements/). The profile owns the phases, tools, and tuning;
+# the engagement owns the customer, scan root, scope, limits, and authorizations.
+# They are composed, never merged: no field appears in both. Vanguard supplies NO
+# defaults - every value below is mandatory and an omitted or unknown field is a
+# hard error. Both files are part of the audit record.
+#
+# Usage: scans run on the VMs in taskfile/vm.config.ps1, which upload both files.
+#   Name this file and a profile as a scenario in a batch manifest under
+#   configs/batches/, then run:  task vm:batch -- configs/batches/<name>.yaml
+#
+# A tool runs only if its phase and its own switch enable it. Most tools use an
+# enabled flag; crt.sh and Censys use the documented mode switch. Durations
+# are strings such as "30s", "1500ms", "1m".
+# Count limits use one encoding: 0 = none, -1 = unlimited, positive = finite.
+# Duration caps use 0s = no wait and -1s = unlimited.
+
+# --- Reconnaissance phases -------------------------------------------------
+phases:
+  # Passive phase: non-intrusive collection (certificate transparency, DNS, ASN).
+  # Does not send traffic to the target's own infrastructure.
+  passive:
+    enabled: true
+  # Active phase: sends traffic directly to the target (port scan, HTTP probe).
+  # Enable only with authorization to touch the target.
+  active:
+    enabled: true
+
+# --- Discovery / crawler ---------------------------------------------------
+# Drives the passive phase: how subdomains are followed and how much work runs
+# concurrently.
+discovery:
+  max_depth: 3            # how many levels of subdomains to follow (0 = root only)
+  max_concurrency: 10     # max simultaneous DNS/ASN lookups
+
+# --- Tools -----------------------------------------------------------------
+# Every tool has an explicit switch and complete settings. Settings are required
+# even for disabled tools, so the file remains a complete record.
+tools:
+
+  # crt.sh certificate-transparency search (passive). Discovers subdomains and
+  # certificates. The passive crawler requires this tool; mode "disabled" starts no
+  # crawler and yields no passive discoveries.
+  crtsh:
+    # mode: disabled | enabled | embedded_cache_support. embedded_cache_support
+    # answers a query from the fixture compiled into the crtsh package and, on a
+    # miss, queries crt.sh exactly as "enabled" does. "enabled" always queries
+    # crt.sh. "disabled" runs neither the tool nor the passive crawler.
+    mode: embedded_cache_support
+    base_url: "https://crt.sh/"
+    timeout: 30s
+    max_retries: 2           # Wellguard caps provider retries so a stopped job exits predictably.
+    backoff_min: 1s          # initial backoff before the first retry
+    backoff_max: 10s         # cap on exponential backoff growth
+    degraded_recheck_delay: 5s # cooldown before re-querying a suspicious empty (a 200 with 0 certs that arrived only after the backend flaked); a still-empty re-query is flagged as a data-quality issue, not recorded as a real zero
+    max_query_time: 60s      # wall-clock cap per search, including retry backoff
+    max_body_bytes: 10485760 # response body cap (10 MiB)
+
+  # certspotter second Certificate Transparency source (passive). Corroborates the
+  # crt.sh crawler's coverage: certspotter reads the same CT logs, so a materially
+  # smaller crt.sh subdomain set signals a truncated crt.sh response, raised as a
+  # coverage issue. Its names also feed discovery like any other subdomain source.
+  # An API token (CERTSPOTTER_API_KEY env) is optional and only raises rate limits.
+  certspotter:
+    enabled: true
+    base_url: "https://api.certspotter.com"
+    timeout: 30s
+    max_pages: 2             # bounded result pages (256 issuances each)
+    max_body_bytes: 10485760 # response body cap (10 MiB)
+    cross_check_min_ratio: 0.5 # warn when crtsh count < 0.5 x certspotter count; 0.0 = off
+
+  # Passive subdomain enumeration via subfinder (passive). Aggregates many
+  # third-party passive DNS sources (crt.sh, VirusTotal, Shodan, ...). Runs
+  # alongside the crt.sh crawler and feeds the same per-domain DNS/whois fan-out.
+  subfinder:
+    enabled: true
+    threads: 10              # sources queried concurrently
+    timeout: 30s             # per-source response timeout
+    max_enumeration_time: 45s # cap on total enumeration time
+    all: false               # use the default fast passive source set
+
+  # Passive DNS resolver plus an explicitly gated active zone-transfer probe.
+  dnsinfo:
+    enabled: true
+    zone_transfer: false     # Wellguard does not authorize AXFR through this integration.
+    resolver: "8.8.8.8:53"   # DNS server (host:port)
+    timeout: 5s              # per-query timeout
+
+  # ASN / netblock lookup via Team Cymru DNS (passive).
+  asn:
+    enabled: true
+    resolver: "8.8.8.8:53"
+    timeout: 5s             # per-query timeout (per attempt)
+    max_retries: 2          # extra attempts after the first on a transient flake (timeout/SERVFAIL); 0 = off
+    backoff_min: 200ms      # initial backoff before the first retry
+    backoff_max: 2s         # cap on exponential backoff growth
+
+  # WHOIS/RDAP domain registration lookup (passive). Gathers registrar,
+  # lifecycle dates, name servers, and contacts. Falls back from port-43 WHOIS
+  # to RDAP over HTTPS when WHOIS is blocked.
+  whois:
+    enabled: true
+    timeout: 15s             # per RDAP request / bootstrap fetch timeout
+
+  # Email-security probe (passive). Gathers SPF, DMARC, DKIM, and BIMI records
+  # and statically analyses the SPF include/redirect chain for the RFC 7208
+  # 10-lookup limit. DMARC posture is graded from the p= policy tag.
+  mailsec:
+    enabled: true
+    resolver: "8.8.8.8:53"   # DNS server (host:port)
+    timeout: 5s              # per-query timeout (per attempt)
+    max_retries: 2           # extra attempts after the first on a transient flake (timeout/SERVFAIL); 0 = off
+    backoff_min: 200ms       # initial backoff before the first retry
+    backoff_max: 2s          # cap on exponential backoff growth
+
+  # HaveIBeenPwned breach-data lookup (passive). Returns the email aliases on a
+  # domain that appear in known data breaches. Requires a paid HIBP API key and
+  # prior domain verification on the HIBP dashboard (a 403 means the domain is not
+  # verified). The key is a secret: supply it via the HIBP_API_KEY environment
+  # variable, not this file. The tool stays inert when the key is absent.
+  breach:
+    enabled: false
+    base_url: "https://haveibeenpwned.com"
+    timeout: 15s             # per-request HTTP timeout
+
+  # Censys GlobalData host search (passive). Queried once at the registered root:
+  # host.dns.names and host.services.cert.names match every subdomain by
+  # registered-domain suffix, so one estate-wide search returns the hosts (IPs,
+  # services, ASN, location, OS) Censys attributes to the estate. Requires a Censys
+  # Personal Access Token in mode "enabled"; the token is a secret: supply it via
+  # the CENSYS_API_KEY environment variable, not this file. Mode
+  # "embedded_cache_only" needs no token at all.
+  censys:
+    # mode: disabled | enabled | embedded_cache_only. embedded_cache_only answers
+    # from the fixture compiled into the censys package and never reaches Censys: no
+    # CENSYS_API_KEY is required, no paid request is spent, and a domain absent from
+    # the fixture simply yields no result (there is no fallback to the API).
+    # "enabled" queries the Censys API and requires CENSYS_API_KEY. "disabled" does
+    # not run the tool.
+    mode: embedded_cache_only
+    max_hosts: 100          # cap on unique hosts returned per scan (estate-wide)
+
+  # VirusTotal domain intelligence (passive). Fetches reputation, per-engine
+  # analysis votes, categories, tags, popularity ranks, JARM, and registrar, and
+  # optionally enumerates known subdomains. Requires a VirusTotal API key; the
+  # free tier allows 4 requests/min. The key is a secret: supply it via the
+  # VIRUSTOTAL_API_KEY environment variable, not this file. The tool stays inert
+  # when the key is absent.
+  virustotal:
+    enabled: false
+    enable_subdomains: true   # also enumerate known subdomains (extra API calls)
+    max_subdomains: 100       # cap on subdomains enumerated per domain
+    iterator_batch_size: 40   # subdomains iterator page size
+
+  # SerpAPI Google-dork asset discovery (passive). Runs a set of Google dork
+  # queries against the root domain to surface URLs a search engine already
+  # indexes (auth/admin interfaces, API endpoints, config/env files, backups,
+  # open directory listings, and so on). In-scope result hosts feed domain
+  # discovery; sensitive hits become findings. Requires a SerpAPI key. The key is
+  # a secret: supply it via the SERPAPI_API_KEY environment variable, not this
+  # file. The tool stays inert when the key is absent.
+  websearch:
+    enabled: false
+    max_results_per_query: 20  # cap on URLs kept per dork query
+
+  # Shodan host-intelligence search (passive). Runs one hostname:<domain> search
+  # per discovered domain and returns the hosts Shodan has indexed: open ports,
+  # routing (ASN/org/ISP), software, and known CVEs. The CVEs raise findings.
+  # Requires a paid Shodan API key (each search costs one query credit). The key
+  # is a secret: supply it via the SHODAN_API_KEY environment variable, not this
+  # file. The tool stays inert when the key is absent.
+  shodan:
+    enabled: false
+    max_hosts: 100           # cap on unique hosts returned per domain
+    timeout: 30s             # per-request HTTP timeout
+
+  # Netlas internet-scan search (passive). Runs a single "domain:<domain>"
+  # responses query per discovered domain and returns the hosts Netlas has
+  # indexed: open ports, protocols, routing (ASN/org/ISP), software, JARM, and
+  # known CVEs. The CVEs raise findings. Netlas is a host-intelligence source in
+  # the same class as censys and shodan, kept as its own provider facet so the
+  # per-provider coverage can be compared. Requires a paid Netlas API key (search
+  # requests draw down the account budget). The key is a secret: supply it via the
+  # NETLAS_API_KEY environment variable, not this file. The tool stays inert when
+  # the key is absent.
+  netlas:
+    enabled: false
+    max_hosts: 100           # cap on unique hosts returned per domain
+    max_pages: 5             # cap on result pages fetched (20 items each)
+    timeout: 30s             # per-request HTTP timeout
+
+  # naabu port scanner with nmap service detection (active).
+  # Requires nmap installed on the host; the app refuses to start without it.
+  portscan:
+    enabled: false           # Wellguard already owns bounded port discovery.
+    timeout: 2s              # per-port connect timeout naabu waits for a response
+    rate_per_second: 300     # per-host naabu probe rate
+    host_concurrency: 5      # simultaneous hosts; aggregate ceiling is 1,500 probes/s
+    ports: [21, 22, 23, 25, 53, 80, 110, 143, 443, 445, 465, 636, 993, 995, 1433, 2376, 3269, 3306, 3389, 5432, 5986, 6379, 6443, 8080, 8443, 8883, 9443, 10443, 27017]
+    nmap_command: "nmap -sV -Pn -T4"   # nmap CLI naabu runs against open ports
+    # Second, independent pass over the same admitted hosts, run directly by nmap
+    # with -sU. It is not a separate tool: it reuses portscan's source, tool log,
+    # target admission, host-concurrency slot, and active-host budget, and runs
+    # sequentially with the host's TCP pass. Enabling it admits no extra host and
+    # spends no extra budget unit.
+    #
+    # It needs a deployed nmap holding cap_net_raw; an enabled block on a machine
+    # without it fails preflight rather than quietly scanning nothing. Only a
+    # confirmed UDP response becomes a service: silence is "open|filtered", which
+    # is recorded as coverage, never as a finding.
+    udp:
+      enabled: false           # Wellguard disables Vanguard's independent port scanner.
+      ports: [53, 123, 137, 161, 500, 1900, 4500, 5353]  # DNS, NTP, NetBIOS-NS, SNMP, IKE, SSDP, IPsec NAT-T, mDNS
+      timeout: 3s              # per-port wait before a port counts as unanswered
+      rate_per_second: 20      # per-host probe rate (ceiling 100)
+      retries: 1               # extra attempts after the first; 0 means one attempt
+      nmap:
+        service_detection: true  # identify what answered
+        version_intensity: 5     # -sV intensity, 0-9
+        timing_template: 3       # -T template, 0-5
+        host_timeout: 5m         # bounds one host's UDP pass
+
+  # Single-request HTTP(S) probe (active).
+  httpprobe:
+    enabled: true
+    timeout: 5s              # per-probe timeout
+    max_body_bytes: 524288   # response body cap (512 KiB)
+    user_agent: "vanguard-recon/1.0"
+
+  # Active HTTPS probe (active). Per discovered domain on port 443: enumerates
+  # supported TLS versions (flagging TLS 1.0/1.1), captures the live leaf
+  # certificate and chain, and reads the HSTS policy. The live cert feeds the
+  # certificate findings; weak TLS versions raise a finding.
+  https:
+    enabled: true
+    timeout: 10s             # per TLS dial/handshake and the HSTS GET
+
+  # Active SMTP STARTTLS probe (active). Per discovered domain: resolves MX hosts
+  # and checks each for STARTTLS support and TLS posture. MX hosts without
+  # STARTTLS raise a finding; the negotiated MX cert feeds certificate findings.
+  smtp:
+    enabled: false
+    timeout: 10s             # per-MX-host probe timeout
+
+  # Active web-info probe (active). Per discovered domain: a redirect-following
+  # HTTP(S) probe (status, server, headers, TLS) plus technology-stack detection
+  # (CMS, plugins, JS/CSS libraries, CDN, hosting). Feeds the existing endpoint
+  # and technology asset views and the security-header / plaintext-HTTP findings.
+  webinfo:
+    enabled: true
+    timeout: 10s             # per HTTP probe / page fetch
+    max_redirects: 10        # redirects followed before giving up
+    max_body_bytes: 524288   # page body cap for stack detection (512 KiB)
+
+  # Standalone WappalyzerGo technology fingerprint (active). Independent of the other
+  # HTTP tools: it makes its own bounded request and runs whether or not httpprobe and
+  # webinfo are enabled. Fingerprints come from the database embedded in the library,
+  # so a scan is reproducible with no runtime download.
+  wappalyzer:
+    enabled: true
+    timeout: 10s                       # per HTTP attempt, redirects included
+    max_redirects: 10                  # redirects followed before giving up
+    max_body_bytes: 524288             # response body cap for fingerprinting (512 KiB)
+    user_agent: "vanguard-recon/1.0"
+
+  # Siemens GoScans (active, free). Runs its own nmap discovery per approved host,
+  # then banner, TLS, SSH, crawl, and path-enumeration checks against the services
+  # that discovery found. It deliberately overlaps portscan and https: two
+  # independent observations of the same service corroborate each other and expose
+  # per-tool coverage gaps. It uses no paid API and no credential.
+  #
+  # It needs two things deployment must provide, because a scan never installs them:
+  # an nmap with the full NSE script set (every scan forces smb-os-discovery,
+  # ssl-cert, the *-ntlm-info scripts, and rdp-enum-encryption, and nmap aborts when
+  # one is missing), and a Python environment that runs the pinned SSLyze. Both are
+  # verified read-only at startup.
+  goscans:
+    enabled: false              # Avoids an overlapping external nmap/SSLyze runtime.
+    timeout: 15m               # bounds the whole tool; on expiry the unassessed hosts are a recorded coverage gap
+    max_targets: 100           # isolated batch cap; must not exceed limits.max_active_hosts
+    discovery_from_port_scan: false  # scope this tool's nmap to ports portscan found; needs a wider tools.portscan.ports first
+    max_parallel_services: 4   # subordinate jobs in flight across the tool
+    max_parallel_services_per_host: 2  # subordinate jobs in flight against one host
+    max_parallel_targets: 4    # targets assessed at once; per-host pressure is capped above
+    user_agent: "vanguard-recon/1.0"
+    nmap:
+      path: nmap               # resolved through PATH when it is a bare name
+      # argv, never a shell line, checked against a reviewed allowlist. -sT is the
+      # baseline: an unprivileged TCP connect scan needs no capabilities. -sU is
+      # rejected here (UDP belongs to tools.portscan) because upstream discovery
+      # keeps only ports whose nmap state is exactly "open", and an unanswered UDP
+      # port is "open|filtered".
+      args: [-sT, -sV, -Pn, -T4, --host-timeout, 4m]
+      timeout: 5m              # bounds one discovery scan (and how long a cancelled scan drains)
+      dial_timeout: 5s         # extra connections discovery makes to read certificate names
+    sslyze:
+      python_path: vanguard-goscans-python  # deployment-installed wrapper for the pinned SSLyze environment
+      version: "6.3.1"         # exact pinned version; startup fails on any other
+      additional_truststore: "" # optional extra CA bundle (absolute path); SSLyze always applies its own
+    banner:
+      enabled: true            # every discovered TCP service gets a banner probe
+      dial_timeout: 5s        # also bounds the ssh module connection
+      receive_timeout: 5s
+    ssl:
+      enabled: true            # requires sslyze.python_path and sslyze.version
+      timeout: 2m              # bounds one SSLyze run against one service
+    ssh:
+      enabled: true
+      timeout: 30s
+    webcrawler:
+      enabled: true
+      timeout: 2m              # bounds one crawl of one web service
+      depth: 1                 # link depth from the entry page; compounds fast
+      max_threads: 4           # crawler parallelism inside one crawl (multiplies with the per-host cap)
+      max_pages: 200           # crawled pages reported per crawl
+      request_timeout: 10s
+    webenum:
+      enabled: true
+      timeout: 2m
+      probe_profile: embedded-safe-default  # only embedded, checksummed profiles exist
+      probe_robots: true       # also derive probe paths from the target robots.txt
+      max_items: 100           # enumeration hits reported per service
+      request_timeout: 10s
+    ports:                     # additive hints for ports nmap could not name
+      tls: [465, 636, 993, 995, 2376, 3269, 5986, 6443, 8443, 8883, 9443, 10443]
+      ssh: [2222]
+      http: [8080, 8000]
+      https: [8443]
+    limits:
+      max_services_per_host: 200  # services of one host that may schedule work
+      max_vhosts: 25              # virtual hosts per TLS/web job; each one is another pass
+      max_excerpt_bytes: 512      # redacted excerpt kept per response body or banner

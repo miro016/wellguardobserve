@@ -4,6 +4,7 @@ import { Finding, Target, TlsObservation, AgentActionRecord, AssetRecord, AssetR
 import { Topology, TopologyService } from '../services/topology.service';
 import { topologyEdgeId, traceTopologyPath } from '../services/topology-path';
 import { mergeTopologySnapshots } from '../services/surface-intelligence';
+import { projectArchitectureTree } from '../services/architecture-projection';
 import { FindingStoryComponent } from './finding-story.component';
 
 type GraphView = 'architecture' | 'routing' | 'evidence';
@@ -102,7 +103,7 @@ export class InfrastructureGraphComponent implements OnDestroy {
   protected readonly topology = computed(() => this.layout(this.filter(this.project(this.fullTopology(), this.viewMode()))));
   protected readonly laneLabels = computed(() => {
     const labels: Record<GraphView, Array<[NodeKind, string]>> = {
-      architecture: [['domain', 'Authorized root'], ['hostname', 'Host'], ['url', 'Public URL'], ['server', 'Observed machine'], ['port', 'Machine port'], ['service', 'Application']],
+      architecture: [['domain', 'Target host'], ['server', 'Servers'], ['port', 'Server ports'], ['hostname', 'Domains'], ['service', 'Services']],
       routing: [['domain', 'Authorized root'], ['hostname', 'Host'], ['url', 'Public URL'], ['edge', 'Provider edge'], ['network', 'Network'], ['server', 'Observed machine']],
       evidence: [['domain', 'Root'], ['hostname', 'Host'], ['url', 'URL'], ['edge', 'Edge'], ['network', 'Network'], ['server', 'Machine'], ['port', 'Port'], ['service', 'Application']]
     };
@@ -251,9 +252,10 @@ export class InfrastructureGraphComponent implements OnDestroy {
   private clampZoom(value: number): number { return Math.max(0.3, Math.min(1.8, Math.round(value * 100) / 100)); }
 
   private project(topology: Topology, view: GraphView): Topology {
+    if (view === 'architecture') return projectArchitectureTree(topology);
     if (view === 'evidence') return topology;
     const kinds: Record<Exclude<GraphView, 'evidence'>, NodeKind[]> = {
-      architecture: ['domain', 'hostname', 'url', 'server', 'port', 'service'],
+      architecture: ['domain', 'server', 'port', 'hostname', 'service'],
       routing: ['domain', 'hostname', 'url', 'edge', 'network', 'server']
     };
     const domainLabels = new Set(topology.nodes.filter((node) => node.kind === 'domain').map((node) => node.label.toLowerCase().replace(/\.$/, '')));
@@ -289,14 +291,6 @@ export class InfrastructureGraphComponent implements OnDestroy {
       }
     }
     let projectedEdges = [...projected.values()];
-    if (view === 'architecture') {
-      const urlDestinations = new Set(projectedEdges.filter((edge) => visibleNodes.find((node) => node.id === edge.from)?.kind === 'url').map((edge) => edge.to));
-      projectedEdges = projectedEdges.filter((edge) => {
-        const from = visibleNodes.find((node) => node.id === edge.from);
-        const to = visibleNodes.find((node) => node.id === edge.to);
-        return !(from && (from.kind === 'domain' || from.kind === 'hostname') && to?.kind === 'server' && urlDestinations.has(to.id));
-      });
-    }
     return { nodes: visibleNodes, edges: projectedEdges };
   }
 
@@ -353,7 +347,7 @@ export class InfrastructureGraphComponent implements OnDestroy {
 
   private layout(topology: Topology): Topology {
     const kindOrder: Record<GraphView, NodeKind[]> = {
-      architecture: ['domain', 'hostname', 'url', 'server', 'port', 'service'],
+      architecture: ['domain', 'server', 'port', 'hostname', 'service'],
       routing: ['domain', 'hostname', 'url', 'edge', 'network', 'server'],
       evidence: ['domain', 'hostname', 'url', 'edge', 'network', 'server', 'port', 'service']
     };

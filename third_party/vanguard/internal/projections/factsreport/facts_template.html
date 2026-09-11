@@ -1,0 +1,2014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vanguard — Facts Knowledge Graph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0b0e14;
+  --panel: #151923e6;
+  --panel-solid: #151923;
+  --border: #232838;
+  --border-focus: #4b587c;
+  --text: #e2e8f0;
+  --muted: #8492a6;
+  --accent: #6c8cff;
+  --accent-glow: rgba(108, 140, 255, 0.25);
+  --danger: #ff5c5c;
+  --danger-glow: rgba(255, 92, 92, 0.35);
+  --warn: #ffb347;
+  --warn-glow: rgba(255, 179, 71, 0.3);
+  --ok: #34d399;
+  --sidebar-w: 330px;
+  --detail-w: 390px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+}
+
+/* ---- sidebar ---- */
+#sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--panel);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+}
+.sidebar-header {
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(21, 25, 35, 0.95);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.brand-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--accent);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.brand-title::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--accent);
+}
+.brand-subtitle {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.filter-section {
+  border-bottom: 1px solid var(--border);
+}
+.filter-section summary {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+  transition: color 0.15s;
+}
+.filter-section summary::-webkit-details-marker { display: none; }
+.filter-section summary:hover { color: var(--text); }
+.filter-section summary::after {
+  content: '▾';
+  font-size: 12px;
+  transition: transform 0.2s;
+}
+.filter-section[open] summary::after { transform: rotate(180deg); }
+
+.filter-body { padding: 0 18px 14px; }
+.input-group { margin-bottom: 10px; }
+.input-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  display: block;
+}
+input[type="text"], input[type="number"], select {
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(11, 14, 20, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input[type="text"]:focus, input[type="number"]:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.row-inputs {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.checkbox-list {
+  max-height: 190px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.checkbox-list::-webkit-scrollbar { width: 4px; }
+.checkbox-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.checkbox-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.checkbox-list label:hover {
+  background: rgba(255,255,255,0.04);
+  color: #fff;
+}
+.checkbox-list input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+.color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.count-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--muted);
+  background: rgba(11, 14, 20, 0.6);
+  padding: 1px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.toggle-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.toggle-all {
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-all:hover { text-decoration: underline; }
+
+/* ---- graph area ---- */
+#graph-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 50%, rgba(26, 33, 48, 0.35) 0%, rgba(11, 14, 20, 1) 100%);
+}
+svg { width: 100%; height: 100%; }
+
+/* floating controls */
+#controls {
+  position: absolute;
+  bottom: 108px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 15;
+}
+.ctrl-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: all 0.15s;
+}
+.ctrl-btn:hover {
+  background: var(--border);
+  border-color: var(--accent);
+  color: #fff;
+  transform: translateY(-1px);
+}
+.ctrl-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* stats bar */
+#stats-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 38px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  font-size: 12px;
+  color: var(--muted);
+  z-index: 10;
+}
+#stats-bar .stats-left, #stats-bar .stats-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+#stats-bar strong { color: var(--text); font-weight: 600; }
+.stat-pill {
+  background: rgba(11, 14, 20, 0.6);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+.stat-pill.ok { border-color: rgba(52, 211, 153, 0.3); color: var(--ok); }
+.stat-pill.warn { border-color: rgba(255, 179, 71, 0.3); color: var(--warn); }
+.stat-pill.danger { border-color: rgba(255, 92, 92, 0.3); color: var(--danger); }
+/* The graph view can only draw an edge whose endpoints are both nodes. Dropping one
+   quietly would make this page disagree with the facts.json it was built from, so any
+   drop is stated on the page rather than left in the console. */
+#integrity-warning {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  z-index: 20; max-width: 70%; padding: 8px 14px; border-radius: 6px;
+  background: rgba(255, 92, 92, 0.12); border: 1px solid var(--danger);
+  color: var(--danger); font-size: 12px; line-height: 1.5;
+}
+
+/* tooltip */
+#tooltip {
+  position: absolute;
+  display: none;
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12px;
+  max-width: 400px;
+  word-break: break-word;
+  pointer-events: none;
+  z-index: 25;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.6);
+  line-height: 1.5;
+  backdrop-filter: blur(16px);
+}
+.tt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.tt-type {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--accent);
+}
+.tt-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.tt-badge.sev3 { background: rgba(255,92,92,0.2); color: var(--danger); border: 1px solid var(--danger); }
+.tt-badge.sev2 { background: rgba(255,179,71,0.2); color: var(--warn); border: 1px solid var(--warn); }
+.tt-key { font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #fff; margin-bottom: 6px; }
+.tt-attr { color: var(--muted); font-size: 11px; margin-top: 3px; }
+.tt-attr span { color: var(--text); }
+
+/* detail panel */
+#detail {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  bottom: 104px;
+  width: var(--detail-w);
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  font-size: 12px;
+  z-index: 20;
+  display: none;
+  flex-direction: column;
+  box-shadow: -8px 0 32px rgba(0,0,0,0.6);
+  overflow: hidden;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.detail-title-group { overflow: hidden; }
+.detail-type-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.detail-key {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  word-break: break-all;
+}
+.close-btn {
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.close-btn:hover { color: #fff; background: var(--border); }
+
+#detail-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+#detail-content::-webkit-scrollbar { width: 4px; }
+#detail-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  margin: 16px 0 8px;
+}
+.section-title:first-child { margin-top: 0; }
+
+.attr-table { width: 100%; border-collapse: collapse; }
+.attr-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  vertical-align: top;
+}
+.attr-table td:first-child {
+  color: var(--muted);
+  width: 110px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.attr-table td:last-child {
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.edge-card, .finding-card {
+  background: rgba(11, 14, 20, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  transition: border-color 0.15s;
+}
+.edge-card:hover { border-color: var(--border-focus); }
+.edge-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.edge-type-name { font-weight: 600; color: var(--accent); }
+.edge-dir { font-size: 10px; color: var(--muted); }
+.edge-peer-link {
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  word-break: break-all;
+  cursor: pointer;
+  display: block;
+}
+.edge-peer-link:hover { color: var(--accent); text-decoration: underline; }
+
+.finding-card.sev3 { border-left: 3px solid var(--danger); }
+.finding-card.sev2 { border-left: 3px solid var(--warn); }
+.finding-card.sev1 { border-left: 3px solid var(--muted); }
+.finding-title { font-weight: 600; color: #fff; margin-bottom: 4px; }
+.finding-meta { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+.finding-rec { font-size: 11px; color: var(--text); margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.05); }
+
+/* loading overlay */
+#loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  z-index: 100;
+  font-size: 14px;
+  color: var(--muted);
+  gap: 16px;
+}
+.spinner {
+  width: 36px; height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* pulse animation for high severity nodes */
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+.edge-label {
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  fill: var(--muted);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---- timeline scrubber ---- */
+#timeline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 38px;
+  min-height: 72px;
+  display: none;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 20px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  z-index: 11;
+}
+#timeline.visible { display: flex; }
+.tl-play {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.15s;
+}
+.tl-play:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.tl-play.playing { background: var(--warn); border-color: var(--warn); }
+.tl-caption {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+}
+.tl-mode {
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-solid);
+  color: var(--text);
+  padding: 5px 7px;
+  font: 11px 'JetBrains Mono', monospace;
+}
+.tl-legend {
+  position: absolute;
+  left: 68px;
+  bottom: 3px;
+  display: flex;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.tl-legend span::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+.tl-legend .legend-current::before { background: var(--success); border-color: var(--success); }
+.tl-legend .legend-valid::before { border-style: dashed; border-color: var(--accent); }
+.tl-legend .legend-historical::before { opacity: 0.35; background: var(--muted); }
+.tl-legend .legend-unknown::before { border-style: dotted; }
+.tl-legend .legend-future::before { opacity: 0.2; }
+.node-group.temporal-historical_only .main-circle { opacity: 0.32; }
+.node-group.temporal-currentness_unknown .main-circle { opacity: 0.68; stroke-dasharray: 2 3; }
+.node-group.temporal-valid_unverified .main-circle { opacity: 0.82; stroke-dasharray: 5 3; }
+.node-group.temporal-recent_passive .main-circle { opacity: 0.78; }
+.node-group.temporal-future .main-circle { opacity: 0.16; stroke-dasharray: 1 4; }
+.tl-track {
+  position: relative;
+  flex: 1;
+  min-width: 120px;
+}
+#time-slider {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+.tl-scan-marker {
+  position: absolute;
+  top: -5px;
+  width: 2px;
+  height: 14px;
+  background: var(--warn);
+  box-shadow: 0 0 5px rgba(251, 191, 36, 0.55);
+  pointer-events: none;
+}
+#time-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel-solid);
+  box-shadow: 0 0 8px var(--accent-glow);
+  cursor: pointer;
+}
+#time-slider::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel-solid);
+  box-shadow: 0 0 8px var(--accent-glow);
+  cursor: pointer;
+}
+.tl-label {
+  flex-shrink: 0;
+  min-width: 200px;
+  text-align: right;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--muted);
+}
+.tl-label strong { color: var(--text); font-weight: 600; }
+.tl-reset {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+}
+.tl-reset:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="sidebar-header">
+    <div class="brand-title">Vanguard Insights</div>
+    <div class="brand-subtitle">Facts Knowledge Graph Viewer</div>
+  </div>
+
+  <details class="filter-section" open>
+    <summary>Search & Exploration</summary>
+    <div class="filter-body">
+      <div class="input-group">
+        <label class="input-label">Search node name, key, or finding</label>
+        <input type="text" id="search" placeholder="e.g. vissim.tech, postgres, DMARC..." autocomplete="off">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Neighbor expansion depth</label>
+        <div class="row-inputs">
+          <input type="number" id="depth" value="1" min="0" max="8" style="width: 70px;">
+          <span style="font-size: 11px; color: var(--muted);">hops around matched nodes</span>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details class="filter-section" open>
+    <summary>Security & Mode Filters</summary>
+    <div class="filter-body">
+      <div class="input-group">
+        <label class="input-label">Security Findings Posture</label>
+        <select id="finding-filter">
+          <option value="all">All Assets (No filter)</option>
+          <option value="has_findings">Only Assets with Findings</option>
+          <option value="sev2">Severity 2+ (Warning & Critical)</option>
+          <option value="sev3">Severity 3+ (Critical Only)</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Observation Mode</label>
+        <select id="mode-filter">
+          <option value="all">All Modes (Passive & Active)</option>
+          <option value="passive">Passive Sources Only</option>
+          <option value="active">Active Probes Only</option>
+        </select>
+      </div>
+    </div>
+  </details>
+
+  <details class="filter-section" open>
+    <summary>Node Types</summary>
+    <div class="filter-body">
+      <div class="toggle-header">
+        <span class="input-label" style="margin:0;">Asset Categories</span>
+        <span class="toggle-all" id="toggle-nodes">all / none</span>
+      </div>
+      <div class="checkbox-list" id="node-type-filters"></div>
+    </div>
+  </details>
+
+  <details class="filter-section" open>
+    <summary>Relationship Types</summary>
+    <div class="filter-body">
+      <div class="toggle-header">
+        <span class="input-label" style="margin:0;">Edge Types</span>
+        <span class="toggle-all" id="toggle-edges">all / none</span>
+      </div>
+      <div class="checkbox-list" id="edge-type-filters"></div>
+    </div>
+  </details>
+
+  <details class="filter-section">
+    <summary>Data Sources</summary>
+    <div class="filter-body">
+      <div class="toggle-header">
+        <span class="input-label" style="margin:0;">Reporting Tools & Feeds</span>
+        <span class="toggle-all" id="toggle-sources">all / none</span>
+      </div>
+      <div class="checkbox-list" id="source-filters"></div>
+    </div>
+  </details>
+
+  <details class="filter-section">
+    <summary>Confidence Grade</summary>
+    <div class="filter-body">
+      <div class="checkbox-list" id="confidence-filters"></div>
+    </div>
+  </details>
+</div>
+
+<div id="graph-area">
+  <div id="loading"><div class="spinner"></div><span>Loading facts.json...</span></div>
+  <div id="integrity-warning" hidden></div>
+  <svg id="svg"></svg>
+  <div id="tooltip"></div>
+  
+  <div id="controls">
+    <button class="ctrl-btn" id="btn-zoom-in" title="Zoom In">+</button>
+    <button class="ctrl-btn" id="btn-zoom-out" title="Zoom Out">−</button>
+    <button class="ctrl-btn" id="btn-fit" title="Fit to View">[ ]</button>
+    <button class="ctrl-btn" id="btn-freeze" title="Freeze / Unfreeze Physics">||</button>
+    <button class="ctrl-btn" id="btn-reset" title="Reset Simulation Layout">↺</button>
+  </div>
+
+  <div id="detail">
+    <div class="detail-header">
+      <div class="detail-title-group">
+        <div class="detail-type-badge" id="detail-type"></div>
+        <div class="detail-key" id="detail-key"></div>
+      </div>
+      <div class="close-btn" id="detail-close" title="Close Panel">&times;</div>
+    </div>
+    <div id="detail-content"></div>
+  </div>
+
+  <div id="timeline">
+    <button class="tl-play" id="tl-play" title="Play real-world timeline">&#9654;</button>
+    <select class="tl-mode" id="timeline-mode" aria-label="Timeline mode">
+      <option value="history">History accumulated through</option>
+      <option value="state">State at</option>
+    </select>
+    <div class="tl-track">
+      <input type="range" id="time-slider" min="0" max="1000" value="1000" aria-label="Real-world timeline cutoff">
+      <span class="tl-scan-marker" id="tl-scan-marker" title="Analysis as-of / scan completion"></span>
+    </div>
+    <span class="tl-label" id="tl-label"></span>
+    <span class="tl-reset" id="tl-reset" title="Restore the complete history">complete history</span>
+    <div class="tl-legend" aria-label="Temporal state legend">
+      <span class="legend-current">live/current (direct or DNS)</span>
+      <span class="legend-valid">valid only (not service proof)</span>
+      <span class="legend-historical">historical (retained)</span>
+      <span class="legend-unknown">unknown (not absent)</span>
+      <span class="legend-future">future at cutoff</span>
+    </div>
+  </div>
+
+  <div id="stats-bar">
+    <div class="stats-left" id="stats-left">Loading graph metrics...</div>
+    <div class="stats-right" id="stats-right"></div>
+  </div>
+</div>
+
+<script id="facts-data" type="application/json">
+/* {{FACTS_JSON}} */
+</script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+(function() {
+"use strict";
+
+const TYPE_COLORS = {
+  Domain:      "#6c8cff",
+  Subdomain:   "#8ca8ff",
+  IPAddress:   "#ff8c6c",
+  Service:     "#ffb347",
+  Technology:  "#34d399",
+  Provider:    "#c084fc",
+  DnsRecord:   "#38bdf8",
+  MailService: "#f472b6",
+  Netblock:    "#fbbf24",
+  Certificate: "#10b981",
+  Endpoint:    "#fb7185",
+};
+const DEFAULT_COLOR = "#94a3b8";
+
+const TYPE_RADIUS = {
+  Domain: 16,
+  Subdomain: 11,
+  IPAddress: 13,
+  Service: 9,
+  Technology: 8,
+  Provider: 11,
+  DnsRecord: 6,
+  MailService: 9,
+  Netblock: 10,
+  Certificate: 8,
+  Endpoint: 9,
+};
+const DEFAULT_RADIUS = 8;
+
+const EDGE_COLORS = {
+  subdomain_of:          "#6c8cff",
+  resolves_to:           "#ff8c6c",
+  exposes_service:       "#ffb347",
+  runs_technology:       "#34d399",
+  belongs_to_asn:        "#c084fc",
+  cert_covers_name:      "#10b981",
+  hosted_by_provider:    "#c084fc",
+  finding_affects_asset: "#ff5c5c",
+  has_mx:                "#f472b6",
+  has_ns:                "#38bdf8",
+  has_txt:               "#38bdf8",
+  has_dns_record:        "#38bdf8",
+  cname_to:              "#8ca8ff",
+  ptr_to:                "#f0a3ff",
+  serves_endpoint:       "#ffd166",
+  host_observed_technology: "#7dd3a0",
+};
+
+let factsData = null;
+let allNodes = [];
+let allLinks = [];
+let nodeMap = new Map();
+let simulation = null;
+let svg, gCanvas, gLinks, gNodes, gLabels, zoom;
+let isFrozen = false;
+
+// Timeline state. History mode reveals the complete ledger through a cutoff; State mode
+// keeps every subject rendered and changes its temporal styling at the selected instant.
+let timeMin = null, timeMax = null, timeKeyframes = [], animTimer = null, animating = false, timeFilterRender = false;
+let animStops = [], animIdx = 0;
+let sourceDatedAssetCount = 0;
+let timelineMode = "history";
+let analysisAsOfMs = null;
+
+// Filter state
+let checkedNodeTypes = new Set();
+let checkedEdgeTypes = new Set();
+let checkedSources = new Set();
+let checkedConfidence = new Set(["low", "medium", "high"]);
+
+const dataElement = document.getElementById("facts-data");
+if (dataElement && dataElement.textContent && !dataElement.textContent.includes("{{FACTS_JSON}}")) {
+  try {
+    factsData = JSON.parse(dataElement.textContent);
+    init();
+  } catch (err) {
+    loadViaFetch();
+  }
+} else {
+  loadViaFetch();
+}
+
+function loadViaFetch() {
+  fetch("facts.json")
+    .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(data => { factsData = data; init(); })
+    .catch(err => {
+      document.getElementById("loading").innerHTML =
+        `<div style="color:var(--danger);text-align:center;">
+           <strong>Failed to load facts data</strong><br>
+           <span style="font-size:12px;color:var(--muted);">${esc(err.message)}</span>
+         </div>`;
+    });
+}
+
+function init() {
+  buildGraphData();
+  buildFilters();
+  setupSVG();
+  setupControls();
+  setupTimeline();
+  applyFilters();
+  document.getElementById("loading").style.display = "none";
+}
+
+function buildGraphData() {
+  nodeMap = new Map();
+  sourceDatedAssetCount = 0;
+  const findingsMap = new Map(); // asset_key -> array of findings
+
+  analysisAsOfMs = parseTs(factsData.analysis_as_of);
+  const surface = factsData.classified_surface || {};
+  const assetClasses = new Map();
+  for (const c of (surface.assets || [])) assetClasses.set(c.type + "\u0000" + c.key, c);
+  const relationshipClasses = new Map();
+  for (const c of (surface.relationships || [])) {
+    relationshipClasses.set(c.type + "\u0000" + c.from + "\u0000" + c.to, c);
+  }
+
+  // Index findings
+  for (const f of (factsData.finding_candidates || [])) {
+    if (!findingsMap.has(f.asset_key)) findingsMap.set(f.asset_key, []);
+    findingsMap.get(f.asset_key).push(f);
+  }
+
+  // Build nodes
+  for (const a of (factsData.assets || [])) {
+    const assetFindings = findingsMap.get(a.key) || [];
+    let maxSev = 0;
+    for (const f of assetFindings) {
+      if (f.severity > maxSev) maxSev = f.severity;
+    }
+    const temporal = temporalModel(a);
+    const firstSeenMs = temporal.earliestKnownMs;
+    const sourceDated = firstSeenMs !== null;
+    if (sourceDated) sourceDatedAssetCount++;
+    const classified = assetClasses.get(a.type + "\u0000" + a.key) || {};
+    const n = {
+      id: a.key,
+      type: a.type,
+      attributes: a.attributes || {},
+      sources: (a.sources && a.sources.length) ? a.sources : ["derived"],
+      firstSeen: a.first_seen,
+      lastSeen: a.last_seen,
+      firstSeenMs: firstSeenMs,
+      sourceDated: sourceDated,
+      temporal: temporal,
+      primary: classified.primary || "currentness_unknown",
+      temporalReason: classified.reason || "not classified",
+      temporalBadges: classified.badges || [],
+      findings: assetFindings,
+      maxSeverity: maxSev,
+      degree: 0,
+    };
+    nodeMap.set(a.key, n);
+  }
+  allNodes = Array.from(nodeMap.values());
+
+  // Build links. The two finding edge types are skipped by design: their endpoints are a
+  // finding candidate and an asset or evidence node, not two assets. Anything else that
+  // cannot be drawn is a defect in the data, so it is counted and reported on the page.
+  allLinks = [];
+  const undrawable = [];
+  for (const r of (factsData.relationships || [])) {
+    if (r.type === "finding_supported_by_evidence" || r.type === "finding_affects_asset") continue;
+    if (!nodeMap.has(r.from) || !nodeMap.has(r.to)) {
+      undrawable.push(r.type + " " + r.from + " -> " + r.to);
+      continue;
+    }
+    const srcNode = nodeMap.get(r.from);
+    const tgtNode = nodeMap.get(r.to);
+    srcNode.degree++;
+    tgtNode.degree++;
+
+    const temporal = temporalModel(r);
+    const classified = relationshipClasses.get(r.type + "\u0000" + r.from + "\u0000" + r.to) || {};
+    allLinks.push({
+      source: r.from,
+      target: r.to,
+      type: r.type,
+      confidence: r.confidence || "medium",
+      mode: r.mode || "passive",
+      firstSeen: r.first_seen,
+      lastSeen: r.last_seen,
+      firstSeenMs: temporal.earliestKnownMs,
+      temporal: temporal,
+      primary: classified.primary || "currentness_unknown",
+      temporalReason: classified.reason || "not classified",
+      temporalBadges: classified.badges || [],
+      evidenceId: r.evidence_id,
+    });
+  }
+
+  computeTimeDomain();
+  reportUndrawableLinks(undrawable);
+}
+
+// reportUndrawableLinks states on the page that the view is not showing every relationship
+// the JSON asserts. Report generation validates the graph and refuses to write a file with
+// dangling edges, so this banner should never appear; if it does, the page says so instead
+// of presenting a quietly incomplete graph as the whole truth.
+function reportUndrawableLinks(undrawable) {
+  const el = document.getElementById("integrity-warning");
+  if (!el) return;
+  if (!undrawable.length) { el.hidden = true; return; }
+  const shown = undrawable.slice(0, 5).map(esc).join("<br>");
+  const more = undrawable.length > 5 ? "<br>... and " + (undrawable.length - 5) + " more" : "";
+  el.innerHTML = "<strong>" + undrawable.length + " relationship(s) could not be drawn</strong>" +
+    " because an endpoint names no asset. This graph is incomplete.<br>" + shown + more;
+  el.hidden = false;
+}
+
+// temporalModel reads the explicit assertion and summary fields. source_time_missing is
+// authoritative: no comparison with scan time is used to guess whether a date is real.
+function temporalModel(raw) {
+  const assertions = raw.assertions || [];
+  const points = [];
+  const intervals = [];
+  const knownTimes = [];
+  for (const a of assertions) {
+    const sourceObservedAt = parseTs(a.source_observed_at);
+    const liveVerifiedAt = parseTs(a.live_verified_at);
+    if (sourceObservedAt !== null) {
+      points.push({ at: sourceObservedAt, kind: a.observation_kind || "", source: a.source || "" });
+      knownTimes.push(sourceObservedAt);
+    }
+    if (liveVerifiedAt !== null && liveVerifiedAt !== sourceObservedAt) {
+      points.push({ at: liveVerifiedAt, kind: "active_probe", source: a.source || "" });
+      knownTimes.push(liveVerifiedAt);
+    }
+    const from = parseTs(a.valid_from);
+    const until = parseTs(a.valid_until);
+    if (a.shape === "interval" && (from !== null || until !== null)) {
+      intervals.push({ from: from, until: until });
+      if (from !== null) knownTimes.push(from);
+      if (until !== null) knownTimes.push(until);
+    }
+  }
+  points.sort((a, b) => a.at - b.at);
+  intervals.sort((a, b) => (a.from ?? -Infinity) - (b.from ?? -Infinity));
+  const summaryEarliest = parseTs(raw.earliest_known_at);
+  const earliestKnownMs = summaryEarliest !== null ? summaryEarliest : (knownTimes.length ? Math.min(...knownTimes) : null);
+  return {
+    points: points,
+    intervals: intervals,
+    knownTimes: [...new Set(knownTimes)].sort((a, b) => a - b),
+    earliestKnownMs: earliestKnownMs,
+    fallbackOnly: !!raw.source_time_missing && !raw.source_dated,
+    sourceTimeMissing: !!raw.source_time_missing,
+  };
+}
+
+// computeTimeDomain derives bounds and state-transition keyframes from genuine source
+// times plus the scan-completion as-of marker. Capture-time fallbacks never enter it.
+function computeTimeDomain() {
+  let mn = Infinity, mx = -Infinity;
+  const kf = new Set();
+  const subjects = allNodes.concat(allLinks);
+  for (const subject of subjects) {
+    for (const t of subject.temporal.knownTimes) {
+      if (t < mn) mn = t;
+      if (t > mx) mx = t;
+      kf.add(t);
+    }
+  }
+  if (analysisAsOfMs !== null) {
+    if (analysisAsOfMs < mn) mn = analysisAsOfMs;
+    if (analysisAsOfMs > mx) mx = analysisAsOfMs;
+    kf.add(analysisAsOfMs);
+  }
+  if (mn !== Infinity && mx > mn) {
+    timeMin = mn;
+    timeMax = mx;
+    timeKeyframes = [...kf].sort((a, b) => a - b);
+  } else {
+    timeMin = null;
+    timeMax = null;
+    timeKeyframes = [];
+  }
+}
+
+function buildFilters() {
+  // Node types
+  const nodeTypeCounts = new Map();
+  for (const n of allNodes) {
+    nodeTypeCounts.set(n.type, (nodeTypeCounts.get(n.type) || 0) + 1);
+  }
+  const ntContainer = document.getElementById("node-type-filters");
+  for (const [type, count] of [...nodeTypeCounts.entries()].sort((a,b) => a[0].localeCompare(b[0]))) {
+    checkedNodeTypes.add(type);
+    ntContainer.appendChild(makeCheckbox(type, count, TYPE_COLORS[type] || DEFAULT_COLOR, checkedNodeTypes));
+  }
+
+  // Edge types
+  const edgeTypeCounts = new Map();
+  for (const l of allLinks) {
+    edgeTypeCounts.set(l.type, (edgeTypeCounts.get(l.type) || 0) + 1);
+  }
+  const etContainer = document.getElementById("edge-type-filters");
+  for (const [type, count] of [...edgeTypeCounts.entries()].sort((a,b) => a[0].localeCompare(b[0]))) {
+    checkedEdgeTypes.add(type);
+    etContainer.appendChild(makeCheckbox(type, count, EDGE_COLORS[type] || "#888", checkedEdgeTypes));
+  }
+
+  // Sources
+  const sourcesSet = new Set();
+  for (const n of allNodes) {
+    for (const s of n.sources) sourcesSet.add(s);
+  }
+  const srcContainer = document.getElementById("source-filters");
+  for (const s of [...sourcesSet].sort()) {
+    checkedSources.add(s);
+    srcContainer.appendChild(makeCheckbox(s, null, null, checkedSources));
+  }
+
+  // Confidence
+  const confContainer = document.getElementById("confidence-filters");
+  for (const c of ["high", "medium", "low"]) {
+    confContainer.appendChild(makeCheckbox(c, null, null, checkedConfidence));
+  }
+
+  // Toggles
+  document.getElementById("toggle-nodes").addEventListener("click", () => {
+    toggleAll(checkedNodeTypes, nodeTypeCounts, ntContainer);
+  });
+  document.getElementById("toggle-edges").addEventListener("click", () => {
+    toggleAll(checkedEdgeTypes, edgeTypeCounts, etContainer);
+  });
+  document.getElementById("toggle-sources").addEventListener("click", () => {
+    toggleAll(checkedSources, new Map([...sourcesSet].map(s => [s, 1])), srcContainer);
+  });
+
+  // Inputs & selects
+  document.getElementById("search").addEventListener("input", debounce(applyFilters, 180));
+  document.getElementById("depth").addEventListener("input", debounce(applyFilters, 180));
+  document.getElementById("finding-filter").addEventListener("change", applyFilters);
+  document.getElementById("mode-filter").addEventListener("change", applyFilters);
+  document.getElementById("detail-close").addEventListener("click", () => {
+    document.getElementById("detail").style.display = "none";
+  });
+}
+
+function makeCheckbox(label, count, dotColor, checkedSet) {
+  const lbl = document.createElement("label");
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = checkedSet.has(label);
+  cb.addEventListener("change", () => {
+    if (cb.checked) checkedSet.add(label); else checkedSet.delete(label);
+    applyFilters();
+  });
+  lbl.appendChild(cb);
+  if (dotColor) {
+    const dot = document.createElement("span");
+    dot.className = "color-dot";
+    dot.style.background = dotColor;
+    lbl.appendChild(dot);
+  }
+  lbl.appendChild(document.createTextNode(label));
+  if (count !== null && count !== undefined) {
+    const badge = document.createElement("span");
+    badge.className = "count-badge";
+    badge.textContent = count;
+    lbl.appendChild(badge);
+  }
+  return lbl;
+}
+
+function toggleAll(checkedSet, typeMap, container) {
+  const allChecked = checkedSet.size >= typeMap.size;
+  const boxes = container.querySelectorAll("input[type=checkbox]");
+  if (allChecked) {
+    checkedSet.clear();
+    boxes.forEach(b => b.checked = false);
+  } else {
+    for (const k of typeMap.keys()) checkedSet.add(k);
+    boxes.forEach(b => b.checked = true);
+  }
+  applyFilters();
+}
+
+function setupSVG() {
+  svg = d3.select("#svg");
+  const defs = svg.append("defs");
+
+  const markerColors = new Set(Object.values(EDGE_COLORS));
+  markerColors.add("#555");
+  for (const color of markerColors) {
+    defs.append("marker")
+      .attr("id", "arrow-" + color.replace("#", ""))
+      .attr("viewBox", "0 -4 8 8")
+      .attr("refX", 22)
+      .attr("refY", 0)
+      .attr("markerWidth", 5)
+      .attr("markerHeight", 5)
+      .attr("orient", "auto")
+      .append("path")
+      .attr("d", "M0,-4L8,0L0,4")
+      .attr("fill", color);
+  }
+
+  gCanvas = svg.append("g").attr("id", "canvas");
+  gLinks = gCanvas.append("g").attr("class", "links");
+  gNodes = gCanvas.append("g").attr("class", "nodes");
+  gLabels = gCanvas.append("g").attr("class", "labels");
+
+  zoom = d3.zoom()
+    .scaleExtent([0.05, 10])
+    .on("zoom", e => gCanvas.attr("transform", e.transform));
+  svg.call(zoom);
+}
+
+function setupControls() {
+  document.getElementById("btn-zoom-in").addEventListener("click", () => {
+    svg.transition().duration(250).call(zoom.scaleBy, 1.3);
+  });
+  document.getElementById("btn-zoom-out").addEventListener("click", () => {
+    svg.transition().duration(250).call(zoom.scaleBy, 1 / 1.3);
+  });
+  document.getElementById("btn-fit").addEventListener("click", () => {
+    const currentNodes = simulation ? simulation.nodes() : [];
+    zoomToFit(currentNodes);
+  });
+  const btnFreeze = document.getElementById("btn-freeze");
+  btnFreeze.addEventListener("click", () => {
+    if (!simulation) return;
+    isFrozen = !isFrozen;
+    if (isFrozen) {
+      simulation.stop();
+      btnFreeze.classList.add("active");
+      btnFreeze.textContent = "▶";
+      btnFreeze.title = "Unfreeze Physics Simulation";
+    } else {
+      simulation.alpha(0.3).restart();
+      btnFreeze.classList.remove("active");
+      btnFreeze.textContent = "||";
+      btnFreeze.title = "Freeze Physics Simulation";
+    }
+  });
+  document.getElementById("btn-reset").addEventListener("click", () => {
+    if (!simulation) return;
+    simulation.nodes().forEach(n => { n.x = null; n.y = null; n.vx = null; n.vy = null; });
+    simulation.alpha(1).restart();
+    if (isFrozen) {
+      isFrozen = false;
+      btnFreeze.classList.remove("active");
+      btnFreeze.textContent = "||";
+    }
+  });
+}
+
+function applyFilters() {
+  const search = document.getElementById("search").value.trim().toLowerCase();
+  const depth = parseInt(document.getElementById("depth").value) || 0;
+  const findingFilter = document.getElementById("finding-filter").value;
+  const modeFilter = document.getElementById("mode-filter").value;
+  const cutoff = currentCutoffMs();
+
+  // Step 1: Base node criteria (Main/seed nodes)
+  let seedNodes = allNodes.filter(n => {
+    if (!checkedNodeTypes.has(n.type)) return false;
+    if (!n.sources.some(s => checkedSources.has(s))) return false;
+    if (!visibleSubject(n, cutoff)) return false;
+    if (findingFilter === "has_findings" && n.findings.length === 0) return false;
+    if (findingFilter === "sev2" && n.maxSeverity < 2) return false;
+    if (findingFilter === "sev3" && n.maxSeverity < 3) return false;
+    return true;
+  });
+
+  // Step 2: Search matching to determine seed IDs
+  let seedIds = new Set();
+  if (search) {
+    for (const n of seedNodes) {
+      if (n.id.toLowerCase().includes(search) || n.type.toLowerCase().includes(search)) {
+        seedIds.add(n.id);
+        continue;
+      }
+      let foundAttr = false;
+      for (const [k, v] of Object.entries(n.attributes)) {
+        if (String(v).toLowerCase().includes(search)) { seedIds.add(n.id); foundAttr = true; break; }
+      }
+      if (foundAttr) continue;
+      for (const f of n.findings) {
+        if ((f.title && f.title.toLowerCase().includes(search)) ||
+            (f.rule && f.rule.toLowerCase().includes(search)) ||
+            (f.references && f.references.some(r => r.toLowerCase().includes(search)))) {
+          seedIds.add(n.id);
+          break;
+        }
+      }
+    }
+  } else {
+    seedIds = new Set(seedNodes.map(n => n.id));
+  }
+
+  // Step 3: Filter links by relationship filters
+  let candidateLinks = allLinks.filter(l => {
+    if (!checkedEdgeTypes.has(l.type)) return false;
+    if (!checkedConfidence.has(l.confidence)) return false;
+    if (modeFilter !== "all" && l.mode !== modeFilter) return false;
+    if (!visibleSubject(l, cutoff)) return false;
+    return true;
+  });
+
+  // Step 4: Neighbor expansion (neighbors only filtered by depth and valid edges, not node filters)
+  const visibleNodeIds = expandNeighbors(seedIds, candidateLinks, depth);
+
+  // Step 5: Finalize nodes and links. Timeline state never removes a subject; explicit
+  // user filters and neighbor depth remain the only visibility controls.
+  const nodes = allNodes.filter(n => visibleNodeIds.has(n.id) && visibleSubject(n, cutoff));
+  const nodeSet = new Set(nodes.map(n => n.id));
+  const links = candidateLinks.filter(l => {
+    const src = typeof l.source === "object" ? l.source.id : l.source;
+    const tgt = typeof l.target === "object" ? l.target.id : l.target;
+    return nodeSet.has(src) && nodeSet.has(tgt);
+  });
+
+  for (const n of nodes) n.temporalState = temporalStateAt(n, cutoff);
+  for (const l of links) l.temporalState = temporalStateAt(l, cutoff);
+  renderGraph(nodes, links, search);
+  updateStats(nodes, links);
+  updateTimelineLabel();
+}
+
+function expandNeighbors(seedIds, links, maxDepth) {
+  const result = new Set(seedIds);
+  if (maxDepth <= 0 || seedIds.size === 0) return result;
+
+  const adj = new Map();
+  for (const l of links) {
+    const src = typeof l.source === "object" ? l.source.id : l.source;
+    const tgt = typeof l.target === "object" ? l.target.id : l.target;
+    if (!adj.has(src)) adj.set(src, []);
+    if (!adj.has(tgt)) adj.set(tgt, []);
+    adj.get(src).push(tgt);
+    adj.get(tgt).push(src);
+  }
+
+  let frontier = new Set(seedIds);
+  for (let d = 0; d < maxDepth; d++) {
+    const next = new Set();
+    for (const id of frontier) {
+      for (const nb of (adj.get(id) || [])) {
+        if (!result.has(nb)) {
+          result.add(nb);
+          next.add(nb);
+        }
+      }
+    }
+    if (next.size === 0) break;
+    frontier = next;
+  }
+  return result;
+}
+
+function renderGraph(nodes, links, searchTerm) {
+  const nodePosMap = new Map();
+  if (simulation) {
+    for (const n of simulation.nodes()) {
+      nodePosMap.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy });
+    }
+    simulation.stop();
+  }
+
+  const nodeData = nodes.map(n => {
+    const pos = nodePosMap.get(n.id);
+    if (pos && pos.x !== undefined) {
+      return { ...n, x: pos.x, y: pos.y, vx: pos.vx, vy: pos.vy };
+    }
+    return { ...n };
+  });
+
+  const linkData = links.map(l => ({
+    source: typeof l.source === "object" ? l.source.id : l.source,
+    target: typeof l.target === "object" ? l.target.id : l.target,
+    type: l.type,
+    confidence: l.confidence,
+    mode: l.mode,
+    primary: l.primary,
+    temporalState: l.temporalState,
+    temporalReason: l.temporalReason,
+    temporalBadges: l.temporalBadges,
+  }));
+
+  // Links
+  const link = gLinks.selectAll("line").data(linkData, d => d.source + ">" + d.target + ":" + d.type);
+  link.exit().remove();
+  const linkEnter = link.enter().append("line");
+  const linkMerged = linkEnter.merge(link)
+    .attr("stroke", d => EDGE_COLORS[d.type] || "#555")
+    .attr("stroke-width", d => d.confidence === "high" ? 1.6 : 1.1)
+    .attr("stroke-opacity", temporalLinkOpacity)
+    .attr("stroke-dasharray", d => temporalDash(d.temporalState))
+    .attr("marker-end", d => "url(#arrow-" + (EDGE_COLORS[d.type] || "#555").replace("#", "") + ")");
+
+  // Nodes
+  const node = gNodes.selectAll("g.node-group").data(nodeData, d => d.id);
+  node.exit().remove();
+
+  const nodeEnter = node.enter().append("g")
+    .attr("class", "node-group")
+    .attr("cursor", "pointer")
+    .on("mouseover", (ev, d) => onNodeMouseOver(ev, d, linkMerged, nodeMerged))
+    .on("mousemove", moveTooltip)
+    .on("mouseout", () => onNodeMouseOut(linkMerged, nodeMerged))
+    .on("click", (ev, d) => showDetail(d, linkData))
+    .call(d3.drag()
+      .on("start", dragStart)
+      .on("drag", dragging)
+      .on("end", dragEnd));
+
+  // Pulse ring for critical nodes
+  nodeEnter.append("circle")
+    .attr("class", "pulse-circle")
+    .attr("r", d => calcRadius(d) + 6)
+    .attr("fill", "none")
+    .attr("stroke", d => d.maxSeverity >= 3 ? "var(--danger)" : d.maxSeverity === 2 ? "var(--warn)" : "none")
+    .attr("stroke-width", 2)
+    .attr("opacity", d => d.maxSeverity >= 2 ? 0.8 : 0);
+
+  // Main circle
+  nodeEnter.append("circle")
+    .attr("class", "main-circle")
+    .attr("r", d => calcRadius(d))
+    .attr("fill", d => TYPE_COLORS[d.type] || DEFAULT_COLOR)
+    .attr("stroke", d => d.maxSeverity >= 3 ? "var(--danger)" : d.maxSeverity === 2 ? "var(--warn)" : "rgba(255,255,255,0.2)")
+    .attr("stroke-width", d => d.maxSeverity >= 2 ? 2.5 : 1);
+
+  const nodeMerged = nodeEnter.merge(node);
+  nodeMerged.attr("class", d => "node-group temporal-" + d.temporalState);
+
+  // Update dynamic attrs on merged node circles
+  nodeMerged.select("circle.main-circle")
+    .attr("r", d => calcRadius(d))
+    .attr("fill", d => TYPE_COLORS[d.type] || DEFAULT_COLOR)
+    .attr("stroke", d => {
+      if (searchTerm && d.id.toLowerCase().includes(searchTerm)) return "#fff";
+      return d.maxSeverity >= 3 ? "var(--danger)" : d.maxSeverity === 2 ? "var(--warn)" : "rgba(255,255,255,0.2)";
+    })
+    .attr("stroke-width", d => {
+      if (searchTerm && d.id.toLowerCase().includes(searchTerm)) return 3;
+      return d.maxSeverity >= 2 ? 2.5 : 1;
+    })
+    .attr("stroke-dasharray", d => temporalDash(d.temporalState));
+
+  nodeMerged.select("circle.pulse-circle")
+    .attr("r", d => calcRadius(d) + 6)
+    .attr("stroke", d => d.maxSeverity >= 3 ? "var(--danger)" : d.maxSeverity === 2 ? "var(--warn)" : "none")
+    .attr("opacity", d => (d.maxSeverity >= 2 && d.temporalState !== "future" && d.temporalState !== "historical_only") ? 0.8 : 0);
+
+  // Labels
+  const labelThreshold = nodeData.length > 120 ? 11 : 7;
+  const labelData = nodeData.filter(d => calcRadius(d) >= labelThreshold || (searchTerm && d.id.toLowerCase().includes(searchTerm)));
+  const label = gLabels.selectAll("text").data(labelData, d => d.id);
+  label.exit().remove();
+  const labelEnter = label.enter().append("text")
+    .attr("font-size", "10px")
+    .attr("font-family", "'JetBrains Mono', monospace")
+    .attr("fill", "var(--text)")
+    .attr("text-anchor", "middle")
+    .attr("pointer-events", "none");
+
+  const labelMerged = labelEnter.merge(label)
+    .text(d => shortLabel(d))
+    .attr("dy", d => calcRadius(d) + 13)
+    .attr("font-weight", d => (searchTerm && d.id.toLowerCase().includes(searchTerm)) ? "700" : "400")
+    .attr("opacity", d => temporalNodeOpacity(d.temporalState));
+
+  const w = document.getElementById("graph-area").clientWidth;
+  const h = document.getElementById("graph-area").clientHeight;
+
+  simulation = d3.forceSimulation(nodeData)
+    .force("link", d3.forceLink(linkData).id(d => d.id).distance(l => calcLinkDistance(l)).strength(0.45))
+    .force("charge", d3.forceManyBody().strength(-140).distanceMax(500))
+    .force("center", d3.forceCenter(w / 2, h / 2))
+    .force("collision", d3.forceCollide().radius(d => calcRadius(d) + 6))
+    .alphaDecay(0.025)
+    .on("tick", () => {
+      linkMerged
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
+      nodeMerged
+        .attr("transform", d => `translate(${d.x},${d.y})`);
+      labelMerged
+        .attr("x", d => d.x)
+        .attr("y", d => d.y);
+    });
+
+  // A scrubber-driven render changes temporal styling in place. Reheat gently so the
+  // layout stays stable, and consume the flag so ordinary filter changes still get a
+  // full relayout.
+  if (timeFilterRender) {
+    simulation.alpha(0.5);
+    timeFilterRender = false;
+  }
+
+  if (isFrozen) simulation.stop();
+
+  if (nodeData.length > 0 && nodeData.length <= 150 && !nodePosMap.size) {
+    simulation.on("end", () => zoomToFit(nodeData));
+  }
+}
+
+function calcRadius(d) {
+  const base = TYPE_RADIUS[d.type] || DEFAULT_RADIUS;
+  return Math.min(base + (d.degree || 0) * 0.8, 26);
+}
+
+function temporalDash(state) {
+  if (state === "valid_unverified") return "5 3";
+  if (state === "currentness_unknown") return "2 3";
+  if (state === "future") return "1 4";
+  return null;
+}
+
+function temporalNodeOpacity(state) {
+  if (state === "historical_only") return 0.38;
+  if (state === "currentness_unknown") return 0.68;
+  if (state === "valid_unverified" || state === "recent_passive") return 0.82;
+  if (state === "future") return 0.18;
+  return 1;
+}
+
+function temporalLinkOpacity(d) {
+  const base = d.confidence === "low" ? 0.35 : d.confidence === "medium" ? 0.6 : 0.85;
+  if (d.temporalState === "historical_only") return base * 0.35;
+  if (d.temporalState === "currentness_unknown") return base * 0.58;
+  if (d.temporalState === "valid_unverified" || d.temporalState === "recent_passive") return base * 0.8;
+  if (d.temporalState === "future") return 0.1;
+  return base;
+}
+
+function calcLinkDistance(l) {
+  const srcType = typeof l.source === "object" ? l.source.type : nodeMap.get(l.source)?.type;
+  const tgtType = typeof l.target === "object" ? l.target.type : nodeMap.get(l.target)?.type;
+  if (srcType === "Domain" || tgtType === "Domain") return 85;
+  if (srcType === "Netblock" || tgtType === "Netblock") return 75;
+  return 55;
+}
+
+function shortLabel(d) {
+  if (d.type === "Service" && d.attributes.port) {
+    return d.attributes.port + "/" + (d.attributes.transport || "tcp");
+  }
+  if (d.type === "DnsRecord" && d.attributes.record_type) {
+    return d.attributes.record_type;
+  }
+  let label = d.id;
+  if (label.length > 26) label = label.substring(0, 24) + "..";
+  return label;
+}
+
+function zoomToFit(nodes) {
+  if (!nodes || !nodes.length) return;
+  const pad = 80;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const n of nodes) {
+    if (n.x < x0) x0 = n.x;
+    if (n.y < y0) y0 = n.y;
+    if (n.x > x1) x1 = n.x;
+    if (n.y > y1) y1 = n.y;
+  }
+  const w = document.getElementById("graph-area").clientWidth;
+  const h = document.getElementById("graph-area").clientHeight;
+  const dx = x1 - x0 + pad * 2;
+  const dy = y1 - y0 + pad * 2;
+  if (dx <= 0 || dy <= 0) return;
+  const scale = Math.min(w / dx, h / dy, 2.2);
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  svg.transition().duration(500).call(
+    zoom.transform,
+    d3.zoomIdentity.translate(w/2, h/2).scale(scale).translate(-cx, -cy)
+  );
+}
+
+// Hover interactions
+function onNodeMouseOver(ev, d, links, nodes) {
+  showTooltip(ev, d);
+  const connectedNodes = new Set([d.id]);
+  links.each(function(l) {
+    const src = typeof l.source === "object" ? l.source.id : l.source;
+    const tgt = typeof l.target === "object" ? l.target.id : l.target;
+    if (src === d.id || tgt === d.id) {
+      connectedNodes.add(src);
+      connectedNodes.add(tgt);
+      d3.select(this).attr("stroke-opacity", 1).attr("stroke-width", 2.2);
+    } else {
+      d3.select(this).attr("stroke-opacity", 0.1);
+    }
+  });
+  nodes.each(function(n) {
+    if (!connectedNodes.has(n.id)) {
+      d3.select(this).attr("opacity", 0.15);
+    }
+  });
+  gLabels.selectAll("text").each(function(n) {
+    if (!connectedNodes.has(n.id)) {
+      d3.select(this).attr("opacity", 0.15);
+    }
+  });
+}
+
+function onNodeMouseOut(links, nodes) {
+  hideTooltip();
+  links.attr("stroke-opacity", temporalLinkOpacity)
+       .attr("stroke-width", l => l.confidence === "high" ? 1.6 : 1.1);
+  nodes.attr("opacity", 1);
+  gLabels.selectAll("text").attr("opacity", d => temporalNodeOpacity(d.temporalState));
+}
+
+function dragStart(ev, d) {
+  if (!ev.active && !isFrozen) simulation.alphaTarget(0.3).restart();
+  d.fx = d.x;
+  d.fy = d.y;
+}
+function dragging(ev, d) {
+  d.fx = ev.x;
+  d.fy = ev.y;
+}
+function dragEnd(ev, d) {
+  if (!ev.active && !isFrozen) simulation.alphaTarget(0);
+  if (!isFrozen) {
+    d.fx = null;
+    d.fy = null;
+  }
+}
+
+// Tooltip
+function showTooltip(ev, d) {
+  const tt = document.getElementById("tooltip");
+  let html = `<div class="tt-header">
+                <span class="tt-type">${esc(d.type)}</span>`;
+  if (d.maxSeverity >= 3) html += `<span class="tt-badge sev3">Critical / High</span>`;
+  else if (d.maxSeverity === 2) html += `<span class="tt-badge sev2">Warning</span>`;
+  html += `</div>`;
+  html += `<div class="tt-key">${esc(d.id)}</div>`;
+  html += `<div class="tt-attr">currentness: <span>${esc(d.temporalState)}</span></div>`;
+  if (d.temporalReason) html += `<div class="tt-attr">as-of reason: <span>${esc(d.temporalReason)}</span></div>`;
+  if (d.temporalBadges && d.temporalBadges.length) {
+    html += `<div class="tt-attr">evidence badges: <span>${d.temporalBadges.map(esc).join(", ")}</span></div>`;
+  }
+
+  const attrs = d.attributes || {};
+  for (const [k, v] of Object.entries(attrs)) {
+    html += `<div class="tt-attr">${esc(k)}: <span>${esc(formatVal(v))}</span></div>`;
+  }
+  if (d.sources && d.sources.length) {
+    html += `<div class="tt-attr">sources: <span>${d.sources.map(esc).join(", ")}</span></div>`;
+  }
+  if (d.findings && d.findings.length) {
+    html += `<div class="tt-attr">findings: <span style="color:var(--danger);font-weight:600;">${d.findings.length} raised</span></div>`;
+  }
+  tt.innerHTML = html;
+  tt.style.display = "block";
+  moveTooltip(ev);
+}
+function moveTooltip(ev) {
+  const tt = document.getElementById("tooltip");
+  if (tt.style.display === "none") return;
+  const area = document.getElementById("graph-area").getBoundingClientRect();
+  let x = ev.clientX - area.left + 16;
+  let y = ev.clientY - area.top + 16;
+  if (x + tt.offsetWidth + 20 > area.width) x = x - tt.offsetWidth - 24;
+  if (y + tt.offsetHeight + 20 > area.height) y = area.height - tt.offsetHeight - 16;
+  tt.style.left = Math.max(8, x) + "px";
+  tt.style.top = Math.max(8, y) + "px";
+}
+function hideTooltip() {
+  document.getElementById("tooltip").style.display = "none";
+}
+
+// Detail drawer
+function showDetail(d, activeLinks) {
+  const panel = document.getElementById("detail");
+  const content = document.getElementById("detail-content");
+  document.getElementById("detail-type").textContent = d.type;
+  document.getElementById("detail-key").textContent = d.id;
+
+  let html = `<div class="section-title">Attributes</div><table class="attr-table">`;
+  for (const [k, v] of Object.entries(d.attributes || {})) {
+    html += `<tr><td>${esc(k)}</td><td>${esc(formatVal(v))}</td></tr>`;
+  }
+  if (d.sources) html += `<tr><td>sources</td><td>${d.sources.map(esc).join(", ")}</td></tr>`;
+  html += `<tr><td>currentness</td><td>${esc(d.temporalState)}</td></tr>`;
+  if (d.temporalReason) html += `<tr><td>as-of reason</td><td>${esc(d.temporalReason)}</td></tr>`;
+  if (d.temporalBadges && d.temporalBadges.length) html += `<tr><td>evidence badges</td><td>${d.temporalBadges.map(esc).join(", ")}</td></tr>`;
+  if (d.temporal && d.temporal.fallbackOnly) html += `<tr><td>time coverage</td><td>scan-time fallback only; currentness unknown</td></tr>`;
+  if (d.firstSeen) html += `<tr><td>ordering first</td><td>${esc(fmtTime(d.firstSeen))}</td></tr>`;
+  if (d.lastSeen) html += `<tr><td>ordering last</td><td>${esc(fmtTime(d.lastSeen))}</td></tr>`;
+  html += `</table>`;
+
+  // Edges
+  const edges = activeLinks.filter(l => {
+    const src = typeof l.source === "object" ? l.source.id : l.source;
+    const tgt = typeof l.target === "object" ? l.target.id : l.target;
+    return src === d.id || tgt === d.id;
+  });
+  if (edges.length) {
+    html += `<div class="section-title">Connected Relationships (${edges.length})</div>`;
+    for (const e of edges) {
+      const src = typeof e.source === "object" ? e.source.id : e.source;
+      const tgt = typeof e.target === "object" ? e.target.id : e.target;
+      const peer = src === d.id ? tgt : src;
+      const dir = src === d.id ? "Outgoing →" : "← Incoming";
+      html += `<div class="edge-card">
+                 <div class="edge-card-top">
+                   <span class="edge-type-name">${esc(e.type)}</span>
+                   <span class="edge-dir">${dir} (${esc(e.mode)}; ${esc(e.temporalState)})</span>
+                 </div>
+                 <a class="edge-peer-link" onclick="focusNode('${escJS(peer)}')">${esc(peer)}</a>
+               </div>`;
+    }
+  }
+
+  // Findings
+  if (d.findings && d.findings.length) {
+    html += `<div class="section-title">Security Findings (${d.findings.length})</div>`;
+    for (const f of d.findings) {
+      const sevClass = f.severity >= 3 ? "sev3" : f.severity === 2 ? "sev2" : "sev1";
+      const sevText = f.severity >= 3 ? "Sev " + f.severity + " (High/Critical)" : "Sev " + f.severity;
+      html += `<div class="finding-card ${sevClass}">
+                 <div class="finding-title">${esc(f.title || f.rule)}</div>
+                 <div class="finding-meta">${esc(f.rule)} | ${sevText} | ${esc(f.status)}</div>
+                 ${f.recommendation ? `<div class="finding-rec">${esc(f.recommendation)}</div>` : ''}
+               </div>`;
+    }
+  }
+
+  content.innerHTML = html;
+  panel.style.display = "flex";
+}
+
+window.focusNode = function(nodeId) {
+  const node = allNodes.find(n => n.id === nodeId);
+  if (!node) return;
+  document.getElementById("search").value = nodeId;
+  applyFilters();
+  setTimeout(() => {
+    const target = simulation ? simulation.nodes().find(n => n.id === nodeId) : null;
+    if (target && target.x !== undefined) {
+      const w = document.getElementById("graph-area").clientWidth;
+      const h = document.getElementById("graph-area").clientHeight;
+      svg.transition().duration(450).call(
+        zoom.transform,
+        d3.zoomIdentity.translate(w/2, h/2).scale(1.8).translate(-target.x, -target.y)
+      );
+      showDetail(node, simulation.force("link").links());
+    }
+  }, 100);
+};
+
+function updateStats(nodes, links) {
+  const left = document.getElementById("stats-left");
+  const right = document.getElementById("stats-right");
+  let findingCount = 0;
+  for (const n of nodes) findingCount += (n.findings ? n.findings.length : 0);
+
+  left.innerHTML = `Showing <strong>${nodes.length}</strong> of ${allNodes.length} nodes &nbsp;•&nbsp; 
+                    Showing <strong>${links.length}</strong> of ${allLinks.length} edges &nbsp;•&nbsp; 
+                    <strong>${findingCount}</strong> findings in view`;
+
+  if (factsData && factsData.coverage) {
+    const cov = factsData.coverage;
+    const pct = cov.events_total > 0 ? Math.round((cov.events_mapped / cov.events_total) * 100) : 100;
+    const pillClass = pct >= 95 ? "ok" : pct >= 80 ? "warn" : "danger";
+    right.innerHTML = `<span class="stat-pill ${pillClass}">${cov.events_mapped}/${cov.events_total} events mapped (${pct}%)</span>`;
+  }
+}
+
+// ---- timeline scrubbing ----
+
+// parseTs turns an RFC3339 temporal field into epoch ms, mapping the Go zero time and any
+// unparseable value to null.
+function parseTs(s) {
+  if (!s || s === "0001-01-01T00:00:00Z") return null;
+  const t = Date.parse(s);
+  return Number.isNaN(t) ? null : t;
+}
+
+// Timeline modes never delete graph subjects. History makes not-yet-accumulated evidence
+// visibly future; State evaluates the assertion at the selected instant. Ordinary type,
+// source, search, and depth controls remain independent filters.
+function visibleSubject(subject, cutoff) {
+  return true;
+}
+
+function intervalContains(interval, at) {
+  if (interval.from !== null && interval.from > at) return false;
+  if (interval.until !== null && interval.until < at) return false;
+  return true;
+}
+
+// temporalStateAt evaluates the explicit assertion shapes at the selected instant. A
+// point observation is highlighted only at its actual timeline keyframe; after that it
+// becomes history rather than being stretched into an invented interval.
+function temporalStateAt(subject, cutoff) {
+  if (timelineMode === "history") {
+    if (cutoff !== null && subject.temporal.earliestKnownMs !== null && subject.temporal.earliestKnownMs > cutoff) return "future";
+    return subject.primary;
+  }
+  if (cutoff === null || (analysisAsOfMs !== null && Math.abs(cutoff - analysisAsOfMs) <= timelineTolerance())) {
+    return subject.primary;
+  }
+  const temporal = subject.temporal;
+  if (temporal.earliestKnownMs !== null && temporal.earliestKnownMs > cutoff) return "future";
+
+  const exact = temporal.points.filter(p => Math.abs(p.at - cutoff) <= timelineTolerance());
+  if (exact.some(p => p.kind === "active_probe" || p.kind === "validation")) return "live_verified";
+  if (exact.some(p => p.kind === "dns_answer")) return "currently_resolved";
+  if (temporal.intervals.some(iv => intervalContains(iv, cutoff))) return "valid_unverified";
+  if (exact.some(p => p.kind === "passive_snapshot")) return "recent_passive";
+  if (exact.some(p => p.kind === "historical_log")) return "historical_only";
+  if (temporal.knownTimes.some(t => t <= cutoff)) return "historical_only";
+  return "currentness_unknown";
+}
+
+function timelineTolerance() {
+  if (timeMin === null || timeMax === null) return 1000;
+  return Math.max(1000, (timeMax - timeMin) / 2000);
+}
+
+// currentCutoffMs maps the slider position to an epoch-ms cutoff. The far-right History
+// position means complete history (null); State always returns the selected instant.
+function currentCutoffMs() {
+  if (timeMin === null) return null;
+  const slider = document.getElementById("time-slider");
+  const min = +slider.min, max = +slider.max;
+  const f = (+slider.value - min) / (max - min);
+  if (f >= 1) return timelineMode === "history" ? null : timeMax;
+  return timeMin + f * (timeMax - timeMin);
+}
+
+function setSliderToTime(ms) {
+  const slider = document.getElementById("time-slider");
+  const min = +slider.min, max = +slider.max;
+  const f = (ms - timeMin) / (timeMax - timeMin);
+  slider.value = Math.round(min + Math.max(0, Math.min(1, f)) * (max - min));
+}
+
+function setupTimeline() {
+  const bar = document.getElementById("timeline");
+  const slider = document.getElementById("time-slider");
+  const playBtn = document.getElementById("tl-play");
+  const resetBtn = document.getElementById("tl-reset");
+  const modeSelect = document.getElementById("timeline-mode");
+  const scanMarker = document.getElementById("tl-scan-marker");
+  if (timeMin === null || timeMax === null || timeMax <= timeMin) {
+    bar.classList.remove("visible"); // no temporal spread: scrubbing is meaningless
+    return;
+  }
+  bar.classList.add("visible");
+  if (analysisAsOfMs === null) {
+    scanMarker.style.display = "none";
+  } else {
+    const markerFraction = Math.max(0, Math.min(1, (analysisAsOfMs - timeMin) / (timeMax - timeMin)));
+    scanMarker.style.left = `calc(${(markerFraction * 100).toFixed(3)}% - 1px)`;
+    scanMarker.title = `Analysis as of ${fmtDate(analysisAsOfMs)}`;
+  }
+  slider.value = slider.max; // default to the full graph, matching non-timeline behavior
+  modeSelect.addEventListener("change", () => {
+    pauseTimeline();
+    timelineMode = modeSelect.value;
+    if (timelineMode === "state" && analysisAsOfMs !== null) setSliderToTime(analysisAsOfMs);
+    timeFilterRender = true;
+    applyFilters();
+  });
+  slider.addEventListener("input", () => {
+    pauseTimeline();
+    timeFilterRender = true;
+    applyFilters();
+  });
+  playBtn.addEventListener("click", () => {
+    if (animating) pauseTimeline(); else playTimeline();
+  });
+  resetBtn.addEventListener("click", () => {
+    pauseTimeline();
+    timelineMode = "history";
+    modeSelect.value = "history";
+    slider.value = slider.max;
+    timeFilterRender = true;
+    applyFilters();
+  });
+  updateTimelineLabel();
+}
+
+function updateTimelineLabel() {
+  const label = document.getElementById("tl-label");
+  if (!label || timeMin === null) return;
+  const cov = allNodes.length ? `${sourceDatedAssetCount} of ${allNodes.length} assets source-dated` : "";
+  const cutoff = currentCutoffMs();
+  const marker = analysisAsOfMs === null ? "no scan-completion marker" : `scan marker ${fmtDate(analysisAsOfMs)}`;
+  if (timelineMode === "state") {
+    label.innerHTML = `State at <strong>${fmtDate(cutoff)}</strong> &bull; ${currentComposition()} &bull; ${marker}`;
+  } else if (cutoff === null) {
+    label.innerHTML = `<strong>Complete history</strong> &bull; ${currentComposition()} &bull; ${cov} &bull; ${marker}`;
+  } else {
+    label.innerHTML = `History accumulated through <strong>${fmtDate(cutoff)}</strong> &bull; ${cov} &bull; ${marker}`;
+  }
+}
+
+function currentComposition() {
+  const counts = new Map();
+  for (const n of allNodes) {
+    const state = n.temporalState || n.primary;
+    counts.set(state, (counts.get(state) || 0) + 1);
+  }
+  const current = (counts.get("live_verified") || 0) + (counts.get("currently_resolved") || 0) + (counts.get("recent_passive") || 0);
+  return `current ${current}, valid-unverified ${counts.get("valid_unverified") || 0}, historical ${counts.get("historical_only") || 0}, unknown ${counts.get("currentness_unknown") || 0}, future ${counts.get("future") || 0}`;
+}
+
+// fmtDate renders an epoch-ms instant as a calendar day (the timeline now spans real-world
+// dates, so day granularity reads better than a wall clock).
+function fmtDate(ms) {
+  try { return new Date(ms).toISOString().slice(0, 10); } catch (e) { return String(ms); }
+}
+
+// fmtSpan renders a duration in the largest sensible unit.
+function fmtSpan(ms) {
+  const days = ms / 86400000;
+  if (days >= 730) return (days / 365).toFixed(1) + " yr";
+  if (days >= 60) return Math.round(days / 30) + " mo";
+  if (days >= 2) return Math.round(days) + " d";
+  const min = ms / 60000;
+  if (min >= 1) return Math.round(min) + " min";
+  return Math.round(ms / 1000) + " s";
+}
+
+// animStopsFrom samples temporal transition keyframes down to at most MAX_ANIM_STOPS
+// evenly spaced instants so a capture with hundreds of distinct times still plays back
+// in a bounded number of frames. The final keyframe is always retained.
+const MAX_ANIM_STOPS = 50;
+function animStopsFrom(keyframes) {
+  if (keyframes.length <= MAX_ANIM_STOPS) return keyframes.slice();
+  const stops = [];
+  const stride = (keyframes.length - 1) / (MAX_ANIM_STOPS - 1);
+  for (let i = 0; i < MAX_ANIM_STOPS; i++) stops.push(keyframes[Math.round(i * stride)]);
+  stops[stops.length - 1] = keyframes[keyframes.length - 1];
+  return stops;
+}
+
+// playTimeline steps the cutoff through sampled assertion and validity transitions. It
+// restarts from the beginning at the right edge and otherwise resumes from the selected
+// instant. The per-step delay keeps the whole run near twelve seconds.
+function playTimeline() {
+  if (timeMin === null || !timeKeyframes.length) return;
+  const slider = document.getElementById("time-slider");
+  const playBtn = document.getElementById("tl-play");
+  animStops = animStopsFrom(timeKeyframes);
+  if (+slider.value >= +slider.max) {
+    animIdx = 0; // relaunch from the start of the timeline
+  } else {
+    const cur = currentCutoffMs();
+    animIdx = animStops.findIndex(t => t > cur + 0.5);
+    if (animIdx < 0) animIdx = 0;
+  }
+  animating = true;
+  playBtn.textContent = "\u23F8"; // pause glyph
+  playBtn.classList.add("playing");
+  playBtn.title = "Pause";
+  animStep();
+  const stepMs = Math.max(250, Math.min(900, Math.round(12000 / animStops.length)));
+  animTimer = setInterval(animStep, stepMs);
+}
+
+function animStep() {
+  if (animIdx >= animStops.length) { pauseTimeline(); return; }
+  setSliderToTime(animStops[animIdx]);
+  animIdx++;
+  timeFilterRender = true;
+  applyFilters();
+}
+
+function pauseTimeline() {
+  if (animTimer) { clearInterval(animTimer); animTimer = null; }
+  animating = false;
+  const playBtn = document.getElementById("tl-play");
+  if (playBtn) {
+    playBtn.textContent = "\u25B6"; // play glyph
+    playBtn.classList.remove("playing");
+    playBtn.title = "Play real-world timeline";
+  }
+}
+
+function esc(s) {
+  if (s === null || s === undefined) return "";
+  const d = document.createElement("div");
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+function escJS(s) {
+  return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+function formatVal(v) {
+  if (Array.isArray(v)) return v.join(", ");
+  if (typeof v === "object" && v !== null) return JSON.stringify(v);
+  return String(v);
+}
+function fmtTime(s) {
+  if (!s || s === "0001-01-01T00:00:00Z") return "N/A";
+  try { return new Date(s).toLocaleString(); } catch(e) { return s; }
+}
+function debounce(fn, ms) {
+  let t;
+  return function() {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, arguments), ms);
+  };
+}
+})();
+</script>
+</body>
+</html>

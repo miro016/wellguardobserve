@@ -1,0 +1,290 @@
+{
+  "corpus": {
+    "scanCount": 3,
+    "mode": "root",
+    "topSeverity": "high",
+    "counts": {
+      "high": 1,
+      "medium": 8,
+      "low": 1,
+      "info": 0
+    }
+  },
+  "signals": [
+    {
+      "id": "waste/self-inflicted-rate-limit",
+      "severity": "high",
+      "scope": "scan",
+      "tool": "certspotter",
+      "target": "t.example",
+      "summary": "certspotter hit a self-inflicted rate limit while double-querying t.example",
+      "evidence": {
+        "at": [
+          "2026-01-01T02:00:01.5Z"
+        ],
+        "corrIDs": [
+          "cs1",
+          "cs2"
+        ]
+      },
+      "scans": [
+        "03-gamma"
+      ]
+    },
+    {
+      "id": "attribution/target-gap",
+      "severity": "medium",
+      "scope": "scan",
+      "tool": "crtsh",
+      "summary": "crtsh attributed only 10/100 events to a target (10%)",
+      "evidence": {
+        "empty": 90,
+        "nonEmpty": 10,
+        "sampleNames": null,
+        "total": 100
+      },
+      "scans": [
+        "03-gamma"
+      ]
+    },
+    {
+      "id": "diag/opaque-provider-error",
+      "severity": "medium",
+      "scope": "corpus",
+      "tool": "subfinder",
+      "summary": "subfinder logged 5 opaque error(s) with no concrete cause",
+      "evidence": {
+        "count": 5,
+        "sampleName": "subfinder: provider failed"
+      },
+      "scans": [
+        "01-alpha",
+        "02-beta",
+        "03-gamma"
+      ]
+    },
+    {
+      "id": "hygiene/expected-outcome-at-warn",
+      "severity": "medium",
+      "scope": "corpus",
+      "tool": "dnsinfo",
+      "summary": "dnsinfo logs 4 of 4 warns for expected benign outcomes (100%)",
+      "evidence": {
+        "expected": 4,
+        "sampleName": "dnsinfo: zone transfer failed",
+        "totalWarns": 4
+      },
+      "scans": [
+        "01-alpha",
+        "02-beta",
+        "03-gamma"
+      ]
+    },
+    {
+      "id": "log-integrity/schema",
+      "severity": "medium",
+      "scope": "scan",
+      "summary": "envelope schema version(s) [2] differ from expected 1",
+      "evidence": {
+        "expected": 1,
+        "seen": [
+          2
+        ]
+      },
+      "scans": [
+        "02-beta"
+      ]
+    },
+    {
+      "id": "reliability/degradation-storm",
+      "severity": "medium",
+      "scope": "scan",
+      "tool": "crtsh",
+      "summary": "crtsh burned 8 retry/degraded events",
+      "evidence": {
+        "count": 8,
+        "gaveUp": false,
+        "sampleName": "crtsh: scheduling retry"
+      },
+      "scans": [
+        "02-beta"
+      ]
+    },
+    {
+      "id": "reliability/failed-call-rate",
+      "severity": "medium",
+      "scope": "scan",
+      "tool": "smtp",
+      "summary": "smtp failed 3 of 4 available calls (75%)",
+      "evidence": {
+        "available": 4,
+        "failed": 3
+      },
+      "scans": [
+        "03-gamma"
+      ]
+    },
+    {
+      "id": "trend/attribution-drop",
+      "severity": "medium",
+      "scope": "corpus",
+      "tool": "crtsh",
+      "summary": "crtsh target-attribution ratio worsened from 90% to 10% across the corpus (monotonic worsening)",
+      "evidence": {
+        "first": 0.9,
+        "last": 0.1,
+        "reason": "monotonic worsening",
+        "scanOrder": [
+          "01-alpha",
+          "02-beta",
+          "03-gamma"
+        ],
+        "series": [
+          0.9,
+          0.5,
+          0.1
+        ]
+      },
+      "scans": [
+        "01-alpha",
+        "02-beta",
+        "03-gamma"
+      ]
+    },
+    {
+      "id": "waste/duplicate-concurrent-query",
+      "severity": "medium",
+      "scope": "scan",
+      "tool": "certspotter",
+      "target": "t.example",
+      "summary": "certspotter queried t.example by 2 overlapping calls",
+      "evidence": {
+        "corrIDs": [
+          "cs1",
+          "cs2"
+        ],
+        "end": "2026-01-01T02:00:02Z",
+        "start": "2026-01-01T02:00:01Z"
+      },
+      "scans": [
+        "03-gamma"
+      ]
+    },
+    {
+      "id": "reliability/external-rate-limit",
+      "severity": "low",
+      "scope": "scan",
+      "tool": "netlas",
+      "summary": "netlas hit 1 external rate limit(s)",
+      "evidence": {
+        "count": 1,
+        "targets": [
+          "t.example"
+        ]
+      },
+      "scans": [
+        "03-gamma"
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "tool": "certspotter",
+      "events": 3,
+      "errors": 1,
+      "warns": 0,
+      "rateLimited": 1,
+      "calls": 2,
+      "failedCalls": 0
+    },
+    {
+      "tool": "crtsh",
+      "events": 36,
+      "errors": 0,
+      "warns": 24,
+      "rateLimited": 0,
+      "calls": 12,
+      "failedCalls": 0
+    },
+    {
+      "tool": "dnsinfo",
+      "events": 48,
+      "errors": 0,
+      "warns": 12,
+      "rateLimited": 0,
+      "calls": 36,
+      "failedCalls": 0
+    },
+    {
+      "tool": "netlas",
+      "events": 2,
+      "errors": 1,
+      "warns": 0,
+      "rateLimited": 1,
+      "calls": 1,
+      "failedCalls": 0
+    },
+    {
+      "tool": "smtp",
+      "events": 7,
+      "errors": 0,
+      "warns": 3,
+      "rateLimited": 0,
+      "calls": 4,
+      "failedCalls": 3
+    },
+    {
+      "tool": "subfinder",
+      "events": 21,
+      "errors": 0,
+      "warns": 15,
+      "rateLimited": 0,
+      "calls": 6,
+      "failedCalls": 0
+    }
+  ],
+  "scans": [
+    {
+      "label": "01-alpha",
+      "scanID": "scan_alpha",
+      "status": "ok",
+      "events": 100,
+      "tools": 3,
+      "signals": {
+        "high": 0,
+        "medium": 0,
+        "low": 2,
+        "info": 0
+      }
+    },
+    {
+      "label": "02-beta",
+      "scanID": "scan_beta",
+      "status": "ok",
+      "events": 120,
+      "tools": 3,
+      "signals": {
+        "high": 0,
+        "medium": 2,
+        "low": 2,
+        "info": 0
+      }
+    },
+    {
+      "label": "03-gamma",
+      "scanID": "scan_gamma",
+      "status": "ok",
+      "events": 90,
+      "tools": 6,
+      "signals": {
+        "high": 1,
+        "medium": 3,
+        "low": 3,
+        "info": 0
+      }
+    }
+  ],
+  "skipped": [
+    "captures/not-a-scan"
+  ]
+}

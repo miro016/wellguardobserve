@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vanguard - Attack Surface</title>
+<style>
+:root {
+  --bg: #0b0e14;
+  --panel: #151923;
+  --border: #232838;
+  --text: #e2e8f0;
+  --muted: #8492a6;
+  --accent: #6c8cff;
+  --danger: #ff5c5c;
+  --warn: #ffb347;
+  --ok: #34d399;
+  --sidebar-w: 320px;
+  --detail-w: 400px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  font-size: 13px;
+}
+#sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  z-index: 10;
+}
+.sidebar-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.brand-sub { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.section { border-bottom: 1px solid var(--border); }
+.section > summary {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 10px 16px;
+  list-style: none;
+  user-select: none;
+}
+.section > summary::-webkit-details-marker { display: none; }
+.section > summary:hover { color: var(--text); }
+.section-body { padding: 0 16px 12px; }
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  cursor: pointer;
+  font-size: 12px;
+}
+label.check input { accent-color: var(--accent); cursor: pointer; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.count { margin-left: auto; color: var(--muted); font-size: 11px; }
+.field { margin: 8px 0; }
+.field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+input[type=text], select {
+  width: 100%;
+  background: #0f131c;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
+}
+input[type=range] { width: 100%; accent-color: var(--accent); }
+button {
+  background: #1d2333;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+button:hover { border-color: var(--accent); }
+.btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+#main { flex: 1; position: relative; min-width: 0; }
+#svg { width: 100%; height: 100%; display: block; cursor: grab; }
+#svg:active { cursor: grabbing; }
+#stats {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(21,25,35,0.94);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  pointer-events: none;
+  max-width: 380px;
+}
+#stats b { color: var(--accent); }
+#stats .warn { color: var(--warn); }
+#banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,92,92,0.14);
+  border: 1px solid var(--danger);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 12px;
+  display: none;
+  max-width: 60%;
+}
+#detail {
+  width: var(--detail-w);
+  min-width: var(--detail-w);
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  display: none;
+  padding: 14px 16px 40px;
+}
+#detail.open { display: block; }
+#detail h2 { font-size: 14px; word-break: break-all; margin-bottom: 2px; }
+#detail .sub { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+#detail h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  margin: 14px 0 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+#detail .kv { display: flex; gap: 8px; font-size: 12px; padding: 2px 0; }
+#detail .kv span:first-child { color: var(--muted); min-width: 110px; flex: 0 0 auto; }
+#detail .kv span:last-child { word-break: break-all; }
+#detail ul { list-style: none; font-size: 12px; }
+#detail li { padding: 4px 0; border-bottom: 1px solid rgba(35,40,56,0.6); word-break: break-word; }
+#detail code { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--muted); }
+.pill {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+  margin: 2px 4px 2px 0;
+}
+.sev-4, .sev-3 { color: var(--danger); border-color: var(--danger); }
+.sev-2 { color: var(--warn); border-color: var(--warn); }
+.close {
+  float: right;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+.close:hover { color: var(--text); }
+#tooltip {
+  position: absolute;
+  background: rgba(21,25,35,0.97);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 6px 9px;
+  font-size: 12px;
+  pointer-events: none;
+  display: none;
+  z-index: 20;
+  max-width: 340px;
+}
+.node-label { font-size: 10px; fill: var(--muted); pointer-events: none; }
+.legend { font-size: 11px; color: var(--muted); line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="sidebar-header">
+    <div class="brand">Attack Surface</div>
+    <div class="brand-sub" id="header-sub"></div>
+  </div>
+
+  <details class="section" open>
+    <summary>Search</summary>
+    <div class="section-body">
+      <div class="field">
+        <input type="text" id="search" placeholder="name, address, service, origin">
+      </div>
+      <div class="field">
+        <label>Neighbor expansion: <span id="depth-label">1 hop</span></label>
+        <input type="range" id="depth" min="0" max="3" step="1" value="1">
+      </div>
+    </div>
+  </details>
+
+  <details class="section" open>
+    <summary>Node type</summary>
+    <div class="section-body" id="f-nodetype"></div>
+  </details>
+
+  <details class="section" open>
+    <summary>Scope</summary>
+    <div class="section-body" id="f-scope"></div>
+  </details>
+
+  <details class="section" open>
+    <summary>Currentness</summary>
+    <div class="section-body" id="f-currentness"></div>
+  </details>
+
+  <details class="section">
+    <summary>Edge type</summary>
+    <div class="section-body" id="f-edgetype"></div>
+  </details>
+
+  <details class="section">
+    <summary>Evidence</summary>
+    <div class="section-body">
+      <div id="f-mode"></div>
+      <div class="field">
+        <label>Minimum edge confidence</label>
+        <select id="min-confidence">
+          <option value="0">any</option>
+          <option value="1">low</option>
+          <option value="2">medium</option>
+          <option value="3">high</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Source</label>
+        <select id="source"><option value="">any</option></select>
+      </div>
+    </div>
+  </details>
+
+  <details class="section">
+    <summary>Findings</summary>
+    <div class="section-body">
+      <div class="field">
+        <label>Minimum severity</label>
+        <select id="min-severity">
+          <option value="-1">any (including none)</option>
+          <option value="0">has a finding</option>
+          <option value="1">low and above</option>
+          <option value="2">medium and above</option>
+          <option value="3">high and above</option>
+          <option value="4">critical only</option>
+        </select>
+      </div>
+      <div id="findings-summary" class="legend"></div>
+    </div>
+  </details>
+
+  <details class="section" open>
+    <summary>View</summary>
+    <div class="section-body">
+      <div class="btn-row">
+        <button id="btn-default">Default view</button>
+        <button id="btn-all">Show everything</button>
+      </div>
+      <div class="btn-row">
+        <button id="btn-fit">Fit</button>
+        <button id="btn-reset-zoom">Reset zoom</button>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </details>
+
+  <details class="section">
+    <summary>Contraction</summary>
+    <div class="section-body legend" id="contraction"></div>
+  </details>
+</div>
+
+<div id="main">
+  <svg id="svg"></svg>
+  <div id="stats"></div>
+  <div id="banner"></div>
+  <div id="tooltip"></div>
+</div>
+
+<div id="detail"></div>
+
+<script id="surface-data" type="application/json">
+/* {{SURFACE_JSON}} */
+</script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+"use strict";
+
+// ---------------------------------------------------------------------------
+// Vocabulary. Every list here mirrors the artifact schema; a value the data
+// carries but this file does not know about is still rendered, in a neutral
+// color, rather than dropped.
+// ---------------------------------------------------------------------------
+// The four top-level node arrays in the artifact, in the order the viewer reads them.
+var NODE_ARRAYS = ["domains", "ip_addresses", "services", "web_surfaces"];
+var NODE_COLORS = {
+  Domain:     "#6c8cff",
+  IPAddress:  "#f59e0b",
+  Service:    "#a78bfa",
+  WebSurface: "#34d399"
+};
+var EDGE_COLORS = {
+  subdomain_of:      "#4b587c",
+  resolves_to:       "#6c8cff",
+  cname_to:          "#8b9dc3",
+  ptr_to:            "#7c8aa8",
+  mail_routes_to:    "#e879f9",
+  exposes_service:   "#a78bfa",
+  serves_web_surface:"#34d399",
+  redirects_to:      "#ffb347",
+  tls_assessed_for:  "#22d3ee"
+};
+// Ordered strongest first, matching the facts vocabulary. The default view hides
+// the last two: they are context, not present exposure, and both are one click away.
+var CURRENTNESS = [
+  "live_verified", "currently_resolved", "valid_unverified",
+  "recent_passive", "historical_only", "currentness_unknown"
+];
+var CURRENTNESS_COLORS = {
+  live_verified:       "#34d399",
+  currently_resolved:  "#6c8cff",
+  valid_unverified:    "#22d3ee",
+  recent_passive:      "#ffb347",
+  historical_only:     "#8492a6",
+  currentness_unknown: "#5b6478"
+};
+var DEFAULT_HIDDEN_CURRENTNESS = ["historical_only", "currentness_unknown"];
+var CONFIDENCE_RANK = { low: 1, medium: 2, high: 3 };
+var SEVERITY_NAMES = ["info", "low", "medium", "high", "critical"];
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+var graph = null;
+var allNodes = [];
+var allEdges = [];
+var nodeById = {};
+var filters = {
+  nodeTypes: new Set(),
+  edgeTypes: new Set(),
+  scopes: new Set(),
+  currentness: new Set(),
+  modes: new Set(),
+  minConfidence: 0,
+  minSeverity: -1,
+  source: "",
+  search: "",
+  depth: 1
+};
+var svg, zoomLayer, zoom, simulation, tooltip;
+var selected = null;
+
+// ---------------------------------------------------------------------------
+// Load: the page carries its own data. The same-folder fetch is only a fallback
+// for a copy whose embedded block was stripped.
+// ---------------------------------------------------------------------------
+function load() {
+  var el = document.getElementById("surface-data");
+  var raw = el ? el.textContent.trim() : "";
+  if (raw && raw.indexOf("{{SURFACE_JSON}}") === -1) {
+    try {
+      init(JSON.parse(raw));
+      return;
+    } catch (e) {
+      banner("The embedded graph could not be parsed: " + e.message);
+      return;
+    }
+  }
+  fetch("attack-surface.json")
+    .then(function (r) {
+      if (!r.ok) { throw new Error("HTTP " + r.status); }
+      return r.json();
+    })
+    .then(init)
+    .catch(function (e) {
+      banner("No embedded graph and attack-surface.json could not be loaded (" +
+        e.message + "). Regenerate with: vanguard-projections build -collection <collection-dir> -destination <projection-dir>");
+    });
+}
+
+// banner appends rather than replaces: a page can have more than one thing wrong
+// with it, and a source-collection warning must not be hidden by an integrity one.
+function banner(msg) {
+  var b = document.getElementById("banner");
+  b.textContent = b.textContent ? b.textContent + "  " + msg : msg;
+  b.style.display = "block";
+}
+
+function init(data) {
+  graph = data;
+  // The artifact holds one array per node type. The viewer draws all four together, so
+  // it concatenates them once here and works from that flat list; every node still
+  // carries its own type, which is what the filters and colors key off.
+  allNodes = NODE_ARRAYS.reduce(function (acc, k) {
+    return acc.concat((graph[k] || []).map(function (n) { return Object.assign({}, n); }));
+  }, []);
+  allEdges = (graph.edges || []).slice();
+  allNodes.forEach(function (n) { nodeById[n.id] = n; });
+
+  if (typeof d3 === "undefined") {
+    banner("The D3 library could not be loaded, so the graph cannot be drawn. " +
+      "attack-surface.md and attack-surface.json in this folder carry the same data.");
+    return;
+  }
+
+  describeHeader();
+  buildFilters();
+  setupSVG();
+  setupControls();
+  applyDefaultView();
+}
+
+// ---------------------------------------------------------------------------
+// Header, legend, and the contraction accounting. The page states what it is a
+// view of, so a reader never has to assume a cutoff or a completeness.
+// ---------------------------------------------------------------------------
+function describeHeader() {
+  var parts = [];
+  if (graph.root_target) { parts.push("Root " + esc(graph.root_target)); }
+  if (graph.scan_id) { parts.push("scan " + esc(graph.scan_id)); }
+  var sub = parts.join(", ") + "<br>Analysis as of " + esc(fmtTime(graph.analysis_as_of));
+  if (graph.analysis_partial) { sub += " (partial: the scan did not complete)"; }
+  sub += "<br>" + esc(graph.data_view || "");
+  // The collection verdict sits in the header because it decides how the counts below
+  // may be read: a degraded collection means this is what the scan managed to see, not
+  // what exists. The exact losses live once, in the operator report.
+  var sc = graph.source_collection;
+  if (sc) {
+    var problems = sc.health_total || 0;
+    sub += "<br>Source collection: " + esc(sc.status || "") + " (execution " + (sc.execution_seq || 0) +
+      "), " + problems + " collection problem(s)";
+    if (sc.status !== "succeeded" || problems > 0) {
+      banner("Source collection " + (sc.status || "unknown") + " with " + problems +
+        " collection problem event(s): this surface may be incomplete. " +
+        "See ../reports/report.md for the exact losses.");
+    }
+  }
+  document.getElementById("header-sub").innerHTML = sub;
+
+  var legend = Object.keys(NODE_COLORS).map(function (t) {
+    return '<span class="dot" style="display:inline-block;background:' + NODE_COLORS[t] + '"></span> ' + esc(t);
+  }).join("<br>");
+  legend += '<br><br>Ring: node carries a finding. Dashed edge: passive claim.';
+  document.getElementById("legend").innerHTML = legend;
+
+  var cs = graph.contraction_summary || {};
+  var rows = (cs.assets || []).map(function (a) {
+    return esc(a.asset_type) + ": " + a.outcome + " (" + a.contracted + "/" + a.count + ")";
+  });
+  var text = rows.join("<br>");
+  text += "<br><br>Findings: " + (cs.findings_attached || 0) + " attached, " +
+    (cs.findings_unmapped || 0) + " unmapped.";
+  var v = (graph.integrity && graph.integrity.violations) || [];
+  text += "<br>Integrity: " + (v.length === 0 ? "no violations" : v.length + " violation(s)");
+  document.getElementById("contraction").innerHTML = text;
+  if (v.length > 0) {
+    banner(v.length + " integrity violation(s) recorded in this artifact; see attack-surface.md.");
+  }
+
+  var bySeverity = {};
+  allNodes.forEach(function (n) {
+    (n.findings || []).forEach(function (f) {
+      var name = SEVERITY_NAMES[f.severity] || String(f.severity);
+      bySeverity[name] = (bySeverity[name] || 0) + 1;
+    });
+  });
+  var fs = Object.keys(bySeverity).sort().map(function (k) {
+    return k + ": " + bySeverity[k];
+  }).join("<br>");
+  document.getElementById("findings-summary").innerHTML = fs || "No findings attached.";
+}
+
+// ---------------------------------------------------------------------------
+// Filters. Every checkbox states its own total, so a filter that hides
+// everything still shows how much it is hiding.
+// ---------------------------------------------------------------------------
+function buildFilters() {
+  var nodeTypes = countBy(allNodes, function (n) { return n.type; });
+  var edgeTypes = countBy(allEdges, function (e) { return e.type; });
+  var scopes = countBy(allNodes, function (n) { return n.referenced_only ? "referenced_only" : n.scope; });
+  var currentness = countBy(allNodes, function (n) { return n.primary_currentness; });
+  var modes = countBy(allEdges, function (e) { return e.mode || "unstated"; });
+
+  renderChecks("f-nodetype", nodeTypes, filters.nodeTypes, NODE_COLORS);
+  renderChecks("f-edgetype", edgeTypes, filters.edgeTypes, EDGE_COLORS);
+  renderChecks("f-scope", scopes, filters.scopes, {});
+  renderChecks("f-currentness", orderedCounts(currentness, CURRENTNESS), filters.currentness, CURRENTNESS_COLORS);
+  renderChecks("f-mode", modes, filters.modes, {});
+
+  var sources = {};
+  allNodes.forEach(function (n) { (n.sources || []).forEach(function (s) { sources[s] = true; }); });
+  allEdges.forEach(function (e) { (e.sources || []).forEach(function (s) { sources[s] = true; }); });
+  var sel = document.getElementById("source");
+  Object.keys(sources).sort().forEach(function (s) {
+    var o = document.createElement("option");
+    o.value = s;
+    o.textContent = s;
+    sel.appendChild(o);
+  });
+}
+
+// countBy returns [{key, count}] sorted by key, so the panel order never depends
+// on the order things happened to appear in the stream.
+function countBy(items, keyFn) {
+  var m = {};
+  items.forEach(function (it) {
+    var k = keyFn(it) || "unstated";
+    m[k] = (m[k] || 0) + 1;
+  });
+  return Object.keys(m).sort().map(function (k) { return { key: k, count: m[k] }; });
+}
+
+// orderedCounts re-orders a count list by a known vocabulary, keeping any value
+// the vocabulary does not name at the end rather than dropping it.
+function orderedCounts(counts, order) {
+  var known = counts.filter(function (c) { return order.indexOf(c.key) !== -1; });
+  known.sort(function (a, b) { return order.indexOf(a.key) - order.indexOf(b.key); });
+  var rest = counts.filter(function (c) { return order.indexOf(c.key) === -1; });
+  return known.concat(rest);
+}
+
+function renderChecks(containerID, counts, set, colors) {
+  var c = document.getElementById(containerID);
+  c.innerHTML = "";
+  counts.forEach(function (entry) {
+    var label = document.createElement("label");
+    label.className = "check";
+    var box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = true;
+    set.add(entry.key);
+    box.addEventListener("change", function () {
+      if (box.checked) { set.add(entry.key); } else { set.delete(entry.key); }
+      applyFilters();
+    });
+    box.dataset.key = entry.key;
+    label.appendChild(box);
+    if (colors[entry.key]) {
+      var dot = document.createElement("span");
+      dot.className = "dot";
+      dot.style.background = colors[entry.key];
+      label.appendChild(dot);
+    }
+    var name = document.createElement("span");
+    name.textContent = entry.key;
+    label.appendChild(name);
+    var n = document.createElement("span");
+    n.className = "count";
+    n.textContent = entry.count;
+    label.appendChild(n);
+    c.appendChild(label);
+  });
+}
+
+function setCheckboxes(containerID, set, predicate) {
+  var boxes = document.querySelectorAll("#" + containerID + " input[type=checkbox]");
+  Array.prototype.forEach.call(boxes, function (box) {
+    var on = predicate(box.dataset.key);
+    box.checked = on;
+    if (on) { set.add(box.dataset.key); } else { set.delete(box.dataset.key); }
+  });
+}
+
+// applyDefaultView emphasizes present, in-scope exposure. External and
+// historical context stay one click away, and the counts always say what is
+// hidden, so the default can never read as data absence.
+function applyDefaultView() {
+  setCheckboxes("f-nodetype", filters.nodeTypes, function () { return true; });
+  setCheckboxes("f-edgetype", filters.edgeTypes, function () { return true; });
+  setCheckboxes("f-mode", filters.modes, function () { return true; });
+  setCheckboxes("f-scope", filters.scopes, function (k) { return k === "in_scope"; });
+  setCheckboxes("f-currentness", filters.currentness, function (k) {
+    return DEFAULT_HIDDEN_CURRENTNESS.indexOf(k) === -1;
+  });
+  document.getElementById("min-confidence").value = "0";
+  document.getElementById("min-severity").value = "-1";
+  document.getElementById("source").value = "";
+  document.getElementById("search").value = "";
+  filters.minConfidence = 0;
+  filters.minSeverity = -1;
+  filters.source = "";
+  filters.search = "";
+  applyFilters(true);
+}
+
+function showEverything() {
+  ["f-nodetype", "f-edgetype", "f-mode", "f-scope", "f-currentness"].forEach(function (id) {
+    var set = { "f-nodetype": filters.nodeTypes, "f-edgetype": filters.edgeTypes,
+      "f-mode": filters.modes, "f-scope": filters.scopes, "f-currentness": filters.currentness }[id];
+    setCheckboxes(id, set, function () { return true; });
+  });
+  document.getElementById("min-confidence").value = "0";
+  document.getElementById("min-severity").value = "-1";
+  document.getElementById("source").value = "";
+  filters.minConfidence = 0;
+  filters.minSeverity = -1;
+  filters.source = "";
+  applyFilters(true);
+}
+
+function setupControls() {
+  document.getElementById("search").addEventListener("input", debounce(function (e) {
+    filters.search = e.target.value.trim().toLowerCase();
+    applyFilters();
+  }, 200));
+  document.getElementById("depth").addEventListener("input", function (e) {
+    filters.depth = parseInt(e.target.value, 10);
+    document.getElementById("depth-label").textContent =
+      filters.depth === 1 ? "1 hop" : filters.depth + " hops";
+    applyFilters();
+  });
+  document.getElementById("min-confidence").addEventListener("change", function (e) {
+    filters.minConfidence = parseInt(e.target.value, 10);
+    applyFilters();
+  });
+  document.getElementById("min-severity").addEventListener("change", function (e) {
+    filters.minSeverity = parseInt(e.target.value, 10);
+    applyFilters();
+  });
+  document.getElementById("source").addEventListener("change", function (e) {
+    filters.source = e.target.value;
+    applyFilters();
+  });
+  document.getElementById("btn-default").addEventListener("click", applyDefaultView);
+  document.getElementById("btn-all").addEventListener("click", showEverything);
+  document.getElementById("btn-fit").addEventListener("click", function () { zoomToFit(); });
+  document.getElementById("btn-reset-zoom").addEventListener("click", function () {
+    svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Filtering. Edges survive only when both endpoints do, so no filter can leave
+// an edge pointing at something that is not on screen.
+// ---------------------------------------------------------------------------
+function nodePasses(n) {
+  if (!filters.nodeTypes.has(n.type)) { return false; }
+  var scopeKey = n.referenced_only ? "referenced_only" : n.scope;
+  if (!filters.scopes.has(scopeKey)) { return false; }
+  if (!filters.currentness.has(n.primary_currentness || "unstated")) { return false; }
+  if (filters.minSeverity >= 0) {
+    var best = -1;
+    (n.findings || []).forEach(function (f) { if (f.severity > best) { best = f.severity; } });
+    if (best < filters.minSeverity) { return false; }
+  }
+  if (filters.source && (n.sources || []).indexOf(filters.source) === -1) {
+    return false;
+  }
+  return true;
+}
+
+function edgePasses(e) {
+  if (!filters.edgeTypes.has(e.type)) { return false; }
+  if (!filters.modes.has(e.mode || "unstated")) { return false; }
+  if ((CONFIDENCE_RANK[e.confidence] || 0) < filters.minConfidence) { return false; }
+  return true;
+}
+
+function applyFilters(refit) {
+  var keep = {};
+  allNodes.forEach(function (n) { if (nodePasses(n)) { keep[n.id] = true; } });
+
+  if (filters.search) {
+    var seeds = allNodes.filter(function (n) {
+      return keep[n.id] && matchesSearch(n, filters.search);
+    }).map(function (n) { return n.id; });
+    keep = expand(seeds, keep, filters.depth);
+  }
+
+  var edges = allEdges.filter(function (e) {
+    return edgePasses(e) && keep[e.from] && keep[e.to];
+  });
+  var nodes = allNodes.filter(function (n) { return keep[n.id]; });
+
+  render(nodes, edges);
+  updateStats(nodes, edges);
+  if (refit) { setTimeout(zoomToFit, 400); }
+}
+
+function matchesSearch(n, term) {
+  if ((n.key || "").toLowerCase().indexOf(term) !== -1) { return true; }
+  if ((n.label || "").toLowerCase().indexOf(term) !== -1) { return true; }
+  return (n.facts_asset_keys || []).some(function (k) {
+    return k.toLowerCase().indexOf(term) !== -1;
+  });
+}
+
+// expand grows a seed set by up to depth hops, walking only edges that pass the
+// edge filters and only into nodes that pass the node filters: a search result
+// never drags in something the filters were asked to exclude.
+function expand(seeds, allowed, depth) {
+  var keep = {};
+  seeds.forEach(function (id) { keep[id] = true; });
+  var frontier = seeds.slice();
+  for (var d = 0; d < depth && frontier.length > 0; d++) {
+    // The frontier is fixed for the whole hop, so "2 hops" means two hops and
+    // not "however far the edge list happened to carry us in one pass".
+    var reached = {};
+    frontier.forEach(function (id) { reached[id] = true; });
+    var next = [];
+    allEdges.forEach(function (e) {
+      if (!edgePasses(e)) { return; }
+      if (reached[e.from] && !keep[e.to] && allowed[e.to]) { keep[e.to] = true; next.push(e.to); }
+      if (reached[e.to] && !keep[e.from] && allowed[e.from]) { keep[e.from] = true; next.push(e.from); }
+    });
+    frontier = next;
+  }
+  return keep;
+}
+
+function updateStats(nodes, edges) {
+  var s = document.getElementById("stats");
+  var findings = 0;
+  nodes.forEach(function (n) { findings += (n.findings || []).length; });
+  var totalFindings = 0;
+  allNodes.forEach(function (n) { totalFindings += (n.findings || []).length; });
+  var html = "showing <b>" + nodes.length + "</b> of " + allNodes.length + " nodes, " +
+    "<b>" + edges.length + "</b> of " + allEdges.length + " edges, " +
+    "<b>" + findings + "</b> of " + totalFindings + " findings";
+  var hidden = allNodes.length - nodes.length;
+  if (hidden > 0) {
+    html += '<br><span class="warn">' + hidden + " node(s) hidden by the current filters, not absent from the scan.</span>";
+  }
+  var unmapped = (graph.unmapped_findings || []).length;
+  if (unmapped > 0) {
+    html += '<br><span class="warn">' + unmapped + " finding(s) attached to no node; see attack-surface.md.</span>";
+  }
+  s.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+function setupSVG() {
+  svg = d3.select("#svg");
+  zoomLayer = svg.append("g");
+  zoomLayer.append("g").attr("class", "links");
+  zoomLayer.append("g").attr("class", "nodes");
+  zoomLayer.append("g").attr("class", "labels");
+  zoom = d3.zoom().scaleExtent([0.1, 8]).on("zoom", function (ev) {
+    zoomLayer.attr("transform", ev.transform);
+  });
+  svg.call(zoom);
+  svg.on("click", function (ev) {
+    if (ev.target.id === "svg") { closeDetail(); }
+  });
+  tooltip = document.getElementById("tooltip");
+}
+
+function render(nodes, edges) {
+  var w = document.getElementById("main").clientWidth;
+  var h = document.getElementById("main").clientHeight;
+  var nodeData = nodes.map(function (n) { return Object.assign({}, n); });
+  var index = {};
+  nodeData.forEach(function (n) { index[n.id] = n; });
+  var linkData = edges.map(function (e) {
+    return Object.assign({}, e, { source: index[e.from], target: index[e.to] });
+  });
+
+  var link = zoomLayer.select(".links").selectAll("line").data(linkData, function (d) {
+    return d.type + "|" + d.from + "|" + d.to;
+  });
+  link.exit().remove();
+  var linkEnter = link.enter().append("line")
+    .attr("stroke-width", 1.3)
+    .style("cursor", "pointer")
+    .on("click", function (ev, d) { ev.stopPropagation(); showEdgeDetail(d); });
+  var linkAll = linkEnter.merge(link)
+    .attr("stroke", function (d) { return EDGE_COLORS[d.type] || "#4b587c"; })
+    .attr("stroke-opacity", 0.65)
+    .attr("stroke-dasharray", function (d) { return d.mode === "active" ? null : "4,3"; });
+
+  var node = zoomLayer.select(".nodes").selectAll("circle").data(nodeData, function (d) { return d.id; });
+  node.exit().remove();
+  var nodeEnter = node.enter().append("circle")
+    .style("cursor", "pointer")
+    .on("click", function (ev, d) { ev.stopPropagation(); showNodeDetail(d); })
+    .on("mouseover", showTooltip)
+    .on("mousemove", moveTooltip)
+    .on("mouseout", hideTooltip)
+    .call(d3.drag().on("start", dragStart).on("drag", dragging).on("end", dragEnd));
+  var nodeAll = nodeEnter.merge(node)
+    .attr("r", radius)
+    .attr("fill", function (d) { return NODE_COLORS[d.type] || "#8492a6"; })
+    .attr("fill-opacity", function (d) { return d.referenced_only ? 0.4 : 0.9; })
+    .attr("stroke", function (d) { return worstSeverity(d) >= 2 ? "#ff5c5c" : "#0b0e14"; })
+    .attr("stroke-width", function (d) { return worstSeverity(d) >= 2 ? 2.5 : 1; });
+
+  var label = zoomLayer.select(".labels").selectAll("text").data(nodeData, function (d) { return d.id; });
+  label.exit().remove();
+  var labelAll = label.enter().append("text")
+    .attr("class", "node-label")
+    .attr("text-anchor", "middle")
+    .merge(label)
+    .text(shortLabel);
+
+  if (simulation) { simulation.stop(); }
+  simulation = d3.forceSimulation(nodeData)
+    .force("link", d3.forceLink(linkData).id(function (d) { return d.id; }).distance(80).strength(0.4))
+    .force("charge", d3.forceManyBody().strength(-160).distanceMax(520))
+    .force("center", d3.forceCenter(w / 2, h / 2))
+    .force("collision", d3.forceCollide().radius(function (d) { return radius(d) + 8; }))
+    .on("tick", function () {
+      linkAll
+        .attr("x1", function (d) { return d.source.x; })
+        .attr("y1", function (d) { return d.source.y; })
+        .attr("x2", function (d) { return d.target.x; })
+        .attr("y2", function (d) { return d.target.y; });
+      nodeAll.attr("cx", function (d) { return d.x; }).attr("cy", function (d) { return d.y; });
+      labelAll.attr("x", function (d) { return d.x; }).attr("y", function (d) { return d.y - radius(d) - 5; });
+    });
+}
+
+function radius(d) {
+  var base = { Domain: 8, IPAddress: 9, Service: 6, WebSurface: 8 }[d.type] || 7;
+  return base + Math.min(4, (d.findings || []).length);
+}
+
+function worstSeverity(d) {
+  var best = -1;
+  (d.findings || []).forEach(function (f) { if (f.severity > best) { best = f.severity; } });
+  return best;
+}
+
+function shortLabel(d) {
+  var s = d.label || d.key || "";
+  return s.length > 34 ? s.slice(0, 31) + "..." : s;
+}
+
+function zoomToFit() {
+  var nodes = zoomLayer.select(".nodes").selectAll("circle").data();
+  if (!nodes.length) { return; }
+  var xs = nodes.map(function (d) { return d.x; });
+  var ys = nodes.map(function (d) { return d.y; });
+  var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+  var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+  var w = document.getElementById("main").clientWidth;
+  var h = document.getElementById("main").clientHeight;
+  var scale = 0.85 / Math.max((maxX - minX) / w || 0.01, (maxY - minY) / h || 0.01);
+  scale = Math.max(0.1, Math.min(2.5, scale));
+  var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  svg.transition().duration(400).call(zoom.transform,
+    d3.zoomIdentity.translate(w / 2, h / 2).scale(scale).translate(-cx, -cy));
+}
+
+function dragStart(ev, d) {
+  if (!ev.active) { simulation.alphaTarget(0.25).restart(); }
+  d.fx = d.x; d.fy = d.y;
+}
+function dragging(ev, d) { d.fx = ev.x; d.fy = ev.y; }
+function dragEnd(ev, d) {
+  if (!ev.active) { simulation.alphaTarget(0); }
+  d.fx = null; d.fy = null;
+}
+
+function showTooltip(ev, d) {
+  tooltip.innerHTML = "<b>" + esc(d.label || d.key) + "</b><br>" + esc(d.type) + ", " +
+    esc(d.scope) + ", " + esc(d.primary_currentness || "unstated") +
+    ((d.findings || []).length ? "<br>" + d.findings.length + " finding(s)" : "");
+  tooltip.style.display = "block";
+  moveTooltip(ev);
+}
+function moveTooltip(ev) {
+  tooltip.style.left = (ev.offsetX + 14) + "px";
+  tooltip.style.top = (ev.offsetY + 14) + "px";
+}
+function hideTooltip() { tooltip.style.display = "none"; }
+
+// ---------------------------------------------------------------------------
+// Detail panels. Everything the contraction folded onto a node is listed here
+// with the observation and evidence ids it kept, so a claim on this page can
+// always be walked back into facts.json beside this page.
+// ---------------------------------------------------------------------------
+function showNodeDetail(d) {
+  selected = d.id;
+  var n = nodeById[d.id];
+  var h = '<span class="close" onclick="closeDetail()">x</span>';
+  h += "<h2>" + esc(n.label || n.key) + "</h2>";
+  h += '<div class="sub">' + esc(n.type) + " &middot; " + esc(n.scope) +
+    (n.kind ? " &middot; " + esc(n.kind) : "") +
+    (n.referenced_only ? " &middot; referenced only" : "") + "</div>";
+
+  h += "<h3>Currentness</h3>";
+  h += kv("primary", n.primary_currentness || "unstated");
+  if ((n.badges || []).length) { h += kv("also observed", n.badges.join(", ")); }
+  if (n.first_seen) { h += kv("first seen", fmtTime(n.first_seen)); }
+  if (n.last_seen) { h += kv("last seen", fmtTime(n.last_seen)); }
+  if ((n.sources || []).length) { h += kv("sources", n.sources.join(", ")); }
+
+  h += sectionKV("Attributes", n.attributes);
+
+  if ((n.findings || []).length) {
+    h += "<h3>Findings (" + n.findings.length + ")</h3><ul>";
+    n.findings.slice().sort(function (a, b) { return b.severity - a.severity; }).forEach(function (f) {
+      h += "<li><span class='pill sev-" + f.severity + "'>" +
+        esc(SEVERITY_NAMES[f.severity] || f.severity) + "</span> " +
+        esc(f.title || f.rule) + "<br><code>" + esc(f.rule) +
+        " &middot; " + esc(f.status) + " &middot; " + esc(f.validation) +
+        " &middot; raised against " + esc(f.facts_asset_key) +
+        (f.attachment_rule ? " &middot; attached by " + esc(f.attachment_rule) : "") +
+        ((f.evidence_ids || []).length ? " &middot; evidence " + esc(f.evidence_ids.join(", ")) : "") +
+        "</code></li>";
+    });
+    h += "</ul>";
+  }
+
+  if ((n.technologies || []).length) {
+    h += "<h3>Technologies</h3><ul>";
+    n.technologies.forEach(function (t) {
+      h += "<li>" + esc(t.key) +
+        (t.versions && t.versions.length ? " " + esc(t.versions.join(", ")) : "") +
+        "<br><code>" + esc(t.relation) + " &middot; " + esc(t.confidence) +
+        (t.currentness ? " &middot; " + esc(t.currentness) : "") +
+        (t.sources && t.sources.length ? " &middot; " + esc(t.sources.join(", ")) : "") +
+        "</code></li>";
+    });
+    h += "</ul>";
+  }
+
+  if ((n.paths || []).length) {
+    h += "<h3>Observed paths (" + n.paths.length + ")</h3><ul>";
+    n.paths.forEach(function (p) {
+      h += "<li>" + esc(p.path) +
+        (p.status_code ? ' <span class="pill">' + p.status_code + "</span>" : "") +
+        (p.title ? "<br>" + esc(p.title) : "") +
+        "<br><code>" + esc(p.url) +
+        (p.server ? " &middot; " + esc(p.server) : "") +
+        (p.auth_type ? " &middot; auth " + esc(p.auth_type) : "") +
+        (p.sources && p.sources.length ? " &middot; " + esc(p.sources.join(", ")) : "") +
+        "</code></li>";
+    });
+    h += "</ul>";
+  }
+
+  if ((n.facets || []).length) {
+    h += "<h3>Folded facts (" + n.facets.length + ")</h3>";
+    h += conflictNote(n.facets);
+    h += "<ul>";
+    n.facets.forEach(function (f) {
+      h += "<li><b>" + esc(f.kind) + "</b>" +
+        (f.statement ? "<br>" + esc(f.statement) : "") +
+        (f.values ? "<br>" + esc(JSON.stringify(f.values)) : "") +
+        "<br><code>" + esc([f.confidence, f.currentness, f.source, f.mode].filter(Boolean).join(" / ")) +
+        (f.observation_id ? " / obs " + esc(f.observation_id) : "") +
+        (f.evidence_id ? " / ev " + esc(f.evidence_id) : "") +
+        "</code></li>";
+    });
+    h += "</ul>";
+  }
+
+  h += "<h3>Provenance</h3>";
+  if ((n.facts_asset_keys || []).length) { h += kv("facts assets", n.facts_asset_keys.join(", ")); }
+  if ((n.observation_ids || []).length) { h += kv("observations", n.observation_ids.join(", ")); }
+  if ((n.evidence_ids || []).length) { h += kv("evidence", n.evidence_ids.join(", ")); }
+
+  var incident = allEdges.filter(function (e) { return e.from === n.id || e.to === n.id; });
+  h += "<h3>Edges (" + incident.length + ")</h3><ul>";
+  incident.forEach(function (e) {
+    var other = e.from === n.id ? e.to : e.from;
+    var arrow = e.from === n.id ? "-> " : "<- ";
+    h += "<li>" + esc(e.type) + " " + esc(arrow) + esc(other) + "</li>";
+  });
+  h += "</ul>";
+
+  var panel = document.getElementById("detail");
+  panel.innerHTML = h;
+  panel.classList.add("open");
+}
+
+// conflictNote names the facet kinds that arrived more than once. Two sources
+// disagreeing is information, and the contraction keeps both rather than
+// picking a winner, so the panel says where to look for the disagreement.
+function conflictNote(facets) {
+  var counts = {};
+  facets.forEach(function (f) { counts[f.kind] = (counts[f.kind] || 0) + 1; });
+  var repeated = Object.keys(counts).filter(function (k) { return counts[k] > 1; }).sort();
+  if (!repeated.length) { return ""; }
+  return '<div class="legend">Several claims of the same kind are kept side by side, ' +
+    "including any that disagree: " + esc(repeated.join(", ")) + ".</div>";
+}
+
+function showEdgeDetail(e) {
+  var h = '<span class="close" onclick="closeDetail()">x</span>';
+  h += "<h2>" + esc(e.type) + "</h2>";
+  h += '<div class="sub">directed: from is the subject, to is the object</div>';
+  h += kv("from", e.from);
+  h += kv("to", e.to);
+  h += kv("confidence", e.confidence || "unstated");
+  h += kv("currentness", e.currentness || "unstated");
+  h += kv("mode", e.mode || "unstated");
+  if ((e.sources || []).length) { h += kv("sources", e.sources.join(", ")); }
+  if (e.first_seen) { h += kv("first seen", fmtTime(e.first_seen)); }
+  if (e.last_seen) { h += kv("last seen", fmtTime(e.last_seen)); }
+  h += sectionKV("Metadata", e.metadata);
+  h += "<h3>Provenance</h3>";
+  if ((e.evidence_ids || []).length) { h += kv("evidence", e.evidence_ids.join(", ")); }
+  if ((e.source_event_ids || []).length) { h += kv("events", e.source_event_ids.join(", ")); }
+  var panel = document.getElementById("detail");
+  panel.innerHTML = h;
+  panel.classList.add("open");
+}
+
+function closeDetail() {
+  selected = null;
+  document.getElementById("detail").classList.remove("open");
+}
+
+function sectionKV(title, obj) {
+  if (!obj) { return ""; }
+  var keys = Object.keys(obj).sort();
+  if (!keys.length) { return ""; }
+  var h = "<h3>" + esc(title) + "</h3>";
+  keys.forEach(function (k) { h += kv(k, formatVal(obj[k])); });
+  return h;
+}
+
+function kv(k, v) {
+  return '<div class="kv"><span>' + esc(k) + "</span><span>" + esc(v) + "</span></div>";
+}
+
+function formatVal(v) {
+  if (v === null || v === undefined) { return ""; }
+  if (typeof v === "object") { return JSON.stringify(v); }
+  return String(v);
+}
+
+function esc(s) {
+  return String(s === null || s === undefined ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function fmtTime(s) {
+  if (!s) { return "unknown"; }
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? String(s) : d.toISOString().replace("T", " ").slice(0, 19) + " UTC";
+}
+
+function debounce(fn, ms) {
+  var t = null;
+  return function () {
+    var args = arguments, self = this;
+    clearTimeout(t);
+    t = setTimeout(function () { fn.apply(self, args); }, ms);
+  };
+}
+
+window.addEventListener("resize", debounce(function () {
+  if (simulation) { simulation.alpha(0.2).restart(); }
+}, 200));
+
+load();
+</script>
+</body>
+</html>

@@ -1,10 +1,12 @@
 import PocketBase, { type RecordModel } from 'pocketbase';
+import { createHash } from 'node:crypto';
 import type { AgentAction, AgentMessage, AuthorizedTarget, InvestigationReport, ScanMode, ScanPolicySnapshot } from './types';
 import { buildKnowledgeObservation } from './knowledge';
 import { nextScheduledAt } from './observation-schedule';
 import type { CacheTelemetry } from './external-cache';
 import { evaluateScan, improvementCandidates, type LearningDirectives } from './self-improvement';
 import { GENERATED_TOOL_SCHEMA_VERSION, validateGeneratedTool, type GeneratedToolDefinition, type GeneratedToolProposal } from './generated-tools';
+import { AGENT_TOOL_CATALOG, type AgentToolPolicy } from './tool-catalog';
 
 export class InvestigationStore {
   readonly client: PocketBase;
@@ -19,7 +21,30 @@ export class InvestigationStore {
     const password = process.env['POCKETBASE_WORKER_PASSWORD'];
     if (!email || !password) throw new Error('POCKETBASE_WORKER_EMAIL and POCKETBASE_WORKER_PASSWORD are required.');
     await this.client.collection('workers').authWithPassword(email, password, { autoRefreshThreshold: 30 * 60 });
+    await this.syncAgentTools();
     await this.recoverInterruptedRequests();
+  }
+
+  private async syncAgentTools(): Promise<void> {
+    const existing = await this.client.collection('agentTools').getFullList({ sort: 'name' });
+    const byName = new Map(existing.map((record) => [String(record['name']), record]));
+    for (const entry of AGENT_TOOL_CATALOG) {
+      const current = byName.get(entry.name);
+      const metadata = { title: entry.title, summary: entry.summary, category: entry.category, source: entry.source, version: entry.version, riskLevel: entry.riskLevel, supportedProfiles: entry.defaultProfiles, essential: Boolean(entry.essential) };
+      if (current) {
+        if ([...Object.entries(metadata)].some(([key, value]) => current[key] !== value)) await this.client.collection('agentTools').update(current.id, metadata);
+      } else {
+        await this.client.collection('agentTools').create({ name: entry.name, ...metadata, enabled: true, profiles: entry.defaultProfiles });
+      }
+    }
+  }
+
+  async agentToolPolicies(): Promise<Map<string, AgentToolPolicy>> {
+    const records = await this.client.collection('agentTools').getFullList({ fields: 'name,enabled,profiles' });
+    return new Map(records.map((record) => [String(record['name']), {
+      name: String(record['name']), enabled: Boolean(record['enabled']),
+      profiles: Array.isArray(record['profiles']) ? record['profiles'] : []
+    } as AgentToolPolicy]));
   }
 
   private async recoverInterruptedRequests(): Promise<void> {
@@ -203,7 +228,14 @@ export class InvestigationStore {
   }
 
   async saveAction(targetId: string, scanId: string, action: AgentAction): Promise<void> {
-    await this.client.collection('agentActions').create({ target: targetId, scan: scanId, tool: action.tool, input: action.input, summary: action.summary.slice(0, 5000), occurredAt: action.at });
+    const saved = await this.client.collection('agentActions').create({ target: targetId, scan: scanId, tool: action.tool, input: action.input, summary: action.summary.slice(0, 28_000), occurredAt: action.at });
+    let output: unknown;
+    try { output = JSON.parse(action.summary); } catch { output = { text: action.summary }; }
+    await this.client.collection('toolOutputs').create({
+      target: targetId, scan: scanId, action: saved.id, tool: action.tool, input: action.input, output,
+      outputSha256: createHash('sha256').update(action.summary).digest('hex'),
+      failed: Boolean(output && typeof output === 'object' && '_wellguardError' in output), occurredAt: action.at
+    });
   }
 
   async saveMessage(targetId: string, scanId: string, message: AgentMessage): Promise<void> {

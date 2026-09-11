@@ -134,6 +134,12 @@ export interface GeneratedToolExecution {
   status: 'completed' | 'blocked' | 'failed'; requestCount: number; matchedAssertions: number; summary: string; occurredAt: string;
 }
 
+export interface AgentTool {
+  id: string; name: string; title: string; summary: string; category: string;
+  source: 'wellguard' | 'vanguard'; version: string; riskLevel: 'passive' | 'low' | 'interactive';
+  enabled: boolean; profiles: ScanMode[]; supportedProfiles: ScanMode[]; essential: boolean; updated: string;
+}
+
 export interface KnowledgePattern {
   key: string; title: string; category: string; technology: string; severity: Severity; weaknessIds: string[];
   occurrences: number; affectedTargetIds: string[]; currentCount: number; newCount: number; persistentCount: number;

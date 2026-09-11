@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<nmaprun scanner="nmap" args="nmap -sU -Pn -n --reason -sV --version-intensity 5 -T3 --host-timeout 5m -p 53,123,161,500 -oX - 198.51.100.10" start="1756684800" startstr="Mon Sep  1 00:00:00 2025" version="7.94" xmloutputversion="1.05">
+<scaninfo type="udp" protocol="udp" numservices="4" services="53,123,161,500"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<host starttime="1756684800" endtime="1756684830">
+<status state="up" reason="user-set" reason_ttl="0"/>
+<address addr="198.51.100.10" addrtype="ipv4"/>
+<hostnames>
+</hostnames>
+<ports>
+<port protocol="udp" portid="53"><state state="open" reason="udp-response" reason_ttl="61"/><service name="domain" product="ISC BIND" version="9.16.1" extrainfo="Ubuntu Linux" ostype="Linux" method="probed" conf="10"><cpe>cpe:/a:isc:bind:9.16.1</cpe><cpe>cpe:/o:linux:linux_kernel</cpe></service></port>
+<port protocol="udp" portid="123"><state state="open|filtered" reason="no-response" reason_ttl="0"/><service name="ntp" method="table" conf="3"/></port>
+<port protocol="udp" portid="161"><state state="closed" reason="port-unreach" reason_ttl="61"/><service name="snmp" method="table" conf="3"/></port>
+<port protocol="udp" portid="500"><state state="filtered" reason="host-prohibited" reason_ttl="59"/><service name="isakmp" method="table" conf="3"/></port>
+</ports>
+<times srtt="1234" rttvar="567" to="100000"/>
+</host>
+<runstats><finished time="1756684830" timestr="Mon Sep  1 00:00:30 2025" elapsed="30.12" summary="Nmap done at Mon Sep  1 00:00:30 2025; 1 IP address (1 host up) scanned in 30.12 seconds" exit="success"/><hosts up="1" down="0" total="1"/>
+</runstats>
+</nmaprun>

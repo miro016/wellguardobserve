@@ -1,0 +1,38 @@
+{
+  "version": "2026.06",
+  "released": "2026-06-01",
+  "source": "Curated, local-first snapshot: CISA KEV highlights and common default credentials. Manually refreshed under review (see README.md). Not exhaustive.",
+  "knownExploited": [
+    { "cve": "CVE-2021-44228", "name": "Apache Log4j2 (Log4Shell) RCE" },
+    { "cve": "CVE-2021-45046", "name": "Apache Log4j2 follow-up RCE" },
+    { "cve": "CVE-2014-0160", "name": "OpenSSL Heartbleed memory disclosure" },
+    { "cve": "CVE-2014-6271", "name": "GNU Bash (Shellshock) RCE" },
+    { "cve": "CVE-2017-0144", "name": "Microsoft SMBv1 (EternalBlue) RCE" },
+    { "cve": "CVE-2019-0708", "name": "Microsoft RDP (BlueKeep) RCE" },
+    { "cve": "CVE-2017-5638", "name": "Apache Struts2 Jakarta RCE" },
+    { "cve": "CVE-2018-13379", "name": "Fortinet FortiOS SSL VPN path traversal" },
+    { "cve": "CVE-2019-19781", "name": "Citrix ADC/Gateway directory traversal RCE" },
+    { "cve": "CVE-2020-1472", "name": "Microsoft Netlogon (Zerologon) privilege escalation" },
+    { "cve": "CVE-2021-26855", "name": "Microsoft Exchange (ProxyLogon) SSRF/RCE" },
+    { "cve": "CVE-2021-34473", "name": "Microsoft Exchange (ProxyShell) RCE" },
+    { "cve": "CVE-2021-34527", "name": "Windows Print Spooler (PrintNightmare) RCE" },
+    { "cve": "CVE-2022-1388", "name": "F5 BIG-IP iControl REST auth bypass RCE" },
+    { "cve": "CVE-2022-22965", "name": "Spring Framework (Spring4Shell) RCE" },
+    { "cve": "CVE-2023-23397", "name": "Microsoft Outlook privilege escalation" },
+    { "cve": "CVE-2023-34362", "name": "Progress MOVEit Transfer SQL injection RCE" }
+  ],
+  "defaultCredentials": [
+    { "products": ["tomcat"], "candidate": "tomcat:tomcat", "note": "Tomcat Manager example users." },
+    { "products": ["jboss", "wildfly"], "candidate": "admin:admin", "note": "JBoss/WildFly management console." },
+    { "products": ["weblogic"], "candidate": "weblogic:welcome1", "note": "Oracle WebLogic console." },
+    { "products": ["grafana"], "candidate": "admin:admin", "note": "Grafana first-run admin." },
+    { "products": ["jenkins"], "candidate": "admin:admin", "note": "Jenkins (when setup wizard skipped)." },
+    { "products": ["rabbitmq"], "candidate": "guest:guest", "note": "RabbitMQ management (localhost-only by default)." },
+    { "products": ["couchdb"], "candidate": "admin:admin", "note": "Apache CouchDB admin party / setup." },
+    { "products": ["postgresql", "postgres"], "candidate": "postgres:postgres", "note": "PostgreSQL superuser." },
+    { "products": ["mysql", "mariadb"], "candidate": "root:(empty)", "note": "MySQL/MariaDB root with no password." },
+    { "products": ["redis"], "candidate": "(unauthenticated by default)", "note": "Redis ships with no auth." },
+    { "products": ["mongodb"], "candidate": "(unauthenticated by default)", "note": "MongoDB ships with no auth bound to all interfaces in old defaults." },
+    { "products": ["elasticsearch"], "candidate": "(unauthenticated by default)", "note": "Elasticsearch ships with security disabled in old defaults." }
+  ]
+}

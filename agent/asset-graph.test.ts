@@ -134,4 +134,20 @@ describe('explicit asset graph', () => {
     expect(graph.assets.filter((asset) => asset.kind === 'url').map((asset) => asset.label).sort()).toEqual(['https://admin.example.com', 'https://app.example.com']);
     expect(graph.relations.filter((relation) => relation.fromKey === 'port:203.0.113.10:443' && relation.type === 'runs_service')).toHaveLength(2);
   });
+
+  test('imports Vanguard output into the reusable asset graph', () => {
+    const graph = buildAssetGraph(target, [action('run_vanguard_observation', {}, {
+      outputSha256: 'a'.repeat(64),
+      domains: [{ id: 'domain-1', label: 'shop.example.com' }],
+      servers: [{ id: 'address-1', label: '203.0.113.20' }],
+      services: [{ id: 'service-1', label: 'https', attributes: { ip: '203.0.113.20', port: 443, service: 'http' }, technologies: [{ key: 'node.js' }] }],
+      webSurfaces: [],
+      edges: [{ type: 'resolves_to', from: 'domain-1', to: 'address-1', evidenceIds: ['dns-1'] }]
+    })], [], []);
+
+    expect(graph.assets.find((asset) => asset.key === 'server:203.0.113.20')).toBeTruthy();
+    expect(graph.assets.find((asset) => asset.key === 'port:203.0.113.20:443')).toBeTruthy();
+    expect(graph.assets.find((asset) => asset.key === 'service:shop.example.com:443:node.js')?.label).toBe('node.js');
+    expect(graph.relations.some((relation) => relation.type === 'resolves_to' && relation.toKey === 'server:203.0.113.20')).toBeTrue();
+  });
 });

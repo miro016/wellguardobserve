@@ -1,3 +1,14 @@
+# Agent tool governance
+
+The **Agent tools** page has two related registries:
+
+- **Installed runtime tools** is the code-owned catalogue. It shows source, revision, risk class, global enabled state, and an explicit Baseline/Standard/Active/Advanced/Unbounded grant matrix. A platform administrator can disable a non-essential tool or change its future profile grants. The finding recorder is essential and cannot be disabled.
+- **Generated capabilities** contains checksum-bound declarative request plans. An administrator can create a one-step GET/body-marker probe directly, review model proposals, assign a compatible minimum profile, disable them, or remove their registry entry.
+
+The worker synchronizes compiled metadata and immutable supported-profile boundaries on startup but preserves administrator enablement and grants. It intersects that policy with code-level profile gates before a scan begins and stores the resulting tool names in the scan request snapshot. Browser changes cannot inject a callable tool or widen a capability's implementation limits; muted cells on the matrix are deliberately unavailable.
+
+Every completed invocation writes the existing `agentActions` audit record and a normalized `toolOutputs` record containing its inputs, parsed output, failure state, occurrence time, and output digest. Deterministic graph and report assembly may consume those outputs; the model cannot rewrite historical receipts.
+
 # Generated capability registry
 
 Wellguard can turn an evidence-backed coverage gap into a reusable HTTP probe without generating executable source code. The model proposes a declarative `http-probe-v1` document; server-owned code validates, fingerprints and compiles it into existing scope-guarded request primitives.

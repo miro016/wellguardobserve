@@ -14,7 +14,7 @@ export interface AgentScanProfile extends ScanPolicySnapshot {
   agentInstructions: string;
 }
 
-const VERSION = 'scan-policy-v4';
+const VERSION = 'scan-policy-v5';
 const CORE_TOOLS = [
   'dns', 'certificate-transparency', 'rdap', 'tls', 'bounded-tcp-connect', 'passive-banner',
   'single-http-get', 'service-discovery', 'configuration-review', 'public-metadata', 'service-adapters',

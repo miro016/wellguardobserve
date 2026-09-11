@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import PocketBase, { RecordModel } from 'pocketbase';
-import { AgentActionRecord, AgentMessageRecord, AssetRecord, AssetRelationRecord, ChangeReview, ChangeReviewStatus, CreateTargetInput, Finding, FindingFeedback, GeneratedTool, GeneratedToolExecution, ImprovementProposal, KnowledgeObservation, ObservationCadence, ObservationSchedule, PublicIdentity, Scan, ScanEvaluation, ScanMode, ScanRequest, ScheduledScanMode, Target, TargetCriticality, TargetScope, TlsObservation, Workspace, WorkspaceMember, WorkspaceRole, WorkspaceUser } from '../models';
+import { AgentActionRecord, AgentMessageRecord, AgentTool, AssetRecord, AssetRelationRecord, ChangeReview, ChangeReviewStatus, CreateTargetInput, Finding, FindingFeedback, GeneratedTool, GeneratedToolExecution, ImprovementProposal, KnowledgeObservation, ObservationCadence, ObservationSchedule, PublicIdentity, Scan, ScanEvaluation, ScanMode, ScanRequest, ScheduledScanMode, Target, TargetCriticality, TargetScope, TlsObservation, Workspace, WorkspaceMember, WorkspaceRole, WorkspaceUser } from '../models';
 import { nextScheduledAt } from './observation-schedule';
 
 @Injectable({ providedIn: 'root' })
@@ -428,6 +428,52 @@ export class PocketBaseService {
       sourceScan: record['sourceScan'] || '', sourceTarget: record['sourceTarget'] || '', reviewedBy: record['reviewedBy'] || '', reviewedAt: record['reviewedAt'] || '', reviewNote: record['reviewNote'] || '',
       created: record['created'], updated: record['updated']
     } as GeneratedTool));
+  }
+
+  async agentTools(): Promise<AgentTool[]> {
+    if (!this.isAdmin()) throw new Error('Platform administrator access is required.');
+    const records = await this.client.collection('agentTools').getFullList({ sort: 'category,title' });
+    return records.map((record) => ({
+      id: record.id, name: record['name'], title: record['title'], summary: record['summary'], category: record['category'],
+      source: record['source'], version: record['version'], riskLevel: record['riskLevel'], enabled: Boolean(record['enabled']),
+      profiles: Array.isArray(record['profiles']) ? record['profiles'] : [], supportedProfiles: Array.isArray(record['supportedProfiles']) ? record['supportedProfiles'] : [], essential: Boolean(record['essential']), updated: record['updated']
+    } as AgentTool));
+  }
+
+  async updateAgentTool(tool: AgentTool, enabled: boolean, profiles: ScanMode[]): Promise<void> {
+    if (!this.isAdmin() || !this.user()?.id) throw new Error('Platform administrator access is required.');
+    if (tool.essential && (!enabled || !profiles.length)) throw new Error(`${tool.title} is required for evidence persistence.`);
+    const selected = [...new Set(profiles)];
+    if (selected.some((profile) => !tool.supportedProfiles.includes(profile))) throw new Error(`${tool.title} cannot be widened beyond its compiled profile boundary.`);
+    await this.client.collection('agentTools').update(tool.id, { enabled, profiles: selected, updatedBy: this.user()!.id });
+  }
+
+  async createAdminProbe(input: { name: string; title: string; summary: string; rationale: string; path: string; marker: string; minProfile: ScanMode }): Promise<GeneratedTool> {
+    if (!this.isAdmin() || !this.user()?.id) throw new Error('Platform administrator access is required.');
+    const path = input.path.trim();
+    if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\') || /(^|\/)\.\.?(\/|$)/.test(path)) throw new Error('Use one normalized same-origin path beginning with /.');
+    const proposal = {
+      name: input.name.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, ''), title: input.title.trim(),
+      summary: input.summary.trim(), rationale: input.rationale.trim(), category: 'configuration' as const,
+      evidence: ['Created and reviewed directly by a platform administrator.'],
+      spec: { version: 'http-probe-v1' as const, steps: [{ id: 'admin-check', purpose: input.rationale.trim(), method: 'GET' as const, path, assertions: [{ type: 'body-contains' as const, value: input.marker.trim() }] }] }
+    };
+    const stable = (value: unknown): string => Array.isArray(value) ? `[${value.map(stable).join(',')}]` : value && typeof value === 'object' ? `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stable(item)}`).join(',')}}` : JSON.stringify(value);
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(stable(proposal)));
+    const checksum = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    const order: ScanMode[] = ['light', 'standard', 'extended', 'advanced', 'unbounded'];
+    const compatibleProfiles = order;
+    const record = await this.client.collection('generatedTools').create({
+      workspace: this.activeWorkspaceId(), ...proposal, schemaVersion: 'http-probe-v1', checksum, compatibleProfiles,
+      requestCeiling: 1, riskLevel: 'passive', status: 'approved', minProfile: input.minProfile, unboundedAutoUse: false,
+      generatedByModel: 'administrator', reviewedBy: this.user()!.id, reviewedAt: new Date().toISOString(), reviewNote: 'Created directly by a platform administrator.'
+    });
+    return (await this.generatedTools()).find((tool) => tool.id === record.id)!;
+  }
+
+  async removeGeneratedTool(tool: GeneratedTool): Promise<void> {
+    if (!this.isAdmin()) throw new Error('Platform administrator access is required.');
+    await this.client.collection('generatedTools').delete(tool.id);
   }
 
   async generatedToolExecutions(toolId?: string): Promise<GeneratedToolExecution[]> {

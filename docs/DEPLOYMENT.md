@@ -13,6 +13,8 @@
 
 The deployment automatically applies PocketBase migrations, upserts the startup superuser, and provisions a separate least-privilege observer identity in the `workers` collection. Superuser credentials are removed from the observer process environment and never enter the browser bundle.
 
+The image also compiles the pinned Vanguard source snapshot into `vanguard-collect` and `vanguard-projections`. No private GitHub credential is required during deployment. The build fails if the configured revision and checked-in `third_party/vanguard/WELLGUARD_REVISION` provenance value disagree.
+
 `/startupz` exposes only the current startup phase, never logs or environment values. It prevents a live web listener from being mistaken for an investigation-ready observer.
 
 ## Persistence and backups

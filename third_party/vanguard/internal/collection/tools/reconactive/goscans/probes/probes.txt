@@ -1,0 +1,70 @@
+#
+# Web enumeration probe set for the goscans tool.
+#
+# Format, one probe per line, pipe separated:
+#   Name|Path|optional string match|optional string match|...
+# Lines starting with # are comments. A string match is only consulted when the
+# server answers 200 to everything, so a match list is how a probe stays useful
+# against a host with no real 404.
+#
+# Scope rules for anything added here:
+#   - GET only, no request body, no credentials, no parameters that change state;
+#   - paths that indicate exposure, not paths that exploit it;
+#   - nothing that downloads a large file;
+#   - keep the set small: this tool corroborates other tools rather than
+#     replacing a dedicated content discovery run.
+#
+# Version control metadata
+Git repository|/.git/config|[core]|repositoryformatversion
+Git HEAD|/.git/HEAD|ref:
+Subversion repository|/.svn/entries|dir
+Mercurial repository|/.hg/requires|revlog
+#
+# Configuration and secret exposure
+Environment file|/.env|APP_KEY|DB_PASSWORD|SECRET
+IIS configuration|/web.config|<configuration|<system.web
+Composer manifest|/composer.json|"require"
+Node manifest|/package.json|"dependencies"
+Docker compose file|/docker-compose.yml|services:
+macOS directory index|/.DS_Store
+#
+# Server status and diagnostics
+Apache server status|/server-status|Apache Server Status
+Apache server info|/server-info|Apache Server Information
+Nginx status|/nginx_status|Active connections
+PHP info|/phpinfo.php|phpinfo()|PHP Version
+PHP info alternate|/info.php|phpinfo()|PHP Version
+Go pprof|/debug/pprof/|Types of profiles available
+Prometheus metrics|/metrics|# HELP|# TYPE
+ASP.NET error log|/elmah.axd|Error Log for
+ASP.NET trace|/trace.axd|Application Trace
+#
+# Administrative interfaces
+Generic admin|/admin/|<title>
+Joomla administrator|/administrator/|Joomla
+WordPress login|/wp-login.php|user_login|wp-submit
+WordPress REST API|/wp-json/|"namespace"
+phpMyAdmin|/phpmyadmin/|phpMyAdmin
+Adminer|/adminer.php|Adminer
+Tomcat manager|/manager/html|Tomcat|Manager
+Jenkins|/jenkins/|Jenkins
+Grafana|/grafana/login|Grafana
+Kibana|/app/kibana|kibana
+#
+# API and framework surfaces
+Spring Boot actuator|/actuator|_links|self
+Spring Boot health|/actuator/health|"status"
+Spring Boot environment|/actuator/env|propertySources
+Swagger UI|/swagger-ui/|Swagger UI
+OpenAPI document|/openapi.json|"openapi"
+Swagger document|/swagger.json|"swagger"
+GraphQL endpoint|/graphql|"errors"|GraphQL
+Solr admin|/solr/|Solr Admin
+Elasticsearch root|/|"cluster_name"|"lucene_version"
+#
+# Policy and metadata files
+Security policy|/.well-known/security.txt|Contact:
+Robots file|/robots.txt|User-agent
+Sitemap|/sitemap.xml|<urlset|<sitemapindex
+Flash crossdomain policy|/crossdomain.xml|<cross-domain-policy
+Silverlight policy|/clientaccesspolicy.xml|<access-policy

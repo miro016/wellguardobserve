@@ -38,8 +38,20 @@ RUN arch="$TARGETARCH" \
   && unzip "${archive}" nuclei -d /out \
   && chmod +x /out/nuclei
 
+FROM golang:1.27-bookworm AS vanguard-build
+ARG VANGUARD_REVISION=d9e2b785b973bd5a44af8ec86766808542ae8cb6
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libpcap-dev \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY third_party/vanguard/go.mod third_party/vanguard/go.sum third_party/vanguard/WELLGUARD_REVISION ./
+RUN test "$(cat WELLGUARD_REVISION)" = "${VANGUARD_REVISION}"
+RUN go mod download
+COPY third_party/vanguard ./
+RUN CGO_ENABLED=1 go build -mod=mod -trimpath -ldflags "-s -w -X main.version=${VANGUARD_REVISION}" -o /out/vanguard-collect ./cmd/vanguard-collect \
+  && CGO_ENABLED=1 go build -mod=mod -trimpath -ldflags "-s -w -X main.version=${VANGUARD_REVISION}" -o /out/vanguard-projections ./cmd/vanguard-projections
+
 FROM oven/bun:1.4.0-debian AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gosu nginx tini chromium \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gosu nginx tini chromium libpcap0.8 \
   && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default
 WORKDIR /app
 ENV NODE_ENV=production \
@@ -53,11 +65,13 @@ ENV NODE_ENV=production \
     OBSERVER_CHROMIUM_PATH=/usr/bin/chromium
 COPY --from=pocketbase-download /out/pocketbase /usr/local/bin/pocketbase
 COPY --from=nuclei-download /out/nuclei /usr/local/bin/nuclei
+COPY --from=vanguard-build /out/vanguard-collect /out/vanguard-projections /usr/local/bin/
 COPY --from=web-build /build/dist/wellguard-observe/browser /usr/share/nginx/html
 COPY --from=web-build /build/node_modules ./node_modules
 COPY package.json ./
 COPY agent ./agent
 COPY nuclei ./nuclei
+COPY integrations ./integrations
 COPY scripts ./scripts
 COPY pocketbase/pb_migrations ./pb_migrations
 COPY deploy/nginx.conf /etc/nginx/nginx.conf

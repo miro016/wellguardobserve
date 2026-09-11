@@ -1,0 +1,760 @@
+{
+  "host_searches": {
+    "vissim.no": {
+      "Domain": "vissim.no",
+      "Hosts": [
+        {
+          "IP": "4.207.232.240",
+          "Services": [
+            {
+              "Port": 80,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T05:50:51Z"
+            },
+            {
+              "Port": 443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T04:23:12Z"
+            }
+          ],
+          "ASN": {
+            "Number": 8075,
+            "Name": "MICROSOFT-CORP-MSN-AS-BLOCK - Microsoft Corporation",
+            "Description": "MICROSOFT-CORP-MSN-AS-BLOCK - Microsoft Corporation"
+          },
+          "Location": {
+            "Country": "Ireland",
+            "City": "Dublin"
+          },
+          "Sources": [
+            "tls_cert"
+          ],
+          "NetworkAllocatedAt": "2020-07-07T00:00:00Z",
+          "NetworkCIDRs": [
+            "4.192.0.0/12"
+          ]
+        },
+        {
+          "IP": "31.119.26.213",
+          "Services": [
+            {
+              "Port": 443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T23:58:37Z"
+            },
+            {
+              "Port": 500,
+              "Protocol": "IKE",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-29T02:49:48Z"
+            },
+            {
+              "Port": 5070,
+              "Protocol": "UNKNOWN",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T12:00:30Z"
+            },
+            {
+              "Port": 5443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T14:35:31Z"
+            },
+            {
+              "Port": 8443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-29T03:05:01Z"
+            },
+            {
+              "Port": 32015,
+              "Protocol": "UNKNOWN",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T07:30:41Z"
+            }
+          ],
+          "ASN": {
+            "Number": 2856,
+            "Name": "BT-UK-AS - British Telecommunications Limited",
+            "Description": "BT-UK-AS - British Telecommunications Limited"
+          },
+          "Location": {
+            "Country": "United Kingdom",
+            "City": "London"
+          },
+          "Products": [
+            "bootstrap",
+            "globalprotect",
+            "internet_information_services",
+            "jquery",
+            "pan-os"
+          ],
+          "Sources": [
+            "tls_cert"
+          ],
+          "NetworkAllocatedAt": "2020-02-06T00:00:00Z",
+          "NetworkCIDRs": [
+            "31.119.0.0/16"
+          ]
+        },
+        {
+          "IP": "62.134.78.142",
+          "Services": [
+            {
+              "Port": 443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T06:51:13Z"
+            },
+            {
+              "Port": 8443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T17:04:20Z"
+            },
+            {
+              "Port": 50443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T11:10:18Z"
+            },
+            {
+              "Port": 50444,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T07:16:34Z"
+            }
+          ],
+          "ASN": {
+            "Number": 5400,
+            "Name": "BT - British Telecommunications Limited",
+            "Description": "BT - British Telecommunications Limited"
+          },
+          "Location": {
+            "Country": "Netherlands",
+            "City": "Amsterdam"
+          },
+          "Products": [
+            "bootstrap",
+            "globalprotect",
+            "internet_information_services",
+            "jquery",
+            "pan-os"
+          ],
+          "Sources": [
+            "dns",
+            "tls_cert"
+          ],
+          "NetworkAllocatedAt": "2023-06-19T00:00:00Z",
+          "NetworkCIDRs": [
+            "62.134.78.136/29"
+          ]
+        },
+        {
+          "IP": "62.134.192.178",
+          "Services": [
+            {
+              "Port": 161,
+              "Protocol": "SNMP",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-29T00:25:24Z"
+            },
+            {
+              "Port": 443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T11:24:36Z"
+            },
+            {
+              "Port": 500,
+              "Protocol": "IKE",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-29T05:27:48Z"
+            },
+            {
+              "Port": 5444,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T12:55:11Z"
+            },
+            {
+              "Port": 8443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-29T05:12:28Z"
+            },
+            {
+              "Port": 32015,
+              "Protocol": "UNKNOWN",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T06:52:15Z"
+            },
+            {
+              "Port": 65009,
+              "Protocol": "SSH",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-29T03:07:34Z"
+            }
+          ],
+          "ASN": {
+            "Number": 5400,
+            "Name": "BT - British Telecommunications Limited",
+            "Description": "BT - British Telecommunications Limited"
+          },
+          "Location": {
+            "Country": "Netherlands",
+            "City": "Eindhoven"
+          },
+          "OS": "windows",
+          "Products": [
+            "bootstrap",
+            "globalprotect",
+            "internet_information_services",
+            "jquery",
+            "openssh",
+            "pan-os"
+          ],
+          "Sources": [
+            "tls_cert"
+          ],
+          "NetworkAllocatedAt": "2025-05-09T00:00:00Z",
+          "NetworkCIDRs": [
+            "62.134.192.176/30"
+          ]
+        },
+        {
+          "IP": "89.191.5.85",
+          "Services": [
+            {
+              "Port": 80,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T11:03:49Z"
+            },
+            {
+              "Port": 443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T22:15:13Z"
+            },
+            {
+              "Port": 500,
+              "Protocol": "IKE",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-29T03:11:43Z"
+            },
+            {
+              "Port": 10443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T09:14:55Z"
+            },
+            {
+              "Port": 20443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-29T06:09:22Z"
+            }
+          ],
+          "ASN": {
+            "Number": 2116,
+            "Name": "GlobalConnect-AS2116 - GLOBALCONNECT AS",
+            "Description": "GlobalConnect-AS2116 - GLOBALCONNECT AS"
+          },
+          "Location": {
+            "Country": "Norway",
+            "City": "Oslo"
+          },
+          "Products": [
+            "arr",
+            "bootstrap",
+            "internet_information_services",
+            "jquery",
+            "jquery_ui"
+          ],
+          "Sources": [
+            "dns",
+            "tls_cert"
+          ],
+          "NetworkAllocatedAt": "2012-01-20T00:00:00Z",
+          "NetworkCIDRs": [
+            "89.191.5.80/28"
+          ]
+        },
+        {
+          "IP": "89.191.5.86",
+          "Services": [
+            {
+              "Port": 443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T22:46:07Z"
+            },
+            {
+              "Port": 500,
+              "Protocol": "IKE",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-29T04:39:43Z"
+            },
+            {
+              "Port": 60901,
+              "Protocol": "UNKNOWN",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T09:13:23Z"
+            }
+          ],
+          "ASN": {
+            "Number": 2116,
+            "Name": "GlobalConnect-AS2116 - GLOBALCONNECT AS",
+            "Description": "GlobalConnect-AS2116 - GLOBALCONNECT AS"
+          },
+          "Location": {
+            "Country": "Norway",
+            "City": "Oslo"
+          },
+          "Products": [
+            "asp.net",
+            "asp\\.net",
+            "internet_information_services"
+          ],
+          "Sources": [
+            "tls_cert"
+          ],
+          "NetworkAllocatedAt": "2012-01-20T00:00:00Z",
+          "NetworkCIDRs": [
+            "89.191.5.80/28"
+          ]
+        },
+        {
+          "IP": "89.191.5.87",
+          "Services": [
+            {
+              "Port": 21,
+              "Protocol": "FTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T17:04:06Z"
+            },
+            {
+              "Port": 500,
+              "Protocol": "IKE",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-28T06:39:20Z"
+            }
+          ],
+          "ASN": {
+            "Number": 2116,
+            "Name": "GlobalConnect-AS2116 - GLOBALCONNECT AS",
+            "Description": "GlobalConnect-AS2116 - GLOBALCONNECT AS"
+          },
+          "Location": {
+            "Country": "Norway",
+            "City": "Oslo"
+          },
+          "OS": "windows",
+          "Products": [
+            "filezilla_server"
+          ],
+          "Sources": [
+            "dns",
+            "tls_cert"
+          ],
+          "NetworkAllocatedAt": "2012-01-20T00:00:00Z",
+          "NetworkCIDRs": [
+            "89.191.5.80/28"
+          ]
+        },
+        {
+          "IP": "89.191.5.88",
+          "Services": [
+            {
+              "Port": 443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T13:55:10Z"
+            },
+            {
+              "Port": 500,
+              "Protocol": "IKE",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-28T09:03:50Z"
+            },
+            {
+              "Port": 8443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T14:01:12Z"
+            }
+          ],
+          "ASN": {
+            "Number": 2116,
+            "Name": "GlobalConnect-AS2116 - GLOBALCONNECT AS",
+            "Description": "GlobalConnect-AS2116 - GLOBALCONNECT AS"
+          },
+          "Location": {
+            "Country": "Norway",
+            "City": "Oslo"
+          },
+          "Products": [
+            "internet_information_services"
+          ],
+          "Sources": [
+            "tls_cert"
+          ],
+          "NetworkAllocatedAt": "2012-01-20T00:00:00Z",
+          "NetworkCIDRs": [
+            "89.191.5.80/28"
+          ]
+        },
+        {
+          "IP": "89.191.5.90",
+          "Services": [
+            {
+              "Port": 500,
+              "Protocol": "IKE",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-28T10:40:56Z"
+            }
+          ],
+          "ASN": {
+            "Number": 2116,
+            "Name": "GlobalConnect-AS2116 - GLOBALCONNECT AS",
+            "Description": "GlobalConnect-AS2116 - GLOBALCONNECT AS"
+          },
+          "Location": {
+            "Country": "Norway",
+            "City": "Oslo"
+          },
+          "Sources": [
+            "dns"
+          ],
+          "NetworkAllocatedAt": "2012-01-20T00:00:00Z",
+          "NetworkCIDRs": [
+            "89.191.5.80/28"
+          ]
+        },
+        {
+          "IP": "185.231.176.184",
+          "Services": [
+            {
+              "Port": 443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T19:04:25Z"
+            },
+            {
+              "Port": 8443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-29T02:24:13Z"
+            },
+            {
+              "Port": 65002,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T18:00:14Z"
+            },
+            {
+              "Port": 65004,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T23:11:11Z"
+            }
+          ],
+          "ASN": {
+            "Number": 205055,
+            "Name": "geetoo-sk - Geetoo Technology SK s. r. o.",
+            "Description": "geetoo-sk - Geetoo Technology SK s. r. o."
+          },
+          "Location": {
+            "Country": "Slovakia",
+            "City": "Bratislava"
+          },
+          "OS": "windows",
+          "Products": [
+            "http_api",
+            "network_monitor"
+          ],
+          "Sources": [
+            "tls_cert"
+          ],
+          "NetworkAllocatedAt": "2020-01-21T00:00:00Z",
+          "NetworkCIDRs": [
+            "185.231.176.0/24"
+          ]
+        },
+        {
+          "IP": "188.123.96.163",
+          "Services": [
+            {
+              "Port": 80,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T20:07:38Z"
+            },
+            {
+              "Port": 500,
+              "Protocol": "IKE",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-28T12:33:10Z"
+            }
+          ],
+          "ASN": {
+            "Number": 58328,
+            "Name": "IMAFEX-AS - IMAFEX, s.r.o.",
+            "Description": "IMAFEX-AS - IMAFEX, s.r.o."
+          },
+          "Location": {
+            "Country": "Slovakia",
+            "City": "Liptovský Mikuláš"
+          },
+          "Products": [
+            "internet_information_services"
+          ],
+          "Sources": [
+            "dns"
+          ],
+          "NetworkAllocatedAt": "2009-06-23T00:00:00Z",
+          "NetworkCIDRs": [
+            "188.123.96.0/24"
+          ]
+        },
+        {
+          "IP": "194.75.240.99",
+          "Services": [
+            {
+              "Port": 443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T06:50:54Z"
+            },
+            {
+              "Port": 500,
+              "Protocol": "IKE",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-28T12:41:29Z"
+            },
+            {
+              "Port": 2294,
+              "Protocol": "UNKNOWN",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T14:58:41Z"
+            },
+            {
+              "Port": 8443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T23:17:22Z"
+            },
+            {
+              "Port": 10443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T14:00:43Z"
+            },
+            {
+              "Port": 20443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-29T06:14:17Z"
+            },
+            {
+              "Port": 32015,
+              "Protocol": "UNKNOWN",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-29T06:36:13Z"
+            }
+          ],
+          "ASN": {
+            "Number": 2856,
+            "Name": "BT-UK-AS - British Telecommunications Limited",
+            "Description": "BT-UK-AS - British Telecommunications Limited"
+          },
+          "Location": {
+            "Country": "United Kingdom",
+            "City": "Sheffield"
+          },
+          "Products": [
+            "bootstrap",
+            "internet_information_services"
+          ],
+          "Sources": [
+            "tls_cert"
+          ],
+          "NetworkAllocatedAt": "2023-01-05T00:00:00Z",
+          "NetworkCIDRs": [
+            "194.75.240.96/29"
+          ]
+        },
+        {
+          "IP": "202.239.249.67",
+          "Services": [
+            {
+              "Port": 80,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-29T05:06:19Z"
+            },
+            {
+              "Port": 443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T06:33:44Z"
+            },
+            {
+              "Port": 8080,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-29T05:46:53Z"
+            },
+            {
+              "Port": 8443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T22:52:32Z"
+            }
+          ],
+          "ASN": {
+            "Number": 2519,
+            "Name": "VECTANT - ARTERIA Networks Corporation",
+            "Description": "VECTANT - ARTERIA Networks Corporation"
+          },
+          "Location": {
+            "Country": "Japan",
+            "City": "Tokyo"
+          },
+          "Products": [
+            "internet_information_services"
+          ],
+          "Sources": [
+            "dns",
+            "tls_cert"
+          ],
+          "NetworkCIDRs": [
+            "202.239.249.0/24"
+          ]
+        }
+      ]
+    },
+    "vissim.tech": {
+      "Domain": "vissim.tech",
+      "Hosts": [
+        {
+          "IP": "62.134.192.178",
+          "Services": [
+            {
+              "Port": 161,
+              "Protocol": "SNMP",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-29T00:25:24Z"
+            },
+            {
+              "Port": 443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T11:24:36Z"
+            },
+            {
+              "Port": 500,
+              "Protocol": "IKE",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-29T05:27:48Z"
+            },
+            {
+              "Port": 5444,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T12:55:11Z"
+            },
+            {
+              "Port": 8443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-29T05:12:28Z"
+            },
+            {
+              "Port": 32015,
+              "Protocol": "UNKNOWN",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T06:52:15Z"
+            },
+            {
+              "Port": 65009,
+              "Protocol": "SSH",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-29T03:07:34Z"
+            }
+          ],
+          "ASN": {
+            "Number": 5400,
+            "Name": "BT - British Telecommunications Limited",
+            "Description": "BT - British Telecommunications Limited"
+          },
+          "Location": {
+            "Country": "Netherlands",
+            "City": "Eindhoven"
+          },
+          "OS": "windows",
+          "Products": [
+            "bootstrap",
+            "globalprotect",
+            "internet_information_services",
+            "jquery",
+            "openssh",
+            "pan-os"
+          ],
+          "Sources": [
+            "tls_cert"
+          ],
+          "NetworkAllocatedAt": "2025-05-09T00:00:00Z",
+          "NetworkCIDRs": [
+            "62.134.192.176/30"
+          ]
+        },
+        {
+          "IP": "188.123.96.172",
+          "Services": [
+            {
+              "Port": 500,
+              "Protocol": "IKE",
+              "Transport": "udp",
+              "ObservedAt": "2026-08-28T11:03:51Z"
+            },
+            {
+              "Port": 4443,
+              "Protocol": "HTTP",
+              "Transport": "tcp",
+              "ObservedAt": "2026-08-28T20:13:11Z"
+            }
+          ],
+          "ASN": {
+            "Number": 58328,
+            "Name": "IMAFEX-AS - IMAFEX, s.r.o.",
+            "Description": "IMAFEX-AS - IMAFEX, s.r.o."
+          },
+          "Location": {
+            "Country": "Slovakia",
+            "City": "Liptovský Mikuláš"
+          },
+          "Products": [
+            "bootstrap",
+            "globalprotect",
+            "jquery",
+            "pan-os"
+          ],
+          "Sources": [
+            "dns",
+            "tls_cert"
+          ],
+          "NetworkAllocatedAt": "2009-06-23T00:00:00Z",
+          "NetworkCIDRs": [
+            "188.123.96.0/24"
+          ]
+        }
+      ]
+    }
+  },
+  "certificate_searches": {}
+}
